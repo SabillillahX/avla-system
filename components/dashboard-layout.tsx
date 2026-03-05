@@ -59,9 +59,9 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
 
   const sidebarItems = [
     { name: "Dashboard", icon: BarChart3, path: "/dashboard" },
-    { name: "Projects", icon: FileText, path: "/projects" },
-    { name: "My Task", icon: CheckCircle, path: "/" },
-    { name: "People", icon: Users, path: "/people" },
+    { name: "My VIdeo", icon: FileText, path: "/my-video" },
+    { name: "Courses", icon: CheckCircle, path: "/" },
+    { name: "My Course", icon: Users, path: "/my-course" },
     { name: "Chats", icon: MessageSquare, path: "/chats" },
     { name: "Documents", icon: FileText, path: "/documents" },
     { name: "Receipts", icon: Receipt, path: "/receipts" },
@@ -132,11 +132,10 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
             <button
               key={item.name}
               onClick={() => router.push(item.path)}
-              className={`w-full flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg transition-colors ${
-                pathname === item.path
-                  ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
+              className={`w-full flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg transition-colors ${pathname === item.path
+                ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
             >
               <item.icon className="w-4 h-4 mr-3" />
               {item.name}
@@ -178,11 +177,10 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
                           <button
                             key={color.value}
                             onClick={() => setNewProjectColor(color.value)}
-                            className={`w-8 h-8 rounded-full ${color.value} border-2 ${
-                              newProjectColor === color.value
-                                ? "border-gray-800 dark:border-gray-200"
-                                : "border-gray-300 dark:border-gray-600"
-                            }`}
+                            className={`w-8 h-8 rounded-full ${color.value} border-2 ${newProjectColor === color.value
+                              ? "border-gray-800 dark:border-gray-200"
+                              : "border-gray-300 dark:border-gray-600"
+                              }`}
                             title={color.name}
                           />
                         ))}
@@ -298,9 +296,8 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
                       {notifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`p-3 rounded-lg ${
-                            notification.unread ? "bg-blue-50 dark:bg-blue-900/20" : "bg-gray-50 dark:bg-gray-700"
-                          }`}
+                          className={`p-3 rounded-lg ${notification.unread ? "bg-blue-50 dark:bg-blue-900/20" : "bg-gray-50 dark:bg-gray-700"
+                            }`}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
