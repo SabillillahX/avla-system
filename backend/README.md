@@ -1,52 +1,301 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# E-Learning API Backend
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend API untuk sistem E-Learning berbasis AI menggunakan Laravel 12 dengan autentikasi dan role management.
 
-## About Laravel
+## 🚀 Tech Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Laravel 12** - PHP Framework
+- **Laravel Sanctum** - API Authentication
+- **Spatie Laravel Permission** - Role & Permission Management
+- **PostgreSQL/MySQL** - Database
+- **Docker** - Containerization (optional)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 🔐 Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Sistem Autentikasi
+- ✅ User Registration (Student auto-register)
+- ✅ Login dengan Token-based Authentication
+- ✅ Logout (Token Revocation)
+- ✅ Get Current User Info
+- ✅ Role-based Access Control
 
-## Learning Laravel
+### Role Management
+- **Admin** - Full access, dibuat via seeder
+- **Teacher** - Dibuat oleh admin
+- **Student** - Dapat register sendiri
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## 📋 Prerequisites
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- PHP 8.4+ (Laravel 12 requirement)
+- Composer
+- PostgreSQL atau MySQL
+- Node.js & npm (optional, untuk Laravel Mix)
 
-## Laravel Sponsors
+## 🛠️ Quick Setup
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### 1. Install Dependencies
 
-### Premium Partners
+```bash
+composer install
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### 2. Environment Setup
 
-## Contributing
+Copy `.env.example` ke `.env` dan konfigurasi:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```env
+APP_URL=http://localhost:8000
+FRONTEND_URL=http://localhost:3000
 
-## Code of Conduct
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=learning
+DB_USERNAME=root
+DB_PASSWORD=root
+
+SANCTUM_STATEFUL_DOMAINS=localhost,localhost:3000,127.0.0.1:3000
+```
+
+### 3. Generate Application Key
+
+```bash
+php artisan key:generate
+```
+
+### 4. Setup Authentication System
+
+**Otomatis (Recommended):**
+
+Windows (PowerShell):
+```powershell
+.\setup-auth.ps1
+```
+
+Linux/Mac:
+```bash
+chmod +x setup-auth.sh
+./setup-auth.sh
+```
+
+**Manual:**
+
+```bash
+# Publish Spatie Permission
+php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+
+# Run migrations
+php artisan migrate
+
+# Seed database (create roles & admin)
+php artisan db:seed
+```
+
+### 5. Run Server
+
+```bash
+php artisan serve
+```
+
+API akan berjalan di `http://localhost:8000`
+
+## 🔑 Default Credentials
+
+Setelah seeding, gunakan credentials ini:
+
+```
+Email: admin@example.com
+Password: password
+```
+
+## 📚 API Documentation
+
+### Base URL
+```
+http://localhost:8000/api
+```
+
+### Endpoints
+
+#### Public Endpoints
+
+**Register Student**
+```http
+POST /api/register
+Content-Type: application/json
+
+{
+  "name": "Student Name",
+  "email": "student@example.com",
+  "password": "password123",
+  "password_confirmation": "password123"
+}
+```
+
+**Login**
+```http
+POST /api/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "password"
+}
+```
+
+#### Protected Endpoints (Requires Token)
+
+**Get Current User**
+```http
+GET /api/me
+Authorization: Bearer {token}
+```
+
+**Logout**
+```http
+POST /api/logout
+Authorization: Bearer {token}
+```
+
+#### Admin Only Endpoints
+
+**Create Teacher**
+```http
+POST /api/admin/create-teacher
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+
+{
+  "name": "Teacher Name",
+  "email": "teacher@example.com",
+  "password": "password123"
+}
+```
+
+### Response Format
+
+**Success Response:**
+```json
+{
+  "message": "Success message",
+  "user": {
+    "id": 1,
+    "name": "User Name",
+    "email": "user@example.com",
+    "roles": ["role_name"]
+  },
+  "token": "token_string"
+}
+```
+
+**Error Response:**
+```json
+{
+  "message": "Error message",
+  "errors": {
+    "field": ["error detail"]
+  }
+}
+```
+
+## 🧪 Testing
+
+### Import Postman Collection
+
+Import file `E-Learning-Auth-API.postman_collection.json` ke Postman untuk testing.
+
+### Testing dengan cURL
+
+**Login:**
+```bash
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"email":"admin@example.com","password":"password"}'
+```
+
+## 📖 Detailed Documentation
+
+- **[API_AUTH_DOCUMENTATION.md](./API_AUTH_DOCUMENTATION.md)** - Complete API documentation
+- **[QUICK_START.md](./QUICK_START.md)** - Quick start guide
+- **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** - Implementation details
+- **[FILE_STRUCTURE.md](./FILE_STRUCTURE.md)** - File structure overview
+
+## 🗂️ Project Structure
+
+```
+backend/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/Api/
+│   │   │   ├── AuthController.php
+│   │   │   └── TeacherController.php
+│   │   ├── Middleware/
+│   │   │   └── RoleMiddleware.php
+│   │   └── Requests/
+│   │       ├── RegisterRequest.php
+│   │       ├── LoginRequest.php
+│   │       └── CreateTeacherRequest.php
+│   └── Models/
+│       └── User.php
+├── database/
+│   └── seeders/
+│       ├── RoleSeeder.php
+│       ├── AdminSeeder.php
+│       └── DatabaseSeeder.php
+└── routes/
+    └── api.php
+```
+
+## 🔧 Troubleshooting
+
+### PHP Version Error
+**Problem:** "Composer detected issues in your platform: PHP version >= 8.4.0"
+
+**Solution:** Upgrade PHP to 8.4+ or use `--ignore-platform-reqs` flag
+
+### Database Connection Error
+**Problem:** "SQLSTATE[HY000] [1049] Unknown database"
+
+**Solution:** 
+1. Create database first
+```bash
+# PostgreSQL
+createdb learning
+
+# MySQL
+mysql -u root -p
+CREATE DATABASE learning;
+```
+
+2. Check `.env` configuration
+
+### Token Not Working
+**Problem:** "Unauthenticated" error meski sudah kirim token
+
+**Solution:**
+- Pastikan header `Authorization: Bearer {token}` benar
+- Pastikan header `Accept: application/json` ada
+- Check apakah token sudah expired/revoked
+
+## 🎯 Next Steps
+
+Setelah setup selesai, Anda bisa:
+
+1. Implement course management
+2. Add student enrollment system
+3. Create quiz/assignment features
+4. Add email verification
+5. Implement password reset
+6. Add profile management
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+
+## 📝 License
+
+This project is MIT licensed.
 
 In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 

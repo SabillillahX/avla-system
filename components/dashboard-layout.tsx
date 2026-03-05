@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -50,12 +51,13 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children, projects, onAddProject }: DashboardLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const { user, logout } = useAuth()
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectColor, setNewProjectColor] = useState("bg-blue-200")
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
 
   // Get current user (John Doe - people_11)
-  const currentUser = people.find((person) => person.id === "people_11") || people[11]
+  const currentUser = user || people.find((person) => person.id === "people_11") || people[11]
 
   const sidebarItems = [
     { name: "Dashboard", icon: BarChart3, path: "/dashboard" },
@@ -373,6 +375,7 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
                     <Separator className="bg-gray-200 dark:bg-gray-700" />
                     <Button
                       variant="ghost"
+                      onClick={() => logout()}
                       className="w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                       <LogOut className="w-4 h-4 mr-2" />
