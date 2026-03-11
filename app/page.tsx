@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import NotesSection from "@/components/notes-section"
@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { people } from "@/lib/people"
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import {
   Share,
   ChevronDown,
@@ -280,29 +281,31 @@ export default function MyTaskPage() {
   const currentScheduleItems = scheduleData[selectedDate] || []
 
   return (
-    <div className="p-6">
-      {/* Welcome Section */}
-      <div className="mb-6">
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Thursday, 20th February</p>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Good Evening! John,</h2>
+    <ProtectedRoute>
+      <div className="p-6">
+        {/* Welcome Section */}
+        <div className="mb-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Thursday, 20th February</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Good Evening! John,</h2>
 
-        <div className="flex items-center space-x-6 mb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
-          >
-            <Share className="w-4 h-4 mr-2" />
-            Share
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Task
-          </Button>
+          <div className="flex items-center space-x-6 mb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
+            >
+              <Share className="w-4 h-4 mr-2" />
+              Share
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Task
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -323,7 +326,6 @@ export default function MyTaskPage() {
             <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">Projects In-progress</span>
           </div>
         </div>
-      </div>
 
       <div className="grid grid-cols-1 gap-y-6">
         {/* My Projects - Full Width */}
@@ -603,6 +605,7 @@ export default function MyTaskPage() {
           />
         </div>
       </div>
-    </div>
+      </div>
+    </ProtectedRoute>
   )
 }
