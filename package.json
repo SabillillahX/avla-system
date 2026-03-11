@@ -6,9 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start",
-    "backend": "php backend/artisan serve",
-    "dev:all": "concurrently \"pnpm run dev\" \"pnpm run backend\""
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
