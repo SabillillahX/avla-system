@@ -347,7 +347,7 @@ export default function MyVideoPage() {
 
     if (viewMode === "list") {
       return (
-        <Card 
+        <Card
           className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer relative group"
           onClick={() => router.push(`/my-video/${video.id}`)}
         >
@@ -419,7 +419,7 @@ export default function MyVideoPage() {
 
     // Grid card
     return (
-      <Card 
+      <Card
         className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow group overflow-hidden cursor-pointer relative"
         onClick={() => router.push(`/my-video/${video.id}`)}
       >
@@ -818,7 +818,7 @@ export default function MyVideoPage() {
 
             <div className="space-y-4">
               <p className="text-gray-600 dark:text-gray-300">
-                Are you sure you want to delete <span className="font-semibold">{videoToDelete?.title}</span>? 
+                Are you sure you want to delete <span className="font-semibold">{videoToDelete?.title}</span>?
                 This action cannot be undone.
               </p>
 
