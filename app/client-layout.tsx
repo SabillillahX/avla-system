@@ -39,8 +39,9 @@ export default function ClientLayout({
 
   // Jangan tampilkan DashboardLayout untuk halaman auth
   const isAuthPage = pathname?.startsWith('/auth')
+  const isLandingPage = pathname === '/'
 
-  if (isAuthPage) {
+  if (isAuthPage || isLandingPage) {
     return <>{children}</>
   }
 

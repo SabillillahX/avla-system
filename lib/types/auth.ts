@@ -1,5 +1,3 @@
-// Auth Types & Interfaces
-
 export interface User {
   id: number;
   name: string;
@@ -7,6 +5,7 @@ export interface User {
   email_verified_at?: string | null;
   roles: string[];
   permissions?: string[];
+  imageURL?: string;
 }
 
 export interface LoginCredentials {

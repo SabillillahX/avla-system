@@ -15,7 +15,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
-// Validation schema
 const registerSchema = z.object({
   name: z.string().min(1, 'Nama wajib diisi').max(255, 'Nama maksimal 255 karakter'),
   email: z.string().email('Email tidak valid'),
@@ -48,7 +47,7 @@ export default function RegisterPage() {
 
     try {
       await registerUser(data);
-      // Redirect handled by AuthContext
+
     } catch (err: any) {
       if (err.response?.data?.message) {
         setError(err.response.data.message);

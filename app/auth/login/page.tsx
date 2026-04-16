@@ -15,7 +15,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
-// Validation schema
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
   password: z.string().min(1, 'Password wajib diisi'),
@@ -43,7 +42,6 @@ export default function LoginPage() {
 
     try {
       await login(data);
-      // Redirect handled by AuthContext
     } catch (err: any) {
       if (err.response?.data?.message) {
         setError(err.response.data.message);

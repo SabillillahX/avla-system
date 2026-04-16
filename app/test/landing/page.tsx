@@ -3,19 +3,16 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/AuthContext"
-import SmartSimpleBrilliant from "@/components/smart-simple-brilliant"
-import YourWorkInSync from "@/components/your-work-in-sync"
-import EffortlessIntegration from "@/components/effortless-integration-updated"
-import NumbersThatSpeak from "@/components/numbers-that-speak"
-import DocumentationSection from "@/components/documentation-section"
-import TestimonialsSection from "@/components/testimonials-section"
-import FAQSection from "@/components/faq-section"
-import PricingSection from "@/components/pricing-section"
-import CTASection from "@/components/cta-section"
-import FooterSection from "@/components/footer-section"
+import SmartSimpleBrilliant from "../../../components/smart-simple-brilliant"
+import YourWorkInSync from "../../../components/your-work-in-sync"
+import EffortlessIntegration from "../../../components/effortless-integration-updated"
+import NumbersThatSpeak from "../../../components/numbers-that-speak"
+import DocumentationSection from "../../../components/documentation-section"
+import TestimonialsSection from "../../../components/testimonials-section"
+import FAQSection from "../../../components/faq-section"
+import PricingSection from "../../../components/pricing-section"
+import CTASection from "../../../components/cta-section"
+import FooterSection from "../../../components/footer-section"
 
 // Reusable Badge Component
 function Badge({ icon, text }: { icon: React.ReactNode; text: string }) {
@@ -33,14 +30,6 @@ export default function LandingPage() {
   const [activeCard, setActiveCard] = useState(0)
   const [progress, setProgress] = useState(0)
   const mountedRef = useRef(true)
-  const router = useRouter()
-  const { isAuthenticated, isLoading } = useAuth()
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.push('/dashboard')
-    }
-  }, [isLoading, isAuthenticated, router])
 
   useEffect(() => {
     const progressInterval = setInterval(() => {
@@ -130,11 +119,11 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="h-6 sm:h-7 md:h-8 flex justify-start items-start gap-2 sm:gap-3">
-                  <Link href="/auth/login" className="px-2 sm:px-3 md:px-[14px] py-1 sm:py-[6px] bg-white shadow-[0px_1px_2px_rgba(55,50,47,0.12)] overflow-hidden rounded-full flex justify-center items-center hover:opacity-80 transition-opacity">
+                  <div className="px-2 sm:px-3 md:px-[14px] py-1 sm:py-[6px] bg-white shadow-[0px_1px_2px_rgba(55,50,47,0.12)] overflow-hidden rounded-full flex justify-center items-center">
                     <div className="flex flex-col justify-center text-[#37322F] text-xs md:text-[13px] font-medium leading-5 font-sans">
                       Log in
                     </div>
-                  </Link>
+                  </div>
                 </div>
               </div>
             </div>
