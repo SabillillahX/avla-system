@@ -8,9 +8,6 @@ import {
 } from "../types/handle-videos";
 
 export const videosApi = {
-  /**
-   * Fetch paginated list of the current user's videos.
-   */
   getVideos: async (page = 1): Promise<PaginatedVideos> => {
     const response = await api.get<ApiResponse<PaginatedVideos>>("/videos", {
       params: { page },
@@ -18,18 +15,11 @@ export const videosApi = {
     return response.data.data;
   },
 
-  /**
-   * Fetch a single video by ID.
-   */
   getVideoById: async (videoId: string): Promise<Video> => {
     const response = await api.get<ApiResponse<Video>>(`/videos/${videoId}`);
     return response.data.data;
   },
 
-  /**
-   * Upload a new video (single-file upload path).
-   * Sends as multipart/form-data since it includes file fields.
-   */
   uploadVideo: async (payload: UploadVideoPayload): Promise<Video> => {
     const formData = new FormData();
     formData.append("title", payload.title);
@@ -51,10 +41,6 @@ export const videosApi = {
     return response.data.data;
   },
 
-  /**
-   * Update an existing video's metadata (title, description, category, thumbnail).
-   * Uses POST + _method=PATCH so Laravel accepts file uploads via FormData.
-   */
   updateVideo: async (
     videoId: string,
     payload: UpdateVideoPayload
@@ -75,9 +61,6 @@ export const videosApi = {
     return response.data.data;
   },
 
-  /**
-   * Delete a video and all associated files on the server.
-   */
   deleteVideo: async (videoId: string): Promise<void> => {
     await api.delete(`/videos/${videoId}`);
   },

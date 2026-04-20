@@ -4,6 +4,7 @@ import "./globals.css"
 import ClientLayout from "./client-layout"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { NotificationProvider } from "@/components/notification"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -17,7 +18,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>
-            <ClientLayout>{children}</ClientLayout>
+            <NotificationProvider>
+              <ClientLayout>{children}</ClientLayout>
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

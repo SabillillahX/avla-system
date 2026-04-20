@@ -42,6 +42,7 @@ import {
   Edit,
   Trash2,
   ImagePlus,
+  RefreshCw,
 } from "lucide-react"
 import { Video as VideoType, VideoStatus, ViewMode } from "@/lib/types/handle-videos"
 import { videosApi } from "@/lib/api/handle-videos"
@@ -90,8 +91,6 @@ function formatDate(dateStr: string) {
     year: "numeric",
   })
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MyVideoPage() {
   const [videos, setVideos] = useState<VideoType[]>([])
@@ -154,7 +153,16 @@ export default function MyVideoPage() {
     fetchVideos()
   }, [fetchVideos])
 
-  // ── Upload ──────────────────────────────────────────────────────────────────
+  // ── Listener untuk Auto-Refresh dari Global SSE ────────────────────────────
+  useEffect(() => {
+    const handleRefresh = () => {
+      console.log('🔄 Berhasil refresh UI video di background (dari global listener)...');
+      fetchVideos();
+    };
+
+    window.addEventListener('videoListRefresh', handleRefresh);
+    return () => window.removeEventListener('videoListRefresh', handleRefresh);
+  }, [fetchVideos]);
 
   const resetUploadForm = () => {
     setTitleInput("")
@@ -351,26 +359,10 @@ export default function MyVideoPage() {
           className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer relative group"
           onClick={() => router.push(`/my-video/${video.id}`)}
         >
-          <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 dark:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0">
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800">
-                <DropdownMenuItem onClick={() => openEditModal(video)} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <Edit className="w-4 h-4 mr-2" /> Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openDeleteModal(video)} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20">
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <CardContent className="p-4 flex items-center gap-5">
+
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
             {/* Thumbnail */}
-            <div className="relative w-44 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <div className="relative w-full sm:w-44 h-40 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
               {video.thumbnail_path ? (
                 <Image
                   src={getStorageUrl(video.thumbnail_path)}
@@ -388,14 +380,36 @@ export default function MyVideoPage() {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate">
-                {video.title}
-              </h3>
-              {video.description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
-                  {video.description}
-                </p>
-              )}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate mt-1">
+                    {video.title}
+                  </h3>
+                  {video.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1 pr-2">
+                      {video.description}
+                    </p>
+                  )}
+                </div>
+                {/* Always-visible action button safely placed above date layout and flush right */}
+                <div className="shrink-0 z-10 -mr-5 -mt-1 sm:-mr-4 sm:-mt-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-12 sm:w-12 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0">
+                        <MoreVertical className="w-6 h-6 sm:w-8 sm:h-8" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditModal(video); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
+                        <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Edit Video</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDeleteModal(video); }} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
+                        <Trash2 className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Delete Video</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
               <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <Badge className={`text-xs ${cfg.color} border-0`}>
                   <StatusIcon className="w-3 h-3 mr-1" />
@@ -423,23 +437,7 @@ export default function MyVideoPage() {
         className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow group overflow-hidden cursor-pointer relative"
         onClick={() => router.push(`/my-video/${video.id}`)}
       >
-        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-white bg-black/40 hover:bg-black/60 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-full">
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800">
-              <DropdownMenuItem onClick={() => openEditModal(video)} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                <Edit className="w-4 h-4 mr-2" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openDeleteModal(video)} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20">
-                <Trash2 className="w-4 h-4 mr-2" /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+
         <div className="relative h-40 bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
           {video.thumbnail_path ? (
             <Image
@@ -455,21 +453,41 @@ export default function MyVideoPage() {
           </div>
         </div>
         <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-1">
-              {video.title}
-            </h3>
-            <Badge className={`text-[10px] shrink-0 ${cfg.color} border-0`}>
-              <StatusIcon className="w-3 h-3 mr-0.5" />
-              {cfg.label}
-            </Badge>
+          <div className="flex items-start justify-between gap-1">
+            <div className="flex-1 min-w-0 pr-1">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white line-clamp-1">
+                {video.title}
+              </h3>
+              <Badge className={`text-[10px] shrink-0 mt-1.5 ${cfg.color} border-0 w-fit inline-flex`}>
+                <StatusIcon className="w-3 h-3 mr-0.5" />
+                {cfg.label}
+              </Badge>
+              {video.description && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-2">
+                  {video.description}
+                </p>
+              )}
+            </div>
+            {/* Always visible action button safely placed above date layout and flush right */}
+            <div className="shrink-0 z-10 -mr-4 -mt-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-12 sm:w-12 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
+                    <MoreVertical className="w-6 h-6 sm:w-8 sm:h-8" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditModal(video); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
+                    <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Edit Video</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDeleteModal(video); }} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
+                    <Trash2 className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Delete Video</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          {video.description && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">
-              {video.description}
-            </p>
-          )}
-          <div className="flex items-center justify-between text-[11px] text-gray-400 dark:text-gray-500">
+          <div className="flex items-center justify-between text-[11px] text-gray-400 dark:text-gray-500 mt-2 pt-1 border-t border-gray-100 dark:border-gray-800">
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               {formatDate(video.created_at)}
@@ -514,144 +532,87 @@ export default function MyVideoPage() {
           </p>
         </div>
 
-        {/* Upload dialog */}
-        <Dialog open={isUploadOpen} onOpenChange={handleOpenChange}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Video
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-white dark:bg-gray-800">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 dark:text-white">Upload New Video</DialogTitle>
-            </DialogHeader>
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={fetchVideos}
+            disabled={isLoading}
+            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-transparent"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Dialog open={isUploadOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Video
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-white dark:bg-gray-800">
+              <DialogHeader>
+                <DialogTitle className="text-gray-900 dark:text-white">Upload New Video</DialogTitle>
+              </DialogHeader>
 
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-              {/* Title */}
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Video Title <span className="text-red-500">*</span></Label>
-                <Input
-                  value={titleInput}
-                  onChange={(e) => setTitleInput(e.target.value)}
-                  placeholder="Enter video title"
-                  maxLength={255}
-                  className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Description <span className="text-red-500">*</span></Label>
-                <textarea
-                  value={descriptionInput}
-                  onChange={(e) => setDescriptionInput(e.target.value)}
-                  placeholder="Enter video description"
-                  maxLength={2000}
-                  rows={3}
-                  className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-                <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-0.5">{descriptionInput.length}/2000</p>
-              </div>
-
-              {/* Category */}
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Category <span className="text-red-500">*</span></Label>
-                <Input
-                  value={categoryInput}
-                  onChange={(e) => setCategoryInput(e.target.value)}
-                  placeholder="e.g. Education, Gaming, Music"
-                  maxLength={100}
-                  className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              {/* Thumbnail */}
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Thumbnail <span className="text-red-500">*</span></Label>
-                <div
-                  onClick={() => thumbnailInputRef.current?.click()}
-                  className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
-                >
-                  <input
-                    type="file"
-                    ref={thumbnailInputRef}
-                    onChange={(e) => setThumbnailFileInput(e.target.files?.[0] ?? null)}
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                  />
-                  {thumbnailFileInput ? (
-                    <div className="flex flex-col items-center">
-                      <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-500" />
-                      <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 break-all">
-                        {thumbnailFileInput.name}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 h-6 w-6 text-gray-500 hover:text-red-500"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setThumbnailFileInput(null)
-                          if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <ImagePlus className="w-6 h-6 mx-auto mb-1 text-gray-400" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Click to select a thumbnail image
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        JPG, PNG, WEBP up to 2 MB
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Source type toggle */}
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Source</Label>
-                <div className="flex gap-2 mt-2">
-                  {(["file", "url"] as const).map((type) => (
-                    <Button
-                      key={type}
-                      size="sm"
-                      variant={sourceType === type ? "default" : "outline"}
-                      onClick={() => setSourceType(type)}
-                      className="capitalize text-xs"
-                    >
-                      {type === "file" ? "Upload File" : "Paste URL"}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Conditional input */}
-              {sourceType === "file" ? (
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                {/* Title */}
                 <div>
-                  <Label className="text-gray-700 dark:text-gray-300">Video File</Label>
+                  <Label className="text-gray-700 dark:text-gray-300">Video Title <span className="text-red-500">*</span></Label>
+                  <Input
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    placeholder="Enter video title"
+                    maxLength={255}
+                    className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <Label className="text-gray-700 dark:text-gray-300">Description <span className="text-red-500">*</span></Label>
+                  <textarea
+                    value={descriptionInput}
+                    onChange={(e) => setDescriptionInput(e.target.value)}
+                    placeholder="Enter video description"
+                    maxLength={2000}
+                    rows={3}
+                    className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                  <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-0.5">{descriptionInput.length}/2000</p>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <Label className="text-gray-700 dark:text-gray-300">Category <span className="text-red-500">*</span></Label>
+                  <Input
+                    value={categoryInput}
+                    onChange={(e) => setCategoryInput(e.target.value)}
+                    placeholder="e.g. Education, Gaming, Music"
+                    maxLength={100}
+                    className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Thumbnail */}
+                <div>
+                  <Label className="text-gray-700 dark:text-gray-300">Thumbnail <span className="text-red-500">*</span></Label>
                   <div
-                    onClick={() => videoInputRef.current?.click()}
-                    className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+                    onClick={() => thumbnailInputRef.current?.click()}
+                    className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
                   >
                     <input
                       type="file"
-                      ref={videoInputRef}
-                      onChange={(e) => setVideoFileInput(e.target.files?.[0] ?? null)}
-                      accept="video/mp4,video/webm,video/avi,video/quicktime,video/x-matroska"
+                      ref={thumbnailInputRef}
+                      onChange={(e) => setThumbnailFileInput(e.target.files?.[0] ?? null)}
+                      accept="image/jpeg,image/png,image/webp"
                       className="hidden"
                     />
-                    {videoFileInput ? (
+                    {thumbnailFileInput ? (
                       <div className="flex flex-col items-center">
-                        <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                        <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-500" />
                         <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 break-all">
-                          {videoFileInput.name}
+                          {thumbnailFileInput.name}
                         </p>
                         <Button
                           type="button"
@@ -660,8 +621,8 @@ export default function MyVideoPage() {
                           className="absolute top-2 right-2 h-6 w-6 text-gray-500 hover:text-red-500"
                           onClick={(e) => {
                             e.stopPropagation()
-                            setVideoFileInput(null)
-                            if (videoInputRef.current) videoInputRef.current.value = ""
+                            setThumbnailFileInput(null)
+                            if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
                           }}
                         >
                           <X className="w-4 h-4" />
@@ -669,57 +630,125 @@ export default function MyVideoPage() {
                       </div>
                     ) : (
                       <>
-                        <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                        <ImagePlus className="w-6 h-6 mx-auto mb-1 text-gray-400" />
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Drag &amp; drop your video file here, or click to browse
+                          Click to select a thumbnail image
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                          MP4, MKV, AVI, MOV, WEBM up to 500 MB
+                          JPG, PNG, WEBP up to 2 MB
                         </p>
                       </>
                     )}
                   </div>
                 </div>
-              ) : (
+
+                {/* Source type toggle */}
                 <div>
-                  <Label className="text-gray-700 dark:text-gray-300">Video URL</Label>
-                  <Input
-                    value={videoUrlInput}
-                    onChange={(e) => setVideoUrlInput(e.target.value)}
-                    placeholder="https://example.com/video.mp4"
-                    className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                  />
+                  <Label className="text-gray-700 dark:text-gray-300">Source</Label>
+                  <div className="flex gap-2 mt-2">
+                    {(["file", "url"] as const).map((type) => (
+                      <Button
+                        key={type}
+                        size="sm"
+                        variant={sourceType === type ? "default" : "outline"}
+                        onClick={() => setSourceType(type)}
+                        className="capitalize text-xs"
+                      >
+                        {type === "file" ? "Upload File" : "Paste URL"}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              )}
 
-              {/* Error */}
-              {uploadError && (
-                <p className="text-sm text-red-500 flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  {uploadError}
-                </p>
-              )}
+                {/* Conditional input */}
+                {sourceType === "file" ? (
+                  <div>
+                    <Label className="text-gray-700 dark:text-gray-300">Video File</Label>
+                    <div
+                      onClick={() => videoInputRef.current?.click()}
+                      className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+                    >
+                      <input
+                        type="file"
+                        ref={videoInputRef}
+                        onChange={(e) => setVideoFileInput(e.target.files?.[0] ?? null)}
+                        accept="video/mp4,video/webm,video/avi,video/quicktime,video/x-matroska"
+                        className="hidden"
+                      />
+                      {videoFileInput ? (
+                        <div className="flex flex-col items-center">
+                          <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 break-all">
+                            {videoFileInput.name}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-2 right-2 h-6 w-6 text-gray-500 hover:text-red-500"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setVideoFileInput(null)
+                              if (videoInputRef.current) videoInputRef.current.value = ""
+                            }}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Drag &amp; drop your video file here, or click to browse
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            MP4, MKV, AVI, MOV, WEBM up to 500 MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Label className="text-gray-700 dark:text-gray-300">Video URL</Label>
+                    <Input
+                      value={videoUrlInput}
+                      onChange={(e) => setVideoUrlInput(e.target.value)}
+                      placeholder="https://example.com/video.mp4"
+                      className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                )}
 
-              {/* Actions */}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isUploading}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={isUploading}
-                  className="bg-blue-600 hover:bg-blue-700 min-w-[90px]"
-                >
-                  {isUploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    "Upload"
-                  )}
-                </Button>
+                {/* Error */}
+                {uploadError && (
+                  <p className="text-sm text-red-500 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {uploadError}
+                  </p>
+                )}
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isUploading}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isUploading}
+                    className="bg-blue-600 hover:bg-blue-700 min-w-[90px]"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Upload"
+                    )}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
 
         {/* Edit Dialog */}
         <Dialog open={isEditModalVisible} onOpenChange={setIsEditModalVisible}>
@@ -843,7 +872,7 @@ export default function MyVideoPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard icon={Video} label="Total Videos" value={stats.total} accent="bg-blue-600" />
         <StatCard icon={CheckCircle2} label="Completed" value={stats.completed} accent="bg-emerald-600" />
         <StatCard icon={TrendingUp} label="Processing" value={stats.processing} accent="bg-amber-500" />
@@ -935,7 +964,7 @@ export default function MyVideoPage() {
         ) : filteredList.length === 0 ? (
           <EmptyState />
         ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredList.map((v) => (
               <VideoCard key={v.id} video={v} />
             ))}
