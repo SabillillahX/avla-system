@@ -2,6 +2,8 @@ import api from "./axios";
 import {
   ApiResponse,
   PaginatedVideos,
+  Quiz,
+  QuizListResponse,
   UpdateVideoPayload,
   UploadVideoPayload,
   Video,
@@ -17,6 +19,11 @@ export const videosApi = {
 
   getVideoById: async (videoId: string): Promise<Video> => {
     const response = await api.get<ApiResponse<Video>>(`/videos/${videoId}`);
+    return response.data.data;
+  },
+
+  getVideoQuizzes: async (videoId: string): Promise<Quiz[]> => {
+    const response = await api.get<QuizListResponse>(`/videos/${videoId}/quizzes`);
     return response.data.data;
   },
 

@@ -2,89 +2,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express, { Request, Response } from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { z } from "zod";
+import { ENV, ALLOWED_ORIGINS } from "./utils/helper.js";
+import {
+    NotificationPayload,
+    ParsedQuiz,
+    TranscriptSegment,
+    TranscriptChunk,
+    UnknownRecord
+} from "./utils/interface.js";
+import { parseQuizFromLlmOutput } from "./utils/helper.js";
 
-dotenv.config();
-
-// ---------------------------------------------------------------------------
-// Environment & Constants
-// ---------------------------------------------------------------------------
-
-const ENV = {
-    geminiApiKey: process.env.GEMINI_API ?? "",
-    backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL ?? "",
-    allowedOrigins: process.env.ALLOWED_ORIGINS ?? "",
-    port: Number(process.env.PORT ?? 8081),
-} as const;
-
-const REQUIRED_ENV_KEYS = ["geminiApiKey", "backendUrl"] as const;
-
-for (const key of REQUIRED_ENV_KEYS) {
-    if (!ENV[key]) {
-        console.error(`[Config] Missing required environment variable: ${key}`);
-        process.exit(1);
-    }
-}
-
-const DEFAULT_QUIZ_INTERVAL_SECONDS = 3 * 60; // 3 minutes
-
-const ALLOWED_ORIGINS: string[] = Array.from(
-    new Set([
-        ...ENV.allowedOrigins
-            .split(",")
-            .map((o) => o.trim())
-            .filter(Boolean),
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ])
-);
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ParsedQuiz {
-    question: string;
-    options: [string, string, string, string];
-    correct_answer: string;
-    explanation: string;
-}
-
-interface TranscriptSegment {
-    text: string;
-    end: number;
-}
-
-interface TranscriptChunk {
-    trigger_time: number;
-    text: string;
-}
-
-interface NotificationPayload {
-    event: string;
-    video_id?: string | number;
-    message?: string;
-    progress?: number;
-    processed_chunks?: number;
-    total_chunks?: number;
-    saved_count?: number;
-}
-
-type UnknownRecord = Record<string, unknown>;
-
-// ---------------------------------------------------------------------------
-// In-Memory Stores
-// ---------------------------------------------------------------------------
-
+// In memory stores
 const activeSSESessions = new Map<string, SSEServerTransport>();
 const notificationClientsByUserId = new Map<string, Response>();
 
-/**
- * Buffer for notifications that arrived before the client connected (or while
- * it was reconnecting). Each entry is TTL-bound so stale events are not
- * replayed to a client that reconnects much later.
- */
 const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface BufferedNotification {
@@ -118,16 +50,10 @@ function flushPendingNotifications(userId: string, client: Response): void {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Notification Emitter
-// ---------------------------------------------------------------------------
-
 function emitNotificationToUser(userId: string, payload: NotificationPayload): void {
     const client = notificationClientsByUserId.get(userId);
 
     if (!client) {
-        // Client is offline or reconnecting — buffer the event so it is delivered
-        // automatically the moment the client re-establishes its SSE connection.
         bufferNotificationForUser(userId, payload);
         console.log(`[Notifications] userId=${userId} offline — buffered event "${payload.event}"`);
         return;
@@ -135,10 +61,6 @@ function emitNotificationToUser(userId: string, payload: NotificationPayload): v
 
     client.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
-
-// ---------------------------------------------------------------------------
-// Gemini API
-// ---------------------------------------------------------------------------
 
 async function callGeminiApi(prompt: string): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${ENV.geminiApiKey}`;
@@ -158,253 +80,121 @@ async function callGeminiApi(prompt: string): Promise<string> {
     return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "No response generated.";
 }
 
-// ---------------------------------------------------------------------------
-// Quiz Parsing Utilities
-// ---------------------------------------------------------------------------
-
-function normalizeWhitespace(value: string): string {
-    return value.replace(/\s+/g, " ").trim();
+function getVideoDurationSeconds(segments: TranscriptSegment[]): number {
+    if (segments.length === 0) return 0;
+    return segments[segments.length - 1].end;
 }
 
-function stripOptionPrefix(value: string): string {
-    return value
-        .replace(/^\s*[-*]\s+/, "")
-        .replace(/^\s*[A-Da-d][\).:\-]\s+/, "")
-        .replace(/^\s*\d+[\).:\-]\s+/, "")
-        .trim();
-}
+function calculateTargetQuizCount(durationSeconds: number): number {
+    const minutes = durationSeconds / 60;
 
-function stripWrappingQuotes(value: string): string {
-    return value.replace(/^['"`]+|['"`]+$/g, "").trim();
-}
-
-function normalizeOptionText(value: string): string {
-    return normalizeWhitespace(stripWrappingQuotes(stripOptionPrefix(value)));
-}
-
-function normalizeForComparison(value: string): string {
-    return normalizeOptionText(value).toLowerCase();
-}
-
-function resolveCorrectAnswerText(
-    rawCorrectAnswer: string,
-    normalizedOptions: string[]
-): string | null {
-    const normalizedAnswer = normalizeForComparison(rawCorrectAnswer);
-    if (!normalizedAnswer) return null;
-
-    // Exact text match
-    const exactMatch = normalizedOptions.find(
-        (option) => normalizeForComparison(option) === normalizedAnswer
-    );
-    if (exactMatch) return exactMatch;
-
-    // Label-only match: "A", "B", "Option C", etc.
-    const labelMatch = normalizedAnswer.match(/(?:option\s*)?([a-d])/i);
-    if (labelMatch) {
-        const index = labelMatch[1].toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
-        if (index >= 0 && index < normalizedOptions.length) {
-            return normalizedOptions[index];
-        }
+    if (minutes < 5) {
+        return 3;
     }
 
-    return null;
+    if (minutes < 10) {
+        return Math.max(4, Math.ceil(durationSeconds / 90));
+    }
+
+    return Math.min(10, Math.max(4, Math.ceil(minutes / 2)));
 }
 
-function resolveCorrectAnswer(
-    rawValue: unknown,
-    normalizedOptions: string[]
-): string | null {
-    if (typeof rawValue === "number" && Number.isInteger(rawValue)) {
-        const index = rawValue - 1;
-        return index >= 0 && index < normalizedOptions.length
-            ? normalizedOptions[index]
-            : null;
-    }
-
-    if (typeof rawValue === "string") {
-        return resolveCorrectAnswerText(rawValue, normalizedOptions);
-    }
-
-    return null;
-}
-
-function extractNestedCandidateObjects(input: unknown): UnknownRecord[] {
-    if (!input || typeof input !== "object") return [];
-
-    const root = input as UnknownRecord;
-    const candidates: UnknownRecord[] = [root];
-
-    for (const key of ["quiz", "result", "data", "item", "question_data", "mcq"]) {
-        const value = root[key];
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-            candidates.push(value as UnknownRecord);
-        }
-    }
-
-    for (const key of ["quizzes", "questions", "items"]) {
-        const value = root[key];
-        if (Array.isArray(value) && value.length > 0) {
-            const firstItem = value[0];
-            if (firstItem && typeof firstItem === "object") {
-                candidates.push(firstItem as UnknownRecord);
-            }
-        }
-    }
-
-    return candidates;
-}
-
-function coerceQuizFromObject(rawObject: unknown): ParsedQuiz | null {
-    const candidates = extractNestedCandidateObjects(rawObject);
-
-    for (const candidate of candidates) {
-        const rawQuestion = candidate.question;
-        const rawOptions = candidate.options;
-        const rawCorrectAnswer =
-            candidate.correct_answer ??
-            candidate.correctAnswer ??
-            candidate.answer ??
-            candidate.correctOption;
-        const rawExplanation = candidate.explanation;
-
-        if (typeof rawQuestion !== "string" || !rawQuestion.trim()) continue;
-        if (!Array.isArray(rawOptions) || rawOptions.length < 2) continue;
-
-        const normalizedOptions = rawOptions
-            .filter((opt): opt is string => typeof opt === "string" && !!opt.trim())
-            .map(normalizeOptionText)
-            .filter(Boolean)
-            .slice(0, 4);
-
-        if (normalizedOptions.length !== 4) continue;
-
-        const correctAnswer = resolveCorrectAnswer(rawCorrectAnswer, normalizedOptions);
-        if (!correctAnswer) continue;
-
-        return {
-            question: normalizeWhitespace(rawQuestion),
-            options: normalizedOptions as [string, string, string, string],
-            correct_answer: correctAnswer,
-            explanation:
-                typeof rawExplanation === "string" ? normalizeWhitespace(rawExplanation) : "",
-        };
-    }
-
-    return null;
-}
-
-function extractFirstJsonObject(input: string): string | null {
-    let inString = false;
-    let isEscaped = false;
-    let depth = 0;
-    let startIndex = -1;
-
-    for (let i = 0; i < input.length; i++) {
-        const char = input[i];
-
-        if (isEscaped) { isEscaped = false; continue; }
-        if (char === "\\") { isEscaped = true; continue; }
-        if (char === '"') { inString = !inString; continue; }
-        if (inString) continue;
-
-        if (char === "{") {
-            if (depth === 0) startIndex = i;
-            depth++;
-        } else if (char === "}") {
-            depth--;
-            if (depth === 0 && startIndex !== -1) {
-                return input.slice(startIndex, i + 1);
-            }
-        }
-    }
-
-    return null;
-}
-
-function parseQuizFromLlmOutput(rawOutput: string): ParsedQuiz | null {
-    const cleaned = rawOutput.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const candidates = [cleaned, extractFirstJsonObject(cleaned)].filter(
-        (v): v is string => Boolean(v)
-    );
-
-    for (const candidate of candidates) {
-        try {
-            const parsed = JSON.parse(candidate);
-            const coerced = coerceQuizFromObject(parsed);
-            if (coerced) return coerced;
-        } catch {
-            // Try the next candidate.
-        }
-    }
-
-    return null;
-}
-
-// ---------------------------------------------------------------------------
-// Transcript Chunking
-// ---------------------------------------------------------------------------
-
-function chunkTranscriptByTime(
+// Transcript
+function chunkTranscriptByCount(
     segments: TranscriptSegment[],
-    intervalSeconds: number
+    targetCount: number
 ): TranscriptChunk[] {
+    if (segments.length === 0) return [];
+
+    const totalDuration = getVideoDurationSeconds(segments);
+    const intervalSeconds = totalDuration / targetCount;
+
     const chunks: TranscriptChunk[] = [];
     let currentText = "";
+    let chunkIndex = 0;
     let nextCheckpointSeconds = intervalSeconds;
 
     for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
+        if (!segment.text.trim()) continue;
+
         currentText += segment.text + " ";
 
         const isLastSegment = i === segments.length - 1;
-        if (segment.end >= nextCheckpointSeconds || isLastSegment) {
-            chunks.push({
-                trigger_time: Math.round(segment.end),
-                text: currentText.trim(),
-            });
+        const hasReachedCheckpoint = segment.end >= nextCheckpointSeconds;
+        const hasRemainingChunks = chunkIndex < targetCount - 1;
+
+        if ((hasReachedCheckpoint && hasRemainingChunks) || isLastSegment) {
+            const trimmedText = currentText.trim();
+            if (trimmedText) {
+                chunks.push({
+                    trigger_time: Math.round(segment.end),
+                    text: trimmedText,
+                });
+            }
             currentText = "";
-            nextCheckpointSeconds = segment.end + intervalSeconds;
+            chunkIndex++;
+            nextCheckpointSeconds = intervalSeconds * (chunkIndex + 1);
         }
     }
 
     return chunks;
 }
 
-// ---------------------------------------------------------------------------
-// Quiz Generation Prompt
-// ---------------------------------------------------------------------------
+function buildQuizGenerationPrompt(
+    transcriptText: string,
+    chunkIndex: number = 0,
+    totalChunks: number = 1,
+    durationMinutes: number = 3
+): string {
+    const positionPercent = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+    const isEarlyChunk = chunkIndex < Math.ceil(totalChunks * 0.33);
+    const isLateChunk = chunkIndex >= Math.ceil(totalChunks * 0.66);
 
-function buildQuizGenerationPrompt(transcriptText: string): string {
-    return `You are an E-Learning Instructional Designer and a Professional Educator.
+    const cognitiveLevel = isEarlyChunk
+        ? "comprehension and recall (Bloom's Level 1–2: Remember / Understand) — test whether the learner grasped the core concept just introduced"
+        : isLateChunk
+        ? "analysis and application (Bloom's Level 3–4: Apply / Analyze) — test whether the learner can use or reason about the concept, not just recall it"
+        : "conceptual understanding and application (Bloom's Level 2–3: Understand / Apply) — test whether the learner understands the mechanism behind the concept";
 
-Your task is to create exactly 1 (one) multiple-choice question based on the following chunk of text from an educational video transcript.
+    const depthNote =
+        durationMinutes >= 10
+            ? "This is a substantial video. The learner has been engaged for an extended period — the question should reflect appropriate depth and avoid repeating surface-level facts covered earlier."
+            : "This is a short, focused video. Keep the question tight and directly tied to the single core concept presented in this excerpt.";
 
-Context: This question will appear as a "Pop-Up Quiz" that automatically pauses the video. The goal is to test the student's immediate focus and understanding of the concept that was *just* explained in this specific text chunk.
+    return `You are a Senior Instructional Designer and Expert Educator with 20+ years of experience designing high-stakes assessments for universities and professional certification programs.
 
-Requirements:
-1. The question must be clear, concise, and relevant to the provided text.
-2. Provide exactly 4 reasonable answer options, without A/B/C/D labels inside the option text.
-3. The correct answer text must exactly match one of the provided options.
-4. Provide a brief explanation of why the answer is correct, used as adaptive feedback.
+Your task is to write exactly 1 (one) multiple-choice question for an adaptive pop-up quiz that pauses an educational video at the moment the learner has just finished watching the excerpt below.
 
-RETURN ONLY A VALID JSON OBJECT — NO MARKDOWN, NO PREAMBLE:
+## Positional Context
+- Chunk: ${chunkIndex + 1} of ${totalChunks} (${positionPercent}% through the video)
+- Target cognitive level: ${cognitiveLevel}
+- ${depthNote}
+
+## Question Quality Standards
+1. **Test understanding, not verbatim recall.** Do NOT write questions like "What did the speaker say about X?" Write questions that confirm the learner *understood* the concept — e.g. "Why does X work this way?" or "What would happen if Y?"
+2. **One unambiguously correct answer.** Based strictly on the transcript excerpt provided.
+3. **Three high-quality distractors.** Each wrong option must represent a plausible misconception or a partially correct idea. A learner who only skimmed the content should NOT immediately spot the correct answer. Avoid obviously absurd options.
+4. **No A/B/C/D or numbering inside option text.** The option strings themselves must be clean.
+5. **Adaptive explanation.** The explanation must: (a) clearly state why the correct answer is right using evidence from the transcript, and (b) address the most tempting wrong answer and explain why it fails.
+6. **Language matching.** Detect the language of the transcript and write the entire question, all options, and the explanation in that SAME language.
+
+## Strict Output Format
+Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing text:
 {
-  "question": "Write the question here?",
-  "options": ["First option", "Second option", "Third option", "Fourth option"],
-  "correct_answer": "The correct option text",
-  "explanation": "Explanation of why this option is correct."
+  "question": "A clear, conceptual question ending with a question mark?",
+  "options": ["Correct answer text", "Plausible wrong answer", "Plausible wrong answer", "Plausible wrong answer"],
+  "correct_answer": "Correct answer text",
+  "explanation": "The correct answer is [X] because [evidence from transcript]. A common mistake is choosing [distractor] because [why it seems right], but [why it is actually wrong]."
 }
 
-Video Transcript:
+CRITICAL: The value of "correct_answer" must be an exact character-for-character copy of one of the strings in the "options" array.
+
+## Transcript Excerpt
 """
 ${transcriptText}
 """`;
 }
-
-// ---------------------------------------------------------------------------
-// MCP Server & Tools
-// ---------------------------------------------------------------------------
 
 function buildAuthHeaders(token: string): Record<string, string> {
     return {
@@ -420,7 +210,7 @@ function createMcpServer(): McpServer {
         version: "1.0.0",
     });
 
-    // Tool: getCurrentUser
+    // Tool: getCurrentUser 
     server.tool(
         "getCurrentUser",
         "Get information about the currently logged-in user",
@@ -446,7 +236,7 @@ function createMcpServer(): McpServer {
         }
     );
 
-    // Tool: analyzeVideoAudioPaths
+    // Tool: analyzeVideoAudioPaths 
     server.tool(
         "analyzeVideoAudioPaths",
         "Fetch user's video data and use Gemini to answer questions about their audio paths",
@@ -482,10 +272,10 @@ function createMcpServer(): McpServer {
         }
     );
 
-    // Tool: generateAdaptiveVideoQuizzes
+    // Tool: generateAdaptiveVideoQuizzes 
     server.tool(
         "generateAdaptiveVideoQuizzes",
-        "Generate adaptive multiple-choice quizzes from video transcripts, chunked by time intervals",
+        "Generate adaptive multiple-choice quizzes from video transcripts. Quiz count and intervals are automatically calculated from video duration. Minimum 3 quizzes for videos under 5 minutes, minimum 4 for videos over 5 minutes, maximum 10 for videos 10 minutes or longer.",
         {
             token: z.string().describe("Bearer token of the currently logged-in user"),
             userId: z.union([z.number(), z.string()]).describe("User ID for realtime progress notifications"),
@@ -493,10 +283,11 @@ function createMcpServer(): McpServer {
             intervalMinutes: z
                 .number()
                 .optional()
-                .describe("Quiz popup interval in minutes (default: 3)"),
+                .describe(
+                    "Optional: override the auto-calculated quiz interval (in minutes). When omitted, interval is determined dynamically from video duration."
+                ),
         },
         async ({ token, userId, videoId, intervalMinutes }) => {
-            const intervalSeconds = (intervalMinutes ?? 3) * 60;
             const userIdStr = String(userId);
 
             emitNotificationToUser(userIdStr, {
@@ -506,7 +297,6 @@ function createMcpServer(): McpServer {
                 progress: 0,
             });
 
-            // 1. Fetch transcript
             const transcriptResponse = await fetch(
                 `${ENV.backendUrl}/videos/${videoId}/transcript`,
                 { method: "GET", headers: buildAuthHeaders(token) }
@@ -520,7 +310,12 @@ function createMcpServer(): McpServer {
                     message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
                 });
                 return {
-                    content: [{ type: "text", text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}` }],
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
+                        },
+                    ],
                 };
             }
 
@@ -533,57 +328,116 @@ function createMcpServer(): McpServer {
                     video_id: videoId,
                     message: "Transkrip video kosong, kuis tidak bisa dibuat.",
                 });
-                return { content: [{ type: "text", text: "No transcript segments found." }] };
+                return {
+                    content: [{ type: "text", text: "No transcript segments found." }],
+                };
             }
 
-            // 2. Chunk transcript by time
-            const transcriptChunks = chunkTranscriptByTime(
-                transcriptSegments,
-                intervalSeconds === 0 ? DEFAULT_QUIZ_INTERVAL_SECONDS : intervalSeconds
+            const durationSeconds = getVideoDurationSeconds(transcriptSegments);
+            const durationMinutes = durationSeconds / 60;
+
+            let targetQuizCount: number;
+
+            if (intervalMinutes !== undefined && intervalMinutes > 0) {
+                // Manual override: convert interval to count, then clamp to rules
+                const rawCount = Math.ceil(durationSeconds / (intervalMinutes * 60));
+                targetQuizCount = Math.min(10, Math.max(3, rawCount));
+                console.log(
+                    `[Quiz] Manual interval override: ${intervalMinutes}min → clamped to ${targetQuizCount} quizzes`
+                );
+            } else {
+                targetQuizCount = calculateTargetQuizCount(durationSeconds);
+            }
+
+            console.log(
+                `[Quiz] videoId=${videoId} | duration=${durationMinutes.toFixed(1)}min | targetQuizzes=${targetQuizCount}`
             );
 
-            // 3. Generate quizzes per chunk
+            emitNotificationToUser(userIdStr, {
+                event: "quiz_generation_analyzing",
+                video_id: videoId,
+                message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — akan membuat ${targetQuizCount} soal kuis...`,
+                progress: 3,
+                quiz_count: targetQuizCount,
+                duration_minutes: Math.round(durationMinutes * 10) / 10,
+            });
+
+            const transcriptChunks = chunkTranscriptByCount(
+                transcriptSegments,
+                targetQuizCount
+            );
+
+            if (transcriptChunks.length === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_failed",
+                    video_id: videoId,
+                    message: "Gagal membagi transkrip menjadi potongan.",
+                });
+                return {
+                    content: [{ type: "text", text: "Failed to chunk transcript." }],
+                };
+            }
+
+            const totalChunks = transcriptChunks.length;
+
             const generatedQuizzes: (ParsedQuiz & { trigger_time: number })[] = [];
             let failedChunkCount = 0;
             let lastErrorMessage = "Format kuis dari AI tidak valid.";
-            const totalChunks = transcriptChunks.length;
 
             for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
                 const chunk = transcriptChunks[chunkIndex];
                 if (!chunk.text) continue;
 
                 try {
-                    const rawLlmOutput = await callGeminiApi(buildQuizGenerationPrompt(chunk.text));
+                    const prompt = buildQuizGenerationPrompt(
+                        chunk.text,
+                        chunkIndex,
+                        totalChunks,
+                        durationMinutes
+                    );
+
+                    const rawLlmOutput = await callGeminiApi(prompt);
                     let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
 
-                    // Attempt self-repair if initial parse fails
                     if (!parsedQuiz) {
-                        const repairPrompt = `Convert the following into valid JSON only — no markdown, no preamble:
-{
-  "question": "...",
-  "options": ["...", "...", "...", "..."],
-  "correct_answer": "...",
-  "explanation": "..."
-}
+                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY valid JSON — no markdown, no preamble:
+                        {
+                        "question": "string",
+                        "options": ["string", "string", "string", "string"],
+                        "correct_answer": "string (must exactly match one of the options)",
+                        "explanation": "string"
+                        }
 
-Input to fix:
-${rawLlmOutput}`;
+                        Your previous output to fix:
+                        ${rawLlmOutput}`;
                         const repairedOutput = await callGeminiApi(repairPrompt);
                         parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
                     }
 
                     if (!parsedQuiz) {
-                        throw new Error("Unable to extract a valid quiz format from LLM output.");
+                        throw new Error(
+                            "Unable to extract a valid quiz format from LLM output after repair attempt."
+                        );
                     }
 
                     generatedQuizzes.push({ ...parsedQuiz, trigger_time: chunk.trigger_time });
+
                 } catch (error) {
                     failedChunkCount++;
                     lastErrorMessage =
-                        error instanceof Error ? error.message : "Unknown error during quiz generation.";
+                        error instanceof Error
+                            ? error.message
+                            : "Unknown error during quiz generation.";
+                    console.error(
+                        `[Quiz] Chunk ${chunkIndex + 1}/${totalChunks} failed: ${lastErrorMessage}`
+                    );
+
                 } finally {
                     const processedChunks = chunkIndex + 1;
-                    const progressPercent = Math.min(95, Math.round((processedChunks / totalChunks) * 100));
+                    const progressPercent = Math.min(
+                        95,
+                        Math.round((processedChunks / totalChunks) * 100)
+                    );
 
                     emitNotificationToUser(userIdStr, {
                         event: "quiz_generation_progress",
@@ -591,7 +445,7 @@ ${rawLlmOutput}`;
                         processed_chunks: processedChunks,
                         total_chunks: totalChunks,
                         progress: progressPercent,
-                        message: `Memproses ${processedChunks}/${totalChunks} potongan transkrip...`,
+                        message: `Membuat soal ${processedChunks} dari ${totalChunks}...`,
                     });
                 }
             }
@@ -600,14 +454,18 @@ ${rawLlmOutput}`;
                 emitNotificationToUser(userIdStr, {
                     event: "quiz_generation_failed",
                     video_id: videoId,
-                    message: `Gagal membuat kuis: ${lastErrorMessage} (${totalChunks - failedChunkCount}/${totalChunks} chunk valid)`,
+                    message: `Gagal membuat kuis: ${lastErrorMessage} (0/${totalChunks} chunk berhasil)`,
                 });
                 return {
-                    content: [{ type: "text", text: `Quiz generation failed. Detail: ${lastErrorMessage}` }],
+                    content: [
+                        {
+                            type: "text",
+                            text: `Quiz generation failed. Detail: ${lastErrorMessage}`,
+                        },
+                    ],
                 };
             }
 
-            // 4. Save quizzes to backend
             emitNotificationToUser(userIdStr, {
                 event: "quiz_generation_saving",
                 video_id: videoId,
@@ -615,11 +473,14 @@ ${rawLlmOutput}`;
                 message: "Menyimpan kuis ke server...",
             });
 
-            const saveResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/quizzes`, {
-                method: "POST",
-                headers: buildAuthHeaders(token),
-                body: JSON.stringify({ quizzes: generatedQuizzes }),
-            });
+            const saveResponse = await fetch(
+                `${ENV.backendUrl}/videos/${videoId}/quizzes`,
+                {
+                    method: "POST",
+                    headers: buildAuthHeaders(token),
+                    body: JSON.stringify({ quizzes: generatedQuizzes }),
+                }
+            );
 
             if (!saveResponse.ok) {
                 const saveErrorText = await saveResponse.text();
@@ -629,26 +490,44 @@ ${rawLlmOutput}`;
                     message: `Gagal menyimpan kuis: ${saveResponse.status}`,
                 });
                 return {
-                    content: [{ type: "text", text: `Failed to save quizzes: ${saveResponse.status} - ${saveErrorText}` }],
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to save quizzes: ${saveResponse.status} - ${saveErrorText}`,
+                        },
+                    ],
                 };
             }
 
             const saveResult = await saveResponse.json();
             const savedQuizCount = saveResult.saved_count ?? generatedQuizzes.length;
+            const skippedCount = totalChunks - generatedQuizzes.length;
 
             emitNotificationToUser(userIdStr, {
                 event: "quiz_generation_completed",
                 video_id: videoId,
                 progress: 100,
                 saved_count: savedQuizCount,
-                message: "Kuis berhasil dibuat dan disimpan.",
+                message: `${savedQuizCount} kuis berhasil dibuat dan disimpan.`,
             });
+
+            const triggerSummary = generatedQuizzes
+                .map((q) => `${q.trigger_time}s`)
+                .join(", ");
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Done! Successfully created ${savedQuizCount} quizzes from the video transcript.`,
+                        text: [
+                            `Done! Generated ${savedQuizCount} quizzes from a ${durationMinutes.toFixed(1)}-minute video.`,
+                            skippedCount > 0
+                                ? `(${skippedCount} chunk(s) skipped due to LLM errors)`
+                                : "",
+                            `Quiz trigger times: [${triggerSummary}]`,
+                        ]
+                            .filter(Boolean)
+                            .join(" "),
                     },
                 ],
             };
@@ -658,10 +537,7 @@ ${rawLlmOutput}`;
     return server;
 }
 
-// ---------------------------------------------------------------------------
-// Express App & CORS
-// ---------------------------------------------------------------------------
-
+// Express app setup
 const app = express();
 
 const corsOptions: cors.CorsOptions = {
@@ -680,20 +556,12 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.options("/{*path}", cors(corsOptions));
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function resolveAllowedOriginHeader(requestOrigin: string | undefined): string {
     if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) return requestOrigin;
     return ALLOWED_ORIGINS[0] ?? "http://localhost:3000";
 }
 
-// ---------------------------------------------------------------------------
 // Routes
-// ---------------------------------------------------------------------------
-
-// SSE: Realtime notifications per user
 app.get("/notifications", (req: Request, res: Response) => {
     const userId = req.query.userId as string;
 
@@ -713,12 +581,11 @@ app.get("/notifications", (req: Request, res: Response) => {
         Vary: "Origin",
     });
 
-    res.write(":\n\n"); // Initial SSE comment to open the stream
+    res.write(":\n\n");
 
     notificationClientsByUserId.set(userId, res);
     console.log(`[Notifications] Client connected: userId=${userId}`);
 
-    // Deliver any events that arrived while the client was offline / reconnecting.
     flushPendingNotifications(userId, res);
 
     const heartbeatInterval = setInterval(() => {
@@ -732,7 +599,6 @@ app.get("/notifications", (req: Request, res: Response) => {
     });
 });
 
-// Webhook: Called by backend when transcription is ready
 app.post("/webhook/transcription-done", express.json(), (req: Request, res: Response) => {
     const { video_id, user_id, status } = req.body ?? {};
 
@@ -746,13 +612,14 @@ app.post("/webhook/transcription-done", express.json(), (req: Request, res: Resp
             event: "transcription_ready",
             video_id,
         });
-        console.log(`[Webhook] transcription_ready sent: videoId=${video_id}, userId=${user_id}`);
+        console.log(
+            `[Webhook] transcription_ready sent: videoId=${video_id}, userId=${user_id}`
+        );
     }
 
     res.status(200).json({ received: true });
 });
 
-// SSE: MCP session endpoint
 app.get("/sse", async (req: Request, res: Response) => {
     const allowedOrigin = resolveAllowedOriginHeader(req.headers.origin);
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
@@ -772,7 +639,6 @@ app.get("/sse", async (req: Request, res: Response) => {
     });
 });
 
-// POST: MCP message handler for a given session
 app.post("/messages", async (req: Request, res: Response) => {
     const sessionId = req.query.sessionId as string;
     const transport = activeSSESessions.get(sessionId);
@@ -785,16 +651,15 @@ app.post("/messages", async (req: Request, res: Response) => {
     try {
         await transport.handlePostMessage(req, res);
     } catch (error) {
-        console.error(`[SSE] Error handling message for session ${sessionId}:`, error);
+        console.error(
+            `[SSE] Error handling message for session ${sessionId}:`,
+            error
+        );
         if (!res.headersSent) {
             res.status(500).json({ error: "Internal server error while handling message." });
         }
     }
 });
-
-// ---------------------------------------------------------------------------
-// Start Server
-// ---------------------------------------------------------------------------
 
 app.listen(ENV.port, "0.0.0.0", () => {
     console.log(`[Server] MCP SSE Server running on http://0.0.0.0:${ENV.port}`);

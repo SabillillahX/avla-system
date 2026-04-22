@@ -32,6 +32,24 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+export interface Quiz {
+  id: string;
+  video_id: string;
+  trigger_time: number;
+  question: string;
+  options: string[];
+  correct_answer: string;
+  explanation: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuizListResponse {
+  message: string;
+  data: Quiz[];
+  total: number;
+}
+
 export interface UploadVideoPayload {
   title: string;
   description?: string;

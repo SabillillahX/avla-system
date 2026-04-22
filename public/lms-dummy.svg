@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EFF6FF"/>
+      <stop offset="1" stop-color="#E5E7EB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="120" y="120" width="1360" height="660" rx="28" fill="white" stroke="#D1D5DB" stroke-width="2"/>
+  <rect x="170" y="180" width="420" height="40" rx="8" fill="#E5E7EB"/>
+  <rect x="170" y="240" width="700" height="22" rx="6" fill="#F3F4F6"/>
+  <rect x="170" y="274" width="560" height="22" rx="6" fill="#F3F4F6"/>
+  <rect x="170" y="340" width="1240" height="360" rx="16" fill="#F9FAFB" stroke="#E5E7EB"/>
+  <rect x="210" y="390" width="360" height="40" rx="10" fill="#DBEAFE"/>
+  <rect x="210" y="450" width="900" height="28" rx="8" fill="#E5E7EB"/>
+  <rect x="210" y="492" width="760" height="28" rx="8" fill="#E5E7EB"/>
+  <rect x="210" y="534" width="980" height="28" rx="8" fill="#E5E7EB"/>
+  <rect x="1220" y="390" width="150" height="46" rx="10" fill="#2563EB"/>
+  <text x="130" y="840" fill="#6B7280" font-family="Arial, sans-serif" font-size="24">LMS Dummy Preview</text>
+</svg>
