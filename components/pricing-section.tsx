@@ -61,7 +61,7 @@ export default function PricingSection() {
                 <li key={feature}>- {feature}</li>
               ))}
             </ul>
-            <Button className="mt-6 w-full" variant={plan.highlighted ? "default" : "outline"}>
+            <Button className="mt-6 w-full text-white" variant={plan.highlighted ? "default" : "outline"}>
               {plan.cta}
             </Button>
           </article>

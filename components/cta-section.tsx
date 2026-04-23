@@ -14,10 +14,10 @@ export default function CTASection() {
             Mulai dari satu kelas, ukur hasilnya, lalu skalakan ke seluruh program pembelajaran Anda.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Button asChild>
+            <Button asChild className="text-white">
               <Link href="/auth/register">Mulai Sekarang</Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="text-white">
               <Link href="/auth/login">Lihat Demo</Link>
             </Button>
           </div>
