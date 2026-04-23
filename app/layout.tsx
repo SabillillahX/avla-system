@@ -9,25 +9,25 @@ import { NotificationProvider } from "@/components/notification"
 const inter = Inter({ subsets: ["latin"] })
 
 export default function RootLayout({
-  children,
+    children,
 }: {
-  children: React.ReactNode
+    children: React.ReactNode
 }) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            <NotificationProvider>
-              <ClientLayout>{children}</ClientLayout>
-            </NotificationProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </body>
-    </html>
-  )
+    return (
+        <html lang="en" suppressHydrationWarning>
+            <body className={inter.className}>
+                <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+                    <AuthProvider>
+                        <NotificationProvider>
+                            <ClientLayout>{children}</ClientLayout>
+                        </NotificationProvider>
+                    </AuthProvider>
+                </ThemeProvider>
+            </body>
+        </html>
+    )
 }
 
 export const metadata = {
-      generator: 'v0.dev'
-    };
+    generator: "v0.dev",
+}

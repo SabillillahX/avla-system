@@ -5,6 +5,15 @@ export interface ParsedQuiz {
     explanation: string;
 }
 
+export interface AssessmentQuestion {
+    type: 'multiple_choice' | 'short_answer' | 'essay';
+    difficulty_level: number;
+    question: string;
+    metadata: string[] | null;
+    correct_answers: string[];
+    explanation: string;
+}
+
 export interface TranscriptSegment {
     text: string;
     end: number;
@@ -25,6 +34,9 @@ export interface NotificationPayload {
     saved_count?: number;
     quiz_count?: number;
     duration_minutes?: number;
+    assessment_progress?: number;
+    assessment_status?: string;
+    assessment_saved_count?: number;
 }
 
 export type UnknownRecord = Record<string, unknown>;

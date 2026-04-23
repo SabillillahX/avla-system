@@ -7,11 +7,12 @@ import { ENV, ALLOWED_ORIGINS } from "./utils/helper.js";
 import {
     NotificationPayload,
     ParsedQuiz,
+    AssessmentQuestion,
     TranscriptSegment,
     TranscriptChunk,
     UnknownRecord
 } from "./utils/interface.js";
-import { parseQuizFromLlmOutput } from "./utils/helper.js";
+import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput } from "./utils/helper.js";
 
 // In memory stores
 const activeSSESessions = new Map<string, SSEServerTransport>();
@@ -62,22 +63,71 @@ function emitNotificationToUser(userId: string, payload: NotificationPayload): v
     client.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-async function callGeminiApi(prompt: string): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${ENV.geminiApiKey}`;
+async function callGeminiApi(prompt: string, expectJson: boolean = true): Promise<string> {
+    // Pastikan menggunakan model flash yang terbaru dan efisien
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${ENV.geminiApiKey}`;
 
-    const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    });
+    // Siapkan payload standar
+    const payload: any = {
+        contents: [{ parts: [{ text: prompt }] }],
+    };
 
-    if (!response.ok) {
-        const errorBody = await response.text().catch(() => "Unknown error");
-        throw new Error(`Gemini API error ${response.status}: ${errorBody}`);
+    // 🌟 PERUBAHAN 1: Paksa respons berupa JSON murni agar tidak ada error 500 di Laravel
+    if (expectJson) {
+        payload.generationConfig = {
+            responseMimeType: "application/json",
+        };
     }
 
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "No response generated.";
+    const maxRetries = 3;
+    let delayMs = 2000; // Mulai dengan jeda 2 detik jika gagal
+
+    // 🌟 PERUBAHAN 2: Exponential Backoff Loop
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text ?? (expectJson ? "[]" : "");
+            }
+
+            // Jika kena Rate Limit (429) atau Server Overloaded (503)
+            if (response.status === 429 || response.status >= 500) {
+                if (attempt === maxRetries) {
+                    throw new Error(`Gemini API terus menolak setelah ${maxRetries} percobaan (HTTP ${response.status}).`);
+                }
+                
+                console.warn(`[Gemini] Server sibuk (HTTP ${response.status}). Menunggu ${delayMs / 1000} detik sebelum mencoba lagi... (Upaya ${attempt}/${maxRetries})`);
+                
+                // Jeda (Sleep)
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                
+                // Lipat gandakan waktu tunggu untuk percobaan berikutnya (2s -> 4s -> 8s)
+                delayMs *= 2; 
+                continue; // Ulangi loop fetch
+            }
+
+            // Jika error lain (misal 400 Bad Request, API key salah), langsung hentikan
+            const errorBody = await response.text().catch(() => "Unknown error");
+            throw new Error(`API Error HTTP ${response.status}: ${errorBody}`);
+
+        } catch (error) {
+            // Tangani error jaringan (misal koneksi putus tiba-tiba)
+            if (attempt === maxRetries) {
+                throw error;
+            }
+            console.warn(`[Gemini] Network/Fetch error: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delayMs / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            delayMs *= 2;
+        }
+    }
+
+    throw new Error("Gagal memanggil API Gemini secara tidak terduga.");
 }
 
 function getVideoDurationSeconds(segments: TranscriptSegment[]): number {
@@ -196,6 +246,50 @@ ${transcriptText}
 """`;
 }
 
+function buildFullAssessmentPrompt(fullTranscript: string): string {
+    return `You are an Expert Instructional Designer creating a final summative assessment for an educational video.
+I will provide you with the full transcript of the video. 
+
+Your task is to generate EXACTLY 10 questions based on the entire transcript. 
+The questions must test deep comprehension, not just surface-level recall.
+
+## Question Type Distribution Requirements
+You must provide a mix of question types. Aim for approximately:
+- 5 Multiple Choice Questions (multiple_choice)
+- 3 Short Answer / Fill-in-the-blank Questions (short_answer)
+- 2 Essay Questions (essay)
+
+## Formatting Rules per Question Type
+1. **multiple_choice**: 
+   - Must have exactly 4 plausible options in the "metadata" array.
+   - "correct_answers" must contain an array with exactly one string (the exact text of the correct option).
+2. **short_answer**: 
+   - "metadata" must be null or an empty array.
+   - "correct_answers" must contain an array of 1 to 3 acceptable exact string matches.
+3. **essay**: 
+   - "metadata" must be null.
+   - "correct_answers" must contain the AI Evaluation Rubric (key points the student must mention for a perfect score).
+
+## Strict Output Format
+Return ONLY a valid JSON array containing exactly 10 objects. Do not wrap it in markdown blockquotes (\`\`\`json). Just the raw array.
+
+[
+  {
+    "type": "multiple_choice", // or "short_answer" or "essay"
+    "difficulty_level": 3, // integer between 1 (easy) and 5 (hard)
+    "question": "Clear, contextual question text?",
+    "metadata": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
+    "correct_answers": ["Option 2"], // See rules above based on type
+    "explanation": "Why this answer is correct and why common misconceptions are wrong."
+  }
+]
+
+## Full Video Transcript
+"""
+${fullTranscript}
+"""`;
+}
+
 function buildAuthHeaders(token: string): Record<string, string> {
     return {
         "Content-Type": "application/json",
@@ -266,7 +360,7 @@ function createMcpServer(): McpServer {
             }));
 
             const fullPrompt = `Here is the user's video audio path data:\n${JSON.stringify(audioPathData, null, 2)}\n\nTask: ${prompt}\n\nAnalyze strictly based on the provided data.`;
-            const aiAnswer = await callGeminiApi(fullPrompt);
+            const aiAnswer = await callGeminiApi(fullPrompt, false);
 
             return { content: [{ type: "text", text: aiAnswer }] };
         }
@@ -396,7 +490,7 @@ function createMcpServer(): McpServer {
                         durationMinutes
                     );
 
-                    const rawLlmOutput = await callGeminiApi(prompt);
+                    const rawLlmOutput = await callGeminiApi(prompt, true);
                     let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuiz) {
@@ -410,7 +504,7 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGeminiApi(repairPrompt);
+                        const repairedOutput = await callGeminiApi(repairPrompt, true);
                         parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
                     }
 
@@ -528,6 +622,312 @@ function createMcpServer(): McpServer {
                         ]
                             .filter(Boolean)
                             .join(" "),
+                    },
+                ],
+            };
+        }
+    );
+
+    // Tool: generateFullAssessment
+    server.tool(
+        "generateFullAssessment",
+        "Generate a complete summative assessment with 10 mixed-type questions (5 MC, 3 short answer, 2 essay) from the full video transcript. Can run in parallel with adaptive quiz generation.",
+        {
+            token: z.string().describe("Bearer token of the currently logged-in user"),
+            userId: z.union([z.number(), z.string()]).describe("User ID for realtime progress notifications"),
+            videoId: z.union([z.number(), z.string()]).describe("ID of the target video"),
+            parallelWithQuiz: z
+                .boolean()
+                .optional()
+                .describe(
+                    "If true (default), attempt parallel generation with quiz. If false, wait for quiz to complete first."
+                ),
+        },
+        async ({ token, userId, videoId, parallelWithQuiz = true }) => {
+            const userIdStr = String(userId);
+
+            emitNotificationToUser(userIdStr, {
+                event: "assessment_generation_started",
+                video_id: videoId,
+                message: "Memulai pembuatan penilaian ringkasan...",
+                assessment_progress: 0,
+                assessment_status: "starting",
+            });
+
+            const transcriptResponse = await fetch(
+                `${ENV.backendUrl}/videos/${videoId}/transcript`,
+                { method: "GET", headers: buildAuthHeaders(token) }
+            );
+
+            if (!transcriptResponse.ok) {
+                const errorText = await transcriptResponse.text();
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
+                        },
+                    ],
+                };
+            }
+
+            const transcriptBody = await transcriptResponse.json();
+            const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
+
+            if (transcriptSegments.length === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: "Transkrip video kosong, penilaian tidak bisa dibuat.",
+                });
+                return {
+                    content: [{ type: "text", text: "No transcript segments found." }],
+                };
+            }
+
+            // Construct full transcript from segments
+            const fullTranscript = transcriptSegments
+                .map((seg) => seg.text)
+                .join(" ")
+                .trim();
+
+            if (!fullTranscript) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: "Transkrip kosong, penilaian tidak bisa dibuat.",
+                });
+                return {
+                    content: [{ type: "text", text: "Transcript is empty." }],
+                };
+            }
+
+            const durationSeconds = getVideoDurationSeconds(transcriptSegments);
+            const durationMinutes = durationSeconds / 60;
+
+            emitNotificationToUser(userIdStr, {
+                event: "assessment_generation_analyzing",
+                video_id: videoId,
+                message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — membuat 10 soal penilaian...`,
+                assessment_progress: 5,
+                assessment_status: "analyzing",
+            });
+
+            let generatedQuestions: AssessmentQuestion[] = [];
+            let failedAttempts = 0;
+            const maxAttempts = 2;
+            let lastErrorMessage = "Format penilaian dari AI tidak valid.";
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    const prompt = buildFullAssessmentPrompt(fullTranscript);
+                    const rawLlmOutput = await callGeminiApi(prompt, true);
+                    let parsedQuestions = parseAssessmentFromLlmOutput(rawLlmOutput);
+
+                    if (!parsedQuestions || parsedQuestions.length === 0) {
+                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly 10 objects — no markdown, no preamble:
+                        [
+                          {
+                            "type": "multiple_choice",
+                            "question": "string",
+                            "metadata": ["string", "string", "string", "string"],
+                            "correct_answers": ["string"],
+                            "explanation": "string"
+                          }
+                        ]
+
+                        Your previous output to fix:
+                        ${rawLlmOutput}`;
+                        const repairedOutput = await callGeminiApi(repairPrompt, true);
+                        parsedQuestions = parseAssessmentFromLlmOutput(repairedOutput);
+                    }
+
+                    if (parsedQuestions && parsedQuestions.length >= 8) {
+                        // Accept if we get at least 8 out of 10
+                        generatedQuestions = parsedQuestions.slice(0, 10);
+                        break;
+                    } else {
+                        throw new Error(
+                            `Generated only ${parsedQuestions?.length ?? 0} valid questions, need at least 8.`
+                        );
+                    }
+                } catch (error) {
+                    failedAttempts++;
+                    lastErrorMessage =
+                        error instanceof Error
+                            ? error.message
+                            : "Unknown error during assessment generation.";
+                    console.error(
+                        `[Assessment] Attempt ${attempt + 1}/${maxAttempts} failed: ${lastErrorMessage}`
+                    );
+
+                    emitNotificationToUser(userIdStr, {
+                        event: "assessment_generation_progress",
+                        video_id: videoId,
+                        assessment_progress: 20 + attempt * 25,
+                        message: `Upaya ${attempt + 1} gagal, mencoba lagi...`,
+                    });
+
+                    if (attempt < maxAttempts - 1) {
+                        // Add delay before retry
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                    }
+                }
+            }
+
+            if (generatedQuestions.length < 8) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal membuat penilaian: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} upaya gagal)`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Assessment generation failed. Detail: ${lastErrorMessage}`,
+                        },
+                    ],
+                };
+            }
+
+            emitNotificationToUser(userIdStr, {
+                event: "assessment_generation_saving",
+                video_id: videoId,
+                assessment_progress: 95,
+                message: "Menyimpan penilaian ke server...",
+            });
+
+            let savedAssessmentCount = 0;
+            let saveError = false;
+            const assessmentEndpoint = `${ENV.backendUrl}/questions?video_id=${encodeURIComponent(String(videoId))}`;
+
+            const toAssessmentPayload = (question: AssessmentQuestion) => {
+                const metadata =
+                    question.type === "multiple_choice"
+                        ? {
+                              options: Array.isArray(question.metadata) ? question.metadata : [],
+                          }
+                        : null;
+
+                return {
+                    type: question.type,
+                    question: question.question,
+                    metadata,
+                    accepted_answers: question.correct_answers,
+                    explanation: question.explanation,
+                };
+            };
+
+            // Try primary endpoint first
+            try {
+                const saveResponse = await fetch(
+                    assessmentEndpoint,
+                    {
+                        method: "POST",
+                        headers: buildAuthHeaders(token),
+                        body: JSON.stringify({
+                            questions: generatedQuestions.map(toAssessmentPayload),
+                        }),
+                    }
+                );
+
+                if (saveResponse.ok) {
+                    try {
+                        const saveResult = await saveResponse.json();
+                        savedAssessmentCount = saveResult.saved_count ?? generatedQuestions.length;
+                        console.log(`[Assessment] Saved ${savedAssessmentCount} questions via primary endpoint`);
+                    } catch {
+                        // Response OK but JSON parse failed, assume all saved
+                        savedAssessmentCount = generatedQuestions.length;
+                    }
+                } else {
+                    saveError = true;
+                    const saveErrorText = await saveResponse.text().catch(() => "Unknown backend error");
+                    console.warn(
+                        `[Assessment] Primary save endpoint returned ${saveResponse.status}. Response: ${saveErrorText}. Attempting fallback...`
+                    );
+                }
+            } catch (error) {
+                saveError = true;
+                console.error(`[Assessment] Primary endpoint request failed:`, error);
+            }
+
+            // Fallback: Try saving as individual questions if primary failed
+            if (saveError) {
+                console.log(`[Assessment] Using fallback: saving questions individually...`);
+                savedAssessmentCount = 0;
+
+                for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
+                    const question = generatedQuestions[qIndex];
+                    try {
+                        const fallbackResponse = await fetch(assessmentEndpoint, {
+                            method: "POST",
+                            headers: buildAuthHeaders(token),
+                            body: JSON.stringify(toAssessmentPayload(question)),
+                        });
+
+                        if (fallbackResponse.ok) {
+                            savedAssessmentCount++;
+                            console.log(`[Assessment] Saved question ${qIndex + 1}/${generatedQuestions.length}`);
+                        } else {
+                            const fallbackErrorText = await fallbackResponse
+                                .text()
+                                .catch(() => "Unknown backend error");
+                            console.warn(
+                                `[Assessment] Failed to save question ${qIndex + 1}: HTTP ${fallbackResponse.status} | Response: ${fallbackErrorText}`
+                            );
+                        }
+                    } catch (error) {
+                        console.error(`[Assessment] Error saving question ${qIndex + 1}:`, error);
+                    }
+                }
+            }
+
+            if (savedAssessmentCount === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal menyimpan penilaian: Tidak ada soal yang berhasil disimpan.`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to save assessment: No questions were saved successfully.`,
+                        },
+                    ],
+                };
+            }
+
+            emitNotificationToUser(userIdStr, {
+                event: "assessment_generation_completed",
+                video_id: videoId,
+                assessment_progress: 100,
+                assessment_saved_count: savedAssessmentCount,
+                message: `${savedAssessmentCount} soal penilaian berhasil dibuat dan disimpan.`,
+            });
+
+            const questionSummary = generatedQuestions
+                .slice(0, savedAssessmentCount)
+                .map((q) => `${q.type}(L${q.difficulty_level})`)
+                .join(", ");
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: [
+                            `Done! Generated and saved ${savedAssessmentCount} assessment questions.`,
+                            `Question types: ${questionSummary}`,
+                        ]
+                            .filter(Boolean)
+                            .join(" | "),
                     },
                 ],
             };

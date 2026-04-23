@@ -150,15 +150,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 setAiStatusMessage("Terhubung. AI sedang menyiapkan kuis...")
                 armStaleProtection()
 
-                await mcpClient.callTool({
-                    name: "generateAdaptiveVideoQuizzes",
-                    arguments: {
-                        token: params.token,
-                        userId: params.userId,
-                        videoId: params.videoId,
-                        intervalMinutes: 3,
-                    },
-                })
+                await Promise.all([
+                    mcpClient.callTool({
+                        name: "generateAdaptiveVideoQuizzes",
+                        arguments: {
+                            token: params.token,
+                            userId: params.userId,
+                            videoId: params.videoId,
+                            intervalMinutes: 3,
+                        },
+                    }),
+                    mcpClient.callTool({
+                        name: "generateFullAssessment",
+                        arguments: {
+                            token: params.token,
+                            userId: params.userId,
+                            videoId: params.videoId,
+                            parallelWithQuiz: true,
+                        },
+                    })
+                ])
 
                 return // success
             } catch (error) {
@@ -244,38 +255,44 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             console.log("[Notifications] Received:", data)
 
             switch (data.event) {
-                case "quiz_generation_started": {
+                case "quiz_generation_started":
+                case "assessment_generation_started": {
                     clearTimer(hideTimerRef)
                     setAiProcessState("generating")
-                    setAiProgress((data.progress as number) ?? 0)
-                    setAiStatusMessage((data.message as string) || "Memulai pembuatan kuis adaptif...")
+                    setAiProgress((data.progress as number) ?? (data.assessment_progress as number) ?? 0)
+                    setAiStatusMessage((data.message as string) || "Memulai pembuatan...")
                     armStaleProtection()
                     break
                 }
 
                 case "quiz_generation_progress":
-                case "quiz_generation_saving": {
+                case "quiz_generation_saving":
+                case "assessment_generation_analyzing":
+                case "assessment_generation_progress":
+                case "assessment_generation_saving": {
                     clearTimer(hideTimerRef)
                     setAiProcessState("generating")
-                    setAiProgress((data.progress as number) ?? 0)
-                    setAiStatusMessage((data.message as string) || "AI sedang memproses kuis...")
+                    setAiProgress((data.progress as number) ?? (data.assessment_progress as number) ?? 0)
+                    setAiStatusMessage((data.message as string) || "AI sedang memproses...")
                     armStaleProtection()
                     break
                 }
 
-                case "quiz_generation_completed": {
+                case "quiz_generation_completed":
+                case "assessment_generation_completed": {
                     clearTimer(staleTimerRef)
                     setAiProcessState("success")
                     setAiProgress(100)
-                    setAiStatusMessage((data.message as string) || "Kuis berhasil ditambahkan!")
+                    setAiStatusMessage((data.message as string) || "Selesai!")
                     scheduleAutoHide(3_000)
                     break
                 }
 
-                case "quiz_generation_failed": {
+                case "quiz_generation_failed":
+                case "assessment_generation_failed": {
                     clearTimer(staleTimerRef)
                     setAiProcessState("error")
-                    setAiStatusMessage((data.message as string) || "Gagal membuat kuis.")
+                    setAiStatusMessage((data.message as string) || "Gagal membuat konten.")
                     scheduleAutoHide(4_000)
                     break
                 }
@@ -323,6 +340,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     }
                     break
                 }
+
+                default:
+                    break
             }
         }
     }, [user?.id, armStaleProtection, resetHeartbeatTimer, runMcpWithRetry, scheduleAutoHide])
