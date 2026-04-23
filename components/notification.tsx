@@ -34,6 +34,7 @@ export interface NotificationContextValue {
     aiProcessState: AiProcessState
     aiProgress: number
     aiStatusMessage: string
+    aiProcessingVideoId: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ const NotificationContext = createContext<NotificationContextValue>({
     aiProcessState: "idle",
     aiProgress: 0,
     aiStatusMessage: "",
+    aiProcessingVideoId: null,
 })
 
 export function useNotification(): NotificationContextValue {
@@ -69,6 +71,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const [aiProcessState, setAiProcessState] = useState<AiProcessState>("idle")
     const [aiProgress, setAiProgress] = useState(0)
     const [aiStatusMessage, setAiStatusMessage] = useState("")
+    const [aiProcessingVideoId, setAiProcessingVideoId] = useState<string | null>(null)
 
     // Refs for timers & connection objects — safe to mutate without re-renders.
     const eventSourceRef = useRef<EventSource | null>(null)
@@ -100,6 +103,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             setAiProcessState("idle")
             setAiProgress(0)
             setAiStatusMessage("")
+            setAiProcessingVideoId(null)
         }, delayMs)
     }, [])
 
@@ -261,6 +265,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     setAiProcessState("generating")
                     setAiProgress((data.progress as number) ?? (data.assessment_progress as number) ?? 0)
                     setAiStatusMessage((data.message as string) || "Memulai pembuatan...")
+                    if (data.video_id) setAiProcessingVideoId(String(data.video_id))
                     armStaleProtection()
                     break
                 }
@@ -284,6 +289,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     setAiProcessState("success")
                     setAiProgress(100)
                     setAiStatusMessage((data.message as string) || "Selesai!")
+
+                    // Notify the video player to reload quizzes/assessments
+                    if (data.video_id) {
+                        window.dispatchEvent(
+                            new CustomEvent("aiContentReady", {
+                                detail: { videoId: String(data.video_id), type: data.event },
+                            })
+                        )
+                    }
+
                     scheduleAutoHide(3_000)
                     break
                 }
@@ -307,6 +322,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     }
 
                     activeJobVideoIdRef.current = incomingVideoId
+                    setAiProcessingVideoId(incomingVideoId)
                     console.log(`[Notifications] Transcription ready: videoId=${incomingVideoId}`)
 
                     clearTimer(hideTimerRef)
@@ -341,6 +357,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     break
                 }
 
+                case "video_status_changed": {
+                    const videoId = String(data.video_id)
+                    const newStatus = String(data.status ?? "")
+                    console.log(`[Notifications] Video status changed: videoId=${videoId}, status=${newStatus}`)
+
+                    // Dispatch a granular event so the video list can update in-place
+                    window.dispatchEvent(
+                        new CustomEvent("videoStatusChanged", {
+                            detail: { videoId, status: newStatus },
+                        })
+                    )
+                    break
+                }
+
                 default:
                     break
             }
@@ -370,7 +400,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, [user?.id, connectSse])
 
     return (
-        <NotificationContext.Provider value={{ aiProcessState, aiProgress, aiStatusMessage }}>
+        <NotificationContext.Provider value={{ aiProcessState, aiProgress, aiStatusMessage, aiProcessingVideoId }}>
             {children}
         </NotificationContext.Provider>
     )

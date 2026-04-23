@@ -9,16 +9,19 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import AdaptiveVideoPlayer from "@/components/AdaptiveVideoPlayer"
 import { useAuth } from "@/contexts/AuthContext"
+import { useNotification } from "@/components/notification"
 import { 
   ArrowLeft, 
   Loader2, 
   AlertCircle,
-  Calendar
+  Calendar,
+  Sparkles
 } from "lucide-react"
 
 export default function VideoPreviewPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { token } = useAuth()
+  const { aiProcessState, aiProcessingVideoId, aiProgress, aiStatusMessage } = useNotification()
   const [video, setVideo] = useState<VideoType | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -75,6 +78,25 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
       >
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to My Videos
       </Button>
+
+      {/* AI Processing Banner */}
+      {aiProcessingVideoId === params.id && (aiProcessState === "connecting" || aiProcessState === "generating") && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-5 py-3">
+          <div className="relative shrink-0">
+            <Sparkles className="w-5 h-5 text-amber-500" />
+            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full animate-ping" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              AI sedang membuat kuis & soal penilaian...
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+              {aiStatusMessage || `Progress: ${aiProgress}%`}
+            </p>
+          </div>
+          <Loader2 className="w-4 h-4 text-amber-500 animate-spin shrink-0" />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-8">
         <div className="space-y-6">

@@ -47,6 +47,7 @@ import {
 import { Video as VideoType, VideoStatus, ViewMode } from "@/lib/types/handle-videos"
 import { videosApi } from "@/lib/api/handle-videos"
 import { getStorageUrl } from "@/lib/utils/storage-url"
+import { useNotification } from "@/components/notification"
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -133,6 +134,11 @@ export default function MyVideoPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const router = useRouter()
+  const { aiProcessState, aiProcessingVideoId } = useNotification()
+
+  // Toast state for blocked navigation
+  const [blockedToast, setBlockedToast] = useState<{ videoId: string; message: string } | null>(null)
+  const blockedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Fetch videos ────────────────────────────────────────────────────────────
 
@@ -163,6 +169,42 @@ export default function MyVideoPage() {
     window.addEventListener('videoListRefresh', handleRefresh);
     return () => window.removeEventListener('videoListRefresh', handleRefresh);
   }, [fetchVideos]);
+
+  // ── Listener untuk update status video secara real-time ─────────────────────
+  useEffect(() => {
+    const handleStatusChange = (e: Event) => {
+      const { videoId, status } = (e as CustomEvent<{ videoId: string; status: string }>).detail;
+      setVideos((prev) =>
+        prev.map((v) =>
+          String(v.id) === videoId ? { ...v, status: status as VideoStatus } : v
+        )
+      );
+    };
+
+    window.addEventListener('videoStatusChanged', handleStatusChange);
+    return () => window.removeEventListener('videoStatusChanged', handleStatusChange);
+  }, []);
+
+  // ── Auto-polling: re-fetch saat ada video pending/processing ────────────────
+  const hasUnfinishedVideos = useMemo(
+    () => videos.some((v) => v.status === "pending" || v.status === "processing"),
+    [videos]
+  )
+
+  useEffect(() => {
+    if (!hasUnfinishedVideos) return
+
+    const interval = setInterval(async () => {
+      try {
+        const pageData = await videosApi.getVideos()
+        setVideos(pageData.data)
+      } catch {
+        // silent — next tick will retry
+      }
+    }, 10_000) // poll every 10 seconds
+
+    return () => clearInterval(interval)
+  }, [hasUnfinishedVideos]);
 
   const resetUploadForm = () => {
     setTitleInput("")
@@ -349,19 +391,76 @@ export default function MyVideoPage() {
     </Card>
   )
 
+  const isVideoReady = (status: VideoStatus) => status === "completed"
+
+  const isAiProcessingVideo = (videoId: string) => {
+    return aiProcessingVideoId === videoId && (aiProcessState === "connecting" || aiProcessState === "generating")
+  }
+
+  const handleVideoClick = (video: VideoType) => {
+    if (!isVideoReady(video.status)) {
+      // Video belum selesai diproses backend
+      if (blockedToastTimer.current) clearTimeout(blockedToastTimer.current)
+      const statusLabel = video.status === "processing" ? "sedang diproses" : video.status === "pending" ? "menunggu antrian" : "gagal diproses"
+      setBlockedToast({ videoId: String(video.id), message: `Video ${statusLabel}. Harap tunggu hingga selesai.` })
+      blockedToastTimer.current = setTimeout(() => setBlockedToast(null), 3500)
+      return
+    }
+
+    if (isAiProcessingVideo(String(video.id))) {
+      // Backend selesai tapi AI masih generate soal
+      if (blockedToastTimer.current) clearTimeout(blockedToastTimer.current)
+      setBlockedToast({ videoId: String(video.id), message: "AI sedang membuat kuis & soal. Harap tunggu sebentar..." })
+      blockedToastTimer.current = setTimeout(() => setBlockedToast(null), 3500)
+      return
+    }
+
+    router.push(`/my-video/${video.id}`)
+  }
+
+  // Processing overlay shared between list & grid cards (icon only)
+  const ProcessingOverlay = ({ video }: { video: VideoType }) => {
+    const aiProcessing = isVideoReady(video.status) && isAiProcessingVideo(String(video.id))
+    if (isVideoReady(video.status) && !aiProcessing) return null
+
+    const isProcessing = video.status === "processing" || aiProcessing
+    const isPending = video.status === "pending"
+    const isFailed = video.status === "failed"
+
+    return (
+      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-lg transition-all">
+        {isProcessing && (
+          <div className="relative">
+            <Loader2 className="w-9 h-9 text-amber-400 animate-spin" />
+            <div className="absolute inset-0 w-9 h-9 rounded-full border-2 border-amber-400/30 animate-ping" />
+          </div>
+        )}
+        {isPending && (
+          <Clock className="w-9 h-9 text-white/70" />
+        )}
+        {isFailed && (
+          <AlertCircle className="w-9 h-9 text-red-400" />
+        )}
+      </div>
+    )
+  }
+
   const VideoCard = ({ video }: { video: VideoType }) => {
     const cfg = statusConfig[video.status]
     const StatusIcon = cfg.icon
+    const ready = isVideoReady(video.status) && !isAiProcessingVideo(String(video.id))
 
     if (viewMode === "list") {
       return (
         <Card
-          className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer relative group"
-          onClick={() => router.push(`/my-video/${video.id}`)}
+          className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow relative group ${
+            ready ? "hover:shadow-md cursor-pointer" : "cursor-not-allowed opacity-90"
+          }`}
+          onClick={() => handleVideoClick(video)}
         >
 
           <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
-            {/* Thumbnail */}
+            {/* Thumbnail with processing overlay */}
             <div className="relative w-full sm:w-44 h-40 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
               {video.thumbnail_path ? (
                 <Image
@@ -376,6 +475,7 @@ export default function MyVideoPage() {
                   <Play className="w-5 h-5 text-white ml-0.5" />
                 </div>
               )}
+              <ProcessingOverlay video={video} />
             </div>
 
             {/* Info */}
@@ -412,7 +512,7 @@ export default function MyVideoPage() {
               </div>
               <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <Badge className={`text-xs ${cfg.color} border-0`}>
-                  <StatusIcon className="w-3 h-3 mr-1" />
+                  <StatusIcon className={`w-3 h-3 mr-1 ${video.status === "processing" ? "animate-spin" : ""}`} />
                   {cfg.label}
                 </Badge>
                 {video.category && (
@@ -434,8 +534,10 @@ export default function MyVideoPage() {
     // Grid card
     return (
       <Card
-        className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow group overflow-hidden cursor-pointer relative"
-        onClick={() => router.push(`/my-video/${video.id}`)}
+        className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow group overflow-hidden relative ${
+          ready ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"
+        }`}
+        onClick={() => handleVideoClick(video)}
       >
 
         <div className="relative h-40 bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
@@ -448,9 +550,12 @@ export default function MyVideoPage() {
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           ) : null}
-          <div className="relative w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play className="w-6 h-6 text-white ml-0.5" />
-          </div>
+          {ready ? (
+            <div className="relative w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Play className="w-6 h-6 text-white ml-0.5" />
+            </div>
+          ) : null}
+          <ProcessingOverlay video={video} />
         </div>
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-1">
@@ -459,7 +564,7 @@ export default function MyVideoPage() {
                 {video.title}
               </h3>
               <Badge className={`text-[10px] shrink-0 mt-1.5 ${cfg.color} border-0 w-fit inline-flex`}>
-                <StatusIcon className="w-3 h-3 mr-0.5" />
+                <StatusIcon className={`w-3 h-3 mr-0.5 ${video.status === "processing" ? "animate-spin" : ""}`} />
                 {cfg.label}
               </Badge>
               {video.description && (
@@ -469,7 +574,7 @@ export default function MyVideoPage() {
               )}
             </div>
             {/* Always visible action button safely placed above date layout and flush right */}
-            <div className="shrink-0 z-10 -mr-4 -mt-1">
+            <div className="shrink-0 z-20 -mr-4 -mt-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-12 sm:w-12 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
@@ -977,6 +1082,24 @@ export default function MyVideoPage() {
           </div>
         )}
       </div>
+
+      {/* Blocked navigation toast */}
+      {blockedToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xl backdrop-blur-sm border border-gray-200 dark:border-gray-700">
+            <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center shrink-0">
+              <Loader2 className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
+            </div>
+            <p className="text-sm font-medium">{blockedToast.message}</p>
+            <button
+              onClick={() => setBlockedToast(null)}
+              className="ml-2 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

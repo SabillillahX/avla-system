@@ -1008,6 +1008,13 @@ app.post("/webhook/transcription-done", express.json(), (req: Request, res: Resp
     }
 
     if (status === "completed") {
+        // Emit status change so the frontend can update the video card in-place
+        emitNotificationToUser(String(user_id), {
+            event: "video_status_changed",
+            video_id,
+            status: "completed",
+        });
+
         emitNotificationToUser(String(user_id), {
             event: "transcription_ready",
             video_id,
@@ -1016,6 +1023,27 @@ app.post("/webhook/transcription-done", express.json(), (req: Request, res: Resp
             `[Webhook] transcription_ready sent: videoId=${video_id}, userId=${user_id}`
         );
     }
+
+    res.status(200).json({ received: true });
+});
+
+// Generic webhook for any video status change (pending → processing → completed / failed)
+app.post("/webhook/video-status", express.json(), (req: Request, res: Response) => {
+    const { video_id, user_id, status } = req.body ?? {};
+
+    if (!video_id || !user_id || !status) {
+        res.status(400).json({ error: "Missing required fields: video_id, user_id, status" });
+        return;
+    }
+
+    emitNotificationToUser(String(user_id), {
+        event: "video_status_changed",
+        video_id,
+        status,
+    });
+    console.log(
+        `[Webhook] video_status_changed sent: videoId=${video_id}, userId=${user_id}, status=${status}`
+    );
 
     res.status(200).json({ received: true });
 });

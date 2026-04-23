@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import type { Quiz, QuizResultResponse } from "@/lib/types/quiz"
+import { Loader2 } from "lucide-react"
 
 type AdaptiveVideoPlayerProps = {
   videoId: string
@@ -111,6 +112,39 @@ export default function AdaptiveVideoPlayer({
       controller.abort()
     }
   }, [accessToken, apiBaseUrl, resetQuizState, videoId])
+
+  // Auto-reload quizzes when AI generation completes for this video
+  useEffect(() => {
+    const handleAiReady = (e: Event) => {
+      const { videoId: readyVideoId, type } = (e as CustomEvent<{ videoId: string; type: string }>).detail
+      if (readyVideoId === videoId && type === "quiz_generation_completed") {
+        console.log(`[VideoPlayer] AI quiz ready for video ${videoId}, reloading quizzes...`)
+        // Re-fetch quizzes
+        setQuizzesLoading(true)
+        fetch(`${apiBaseUrl}/videos/${videoId}/quizzes`, {
+          method: "GET",
+          headers: defaultHeaders(accessToken),
+          credentials: accessToken ? "omit" : "include",
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error("Gagal mengambil data kuis")
+            return res.json()
+          })
+          .then((payload: { data: Quiz[] }) => {
+            const sorted = [...payload.data].sort((a, b) => a.trigger_time - b.trigger_time)
+            setQuizzes(sorted)
+            setQuizzesError(null)
+          })
+          .catch((err) => {
+            setQuizzesError(err instanceof Error ? err.message : "Gagal mengambil data kuis")
+          })
+          .finally(() => setQuizzesLoading(false))
+      }
+    }
+
+    window.addEventListener("aiContentReady", handleAiReady)
+    return () => window.removeEventListener("aiContentReady", handleAiReady)
+  }, [videoId, apiBaseUrl, accessToken])
 
   const handleTimeUpdate = useCallback(() => {
     const videoEl = videoRef.current

@@ -29,6 +29,7 @@ export interface NotificationPayload {
     video_id?: string | number;
     message?: string;
     progress?: number;
+    status?: string;
     processed_chunks?: number;
     total_chunks?: number;
     saved_count?: number;
