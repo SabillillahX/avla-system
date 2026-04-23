@@ -101,8 +101,8 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
             key={item.name}
             onClick={() => router.push(item.path)}
             className={`w-full flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-lg transition-colors ${pathname === item.path
-                ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               }`}
           >
             <item.icon className="w-4 h-4 mr-3" />
@@ -144,8 +144,8 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
                           key={color.value}
                           onClick={() => setNewProjectColor(color.value)}
                           className={`w-8 h-8 rounded-full ${color.value} border-2 ${newProjectColor === color.value
-                              ? "border-gray-800 dark:border-gray-200"
-                              : "border-gray-300 dark:border-gray-600"
+                            ? "border-gray-800 dark:border-gray-200"
+                            : "border-gray-300 dark:border-gray-600"
                             }`}
                           title={color.name}
                         />
