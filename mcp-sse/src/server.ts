@@ -261,13 +261,13 @@ You must provide a mix of question types. Aim for approximately:
 
 ## Formatting Rules per Question Type
 1. **multiple_choice**: 
-   - Must have exactly 4 plausible options in the "metadata" array.
+   - Must have exactly 4 plausible options in the "options" array.
    - "correct_answers" must contain an array with exactly one string (the exact text of the correct option).
 2. **short_answer**: 
-   - "metadata" must be null or an empty array.
+   - "options" must be null or an empty array.
    - "correct_answers" must contain an array of 1 to 3 acceptable exact string matches.
 3. **essay**: 
-   - "metadata" must be null.
+   - "options" must be null.
    - "correct_answers" must contain the AI Evaluation Rubric (key points the student must mention for a perfect score).
 
 ## Strict Output Format
@@ -278,7 +278,7 @@ Return ONLY a valid JSON array containing exactly 10 objects. Do not wrap it in 
     "type": "multiple_choice", // or "short_answer" or "essay"
     "difficulty_level": 3, // integer between 1 (easy) and 5 (hard)
     "question": "Clear, contextual question text?",
-    "metadata": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
+    "options": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
     "correct_answers": ["Option 2"], // See rules above based on type
     "explanation": "Why this answer is correct and why common misconceptions are wrong."
   }
@@ -735,7 +735,7 @@ function createMcpServer(): McpServer {
                           {
                             "type": "multiple_choice",
                             "question": "string",
-                            "metadata": ["string", "string", "string", "string"],
+                            "options": ["string", "string", "string", "string"],
                             "correct_answers": ["string"],
                             "explanation": "string"
                           }
@@ -804,88 +804,40 @@ function createMcpServer(): McpServer {
             });
 
             let savedAssessmentCount = 0;
-            let saveError = false;
-            const assessmentEndpoint = `${ENV.backendUrl}/questions?video_id=${encodeURIComponent(String(videoId))}`;
+            const assessmentEndpoint = `${ENV.backendUrl}/questions`;
 
-            const toAssessmentPayload = (question: AssessmentQuestion) => {
-                const metadata =
-                    question.type === "multiple_choice"
-                        ? {
-                              options: Array.isArray(question.metadata) ? question.metadata : [],
-                          }
-                        : null;
+            const toAssessmentPayload = (question: AssessmentQuestion) => ({
+                video_id: String(videoId),
+                type: question.type,
+                question: question.question,
+                options: question.options,
+                accepted_answers: question.correct_answers,
+                explanation: question.explanation,
+            });
 
-                return {
-                    type: question.type,
-                    question: question.question,
-                    metadata,
-                    accepted_answers: question.correct_answers,
-                    explanation: question.explanation,
-                };
-            };
-
-            // Try primary endpoint first
-            try {
-                const saveResponse = await fetch(
-                    assessmentEndpoint,
-                    {
+            // Save questions individually (backend apiResource store handles one at a time)
+            for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
+                const question = generatedQuestions[qIndex];
+                try {
+                    const saveResponse = await fetch(assessmentEndpoint, {
                         method: "POST",
                         headers: buildAuthHeaders(token),
-                        body: JSON.stringify({
-                            questions: generatedQuestions.map(toAssessmentPayload),
-                        }),
+                        body: JSON.stringify(toAssessmentPayload(question)),
+                    });
+
+                    if (saveResponse.ok) {
+                        savedAssessmentCount++;
+                        console.log(`[Assessment] Saved question ${qIndex + 1}/${generatedQuestions.length}`);
+                    } else {
+                        const errorText = await saveResponse
+                            .text()
+                            .catch(() => "Unknown backend error");
+                        console.warn(
+                            `[Assessment] Failed to save question ${qIndex + 1}: HTTP ${saveResponse.status} | Response: ${errorText}`
+                        );
                     }
-                );
-
-                if (saveResponse.ok) {
-                    try {
-                        const saveResult = await saveResponse.json();
-                        savedAssessmentCount = saveResult.saved_count ?? generatedQuestions.length;
-                        console.log(`[Assessment] Saved ${savedAssessmentCount} questions via primary endpoint`);
-                    } catch {
-                        // Response OK but JSON parse failed, assume all saved
-                        savedAssessmentCount = generatedQuestions.length;
-                    }
-                } else {
-                    saveError = true;
-                    const saveErrorText = await saveResponse.text().catch(() => "Unknown backend error");
-                    console.warn(
-                        `[Assessment] Primary save endpoint returned ${saveResponse.status}. Response: ${saveErrorText}. Attempting fallback...`
-                    );
-                }
-            } catch (error) {
-                saveError = true;
-                console.error(`[Assessment] Primary endpoint request failed:`, error);
-            }
-
-            // Fallback: Try saving as individual questions if primary failed
-            if (saveError) {
-                console.log(`[Assessment] Using fallback: saving questions individually...`);
-                savedAssessmentCount = 0;
-
-                for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
-                    const question = generatedQuestions[qIndex];
-                    try {
-                        const fallbackResponse = await fetch(assessmentEndpoint, {
-                            method: "POST",
-                            headers: buildAuthHeaders(token),
-                            body: JSON.stringify(toAssessmentPayload(question)),
-                        });
-
-                        if (fallbackResponse.ok) {
-                            savedAssessmentCount++;
-                            console.log(`[Assessment] Saved question ${qIndex + 1}/${generatedQuestions.length}`);
-                        } else {
-                            const fallbackErrorText = await fallbackResponse
-                                .text()
-                                .catch(() => "Unknown backend error");
-                            console.warn(
-                                `[Assessment] Failed to save question ${qIndex + 1}: HTTP ${fallbackResponse.status} | Response: ${fallbackErrorText}`
-                            );
-                        }
-                    } catch (error) {
-                        console.error(`[Assessment] Error saving question ${qIndex + 1}:`, error);
-                    }
+                } catch (error) {
+                    console.error(`[Assessment] Error saving question ${qIndex + 1}:`, error);
                 }
             }
 

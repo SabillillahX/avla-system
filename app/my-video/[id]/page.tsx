@@ -154,6 +154,17 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
         </div>
 
       </div>
+
+      <div className="mt-8 flex justify-end">
+        <Button 
+          size="lg"
+          onClick={() => router.push(`/my-video/${params.id}/assessment`)}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-6 rounded-xl shadow-md transition-all hover:shadow-lg flex items-center gap-2"
+        >
+          <Sparkles className="w-5 h-5" />
+          Mulai Penilaian
+        </Button>
+      </div>
     </div>
   )
 }

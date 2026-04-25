@@ -9,7 +9,7 @@ export interface AssessmentQuestion {
     type: 'multiple_choice' | 'short_answer' | 'essay';
     difficulty_level: number;
     question: string;
-    metadata: string[] | null;
+    options: string[] | null;
     correct_answers: string[];
     explanation: string;
 }

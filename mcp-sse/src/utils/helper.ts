@@ -217,7 +217,7 @@ export function coerceAssessmentQuestionFromObject(rawObject: unknown): Assessme
     const type = obj.type as string;
     const difficulty = obj.difficulty_level as number;
     const question = obj.question as string;
-    const metadata = obj.metadata;
+    const options = obj.options ?? obj.metadata; // fallback: AI may still output "metadata"
     const correctAnswers = obj.correct_answers;
     const explanation = obj.explanation as string;
 
@@ -228,22 +228,22 @@ export function coerceAssessmentQuestionFromObject(rawObject: unknown): Assessme
     const validTypes = ["multiple_choice", "short_answer", "essay"];
     if (!validTypes.includes(type)) return null;
 
-    let normalizedMetadata: string[] | null = null;
-    if (type === "multiple_choice" && Array.isArray(metadata)) {
-        const mcMetadata = metadata
+    let normalizedOptions: string[] | null = null;
+    if (type === "multiple_choice" && Array.isArray(options)) {
+        const mcOptions = options
             .filter((m): m is string => typeof m === "string" && !!m.trim())
             .map(normalizeOptionText)
             .filter(Boolean)
             .slice(0, 4);
 
-        if (mcMetadata.length === 4) {
-            normalizedMetadata = mcMetadata;
+        if (mcOptions.length === 4) {
+            normalizedOptions = mcOptions;
             // Validate correct_answer is in options
             const correctAnswersNormalized = correctAnswers
                 .filter((ans): ans is string => typeof ans === "string")
                 .map(normalizeForComparison);
 
-            const optionsNormalized = mcMetadata.map(normalizeForComparison);
+            const optionsNormalized = mcOptions.map(normalizeForComparison);
             const allCorrectInOptions = correctAnswersNormalized.every((ans) =>
                 optionsNormalized.includes(ans)
             );
@@ -267,7 +267,7 @@ export function coerceAssessmentQuestionFromObject(rawObject: unknown): Assessme
         type: type as "multiple_choice" | "short_answer" | "essay",
         difficulty_level: difficulty,
         question: normalizeWhitespace(question),
-        metadata: normalizedMetadata,
+        options: normalizedOptions,
         correct_answers: normalizedCorrectAnswers,
         explanation:
             typeof explanation === "string" ? normalizeWhitespace(explanation) : "",

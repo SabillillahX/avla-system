@@ -155,15 +155,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 armStaleProtection()
 
                 await Promise.all([
-                    mcpClient.callTool({
-                        name: "generateAdaptiveVideoQuizzes",
-                        arguments: {
-                            token: params.token,
-                            userId: params.userId,
-                            videoId: params.videoId,
-                            intervalMinutes: 3,
-                        },
-                    }),
+                    // mcpClient.callTool({
+                    //     name: "generateAdaptiveVideoQuizzes",
+                    //     arguments: {
+                    //         token: params.token,
+                    //         userId: params.userId,
+                    //         videoId: params.videoId,
+                    //         intervalMinutes: 3,
+                    //     },
+                    // }),
                     mcpClient.callTool({
                         name: "generateFullAssessment",
                         arguments: {
