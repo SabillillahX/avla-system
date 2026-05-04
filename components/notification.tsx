@@ -29,10 +29,6 @@ const MCP_MAX_CONNECT_ATTEMPTS = 4
 const SSE_HEARTBEAT_TIMEOUT_MS = 45_000
 const STALE_PROCESS_TIMEOUT_MS = 60_000
 
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
-
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
     const { user } = useAuth()
 
@@ -52,14 +48,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const activeJobVideoIdRef = useRef<string | null>(null)
     const aiProcessStateRef = useRef<AiProcessState>("idle")
 
-    // Keep ref in sync so SSE callbacks always read the latest state.
     useEffect(() => {
         aiProcessStateRef.current = aiProcessState
     }, [aiProcessState])
-
-    // ---------------------------------------------------------------------------
-    // Timer helpers
-    // ---------------------------------------------------------------------------
 
     const clearTimer = (ref: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) => {
         if (ref.current) { clearTimeout(ref.current); ref.current = null }
@@ -87,17 +78,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const resetHeartbeatTimer = useCallback(() => {
         clearTimer(heartbeatTimerRef)
         heartbeatTimerRef.current = setTimeout(() => {
-            // No heartbeat received — close and let the reconnect logic re-open.
             console.warn("[Notifications] Heartbeat timeout — forcing reconnect.")
             eventSourceRef.current?.close()
             eventSourceRef.current = null
-            if (!isUnmountedRef.current) connectSse() // eslint-disable-line @typescript-eslint/no-use-before-define
+            if (!isUnmountedRef.current) connectSse()
         }, SSE_HEARTBEAT_TIMEOUT_MS)
-    }, []) // connectSse added below via ref to avoid circular dep
-
-    // ---------------------------------------------------------------------------
-    // MCP tool invocation
-    // ---------------------------------------------------------------------------
+    }, [])
 
     const runMcpWithRetry = useCallback(async (params: {
         token: string
@@ -122,7 +108,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 setAiStatusMessage("Terhubung. AI sedang menyiapkan kuis...")
                 armStaleProtection()
 
-                await Promise.all([
+                const results = await Promise.allSettled([
                     mcpClient.callTool({
                         name: "generateAdaptiveVideoQuizzes",
                         arguments: {
@@ -131,7 +117,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             videoId: params.videoId,
                             intervalMinutes: 3,
                         },
-                    }),
+                    }, undefined, { timeout: 120_000 }),
                     mcpClient.callTool({
                         name: "generateFullAssessment",
                         arguments: {
@@ -140,10 +126,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             videoId: params.videoId,
                             parallelWithQuiz: true,
                         },
-                    })
+                    }, undefined, { timeout: 180_000 })
                 ])
 
-                return // success
+                const allFailed = results.every(r => r.status === 'rejected')
+                if (allFailed) {
+                    throw new Error("Semua task AI gagal dieksekusi (timeout/disconnect).")
+                }
+
+                return
             } catch (error) {
                 lastError = error
                 const message = error instanceof Error ? error.message : "Unknown error"
@@ -163,10 +154,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             ? lastError
             : new Error("Gagal terhubung ke MCP setelah beberapa percobaan.")
     }, [armStaleProtection])
-
-    // ---------------------------------------------------------------------------
-    // SSE connection
-    // ---------------------------------------------------------------------------
 
     const connectSse = useCallback(() => {
         if (isUnmountedRef.current || !user?.id) return
@@ -190,7 +177,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         eventSource.onerror = () => {
             if (isUnmountedRef.current) return
 
-            // Don't stack multiple reconnect timers.
             if (reconnectTimerRef.current) return
 
             reconnectAttemptsRef.current += 1

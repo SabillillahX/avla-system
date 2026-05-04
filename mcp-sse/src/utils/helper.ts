@@ -1,6 +1,6 @@
 
 import dotenv from "dotenv";
-import { ParsedQuiz, AssessmentQuestion, UnknownRecord } from "./interface.js";
+import { ParsedQuiz, AssessmentQuestion, SemanticAssessmentQuestion, UnknownRecord } from "./interface.js";
 
 dotenv.config();
 
@@ -295,6 +295,75 @@ export function parseAssessmentFromLlmOutput(rawOutput: string): AssessmentQuest
                 if (questions.length > 0) return questions;
             } else {
                 const coerced = coerceAssessmentQuestionFromObject(parsed);
+                if (coerced) {
+                    questions.push(coerced);
+                }
+            }
+        } catch {
+            // continue to next candidate
+        }
+    }
+
+    return questions;
+}
+
+export function coerceSemanticQuestionFromObject(rawObject: unknown): SemanticAssessmentQuestion | null {
+    if (typeof rawObject !== "object" || !rawObject) return null;
+
+    const obj = rawObject as UnknownRecord;
+    const type = obj.type as string;
+    const bloomLevel = obj.bloom_level as string;
+    const difficulty = obj.difficulty_level as number;
+    const question = obj.question as string;
+    const referenceAnswer = obj.reference_answer as string;
+    const semanticKeywords = obj.semantic_keywords as string[];
+    const explanation = obj.explanation as string;
+
+    if (type !== "short_answer" && type !== "essay") return null;
+    if (!bloomLevel || typeof bloomLevel !== "string" || !bloomLevel.trim()) return null;
+    if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 5) return null;
+    if (!question || typeof question !== "string" || !question.trim()) return null;
+    if (!referenceAnswer || typeof referenceAnswer !== "string" || !referenceAnswer.trim()) return null;
+    if (!Array.isArray(semanticKeywords) || semanticKeywords.length === 0) return null;
+
+    const normalizedKeywords = semanticKeywords
+        .filter((kw): kw is string => typeof kw === "string" && !!kw.trim())
+        .map(normalizeWhitespace);
+
+    if (normalizedKeywords.length === 0) return null;
+
+    return {
+        type: type as "short_answer" | "essay",
+        bloom_level: normalizeWhitespace(bloomLevel),
+        difficulty_level: difficulty,
+        question: normalizeWhitespace(question),
+        reference_answer: normalizeWhitespace(referenceAnswer),
+        semantic_keywords: normalizedKeywords,
+        explanation: typeof explanation === "string" ? normalizeWhitespace(explanation) : "",
+    };
+}
+
+export function parseSemanticAssessmentFromLlmOutput(rawOutput: string): SemanticAssessmentQuestion[] {
+    const cleaned = rawOutput.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const candidates = [cleaned, extractFirstJsonObject(cleaned)].filter(
+        (v): v is string => Boolean(v)
+    );
+
+    const questions: SemanticAssessmentQuestion[] = [];
+
+    for (const candidate of candidates) {
+        try {
+            const parsed = JSON.parse(candidate);
+            if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                    const coerced = coerceSemanticQuestionFromObject(item);
+                    if (coerced) {
+                        questions.push(coerced);
+                    }
+                }
+                if (questions.length > 0) return questions;
+            } else {
+                const coerced = coerceSemanticQuestionFromObject(parsed);
                 if (coerced) {
                     questions.push(coerced);
                 }

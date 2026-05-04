@@ -15,7 +15,8 @@ import {
   Loader2,
   AlertCircle,
   Calendar,
-  Sparkles
+  Sparkles,
+  BookOpen
 } from "lucide-react"
 
 export default function VideoPreviewPage({ params }: { params: { id: string } }) {
@@ -154,7 +155,16 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
 
       </div>
 
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex justify-end gap-3">
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={() => router.push(`/my-video/${params.id}/results`)}
+          className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2"
+        >
+          <BookOpen className="w-5 h-5" />
+          Hasil Belajar
+        </Button>
         <Button
           size="lg"
           onClick={() => router.push(`/my-video/${params.id}/assessment`)}

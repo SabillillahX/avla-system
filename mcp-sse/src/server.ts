@@ -10,9 +10,10 @@ import {
     AssessmentQuestion,
     TranscriptSegment,
     TranscriptChunk,
-    UnknownRecord
+    UnknownRecord,
+    SemanticAssessmentQuestion
 } from "./utils/interface.js";
-import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput } from "./utils/helper.js";
+import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
 
 // In memory stores
 const activeSSESessions = new Map<string, SSEServerTransport>();
@@ -101,14 +102,14 @@ async function callGeminiApi(prompt: string, expectJson: boolean = true): Promis
                 if (attempt === maxRetries) {
                     throw new Error(`Gemini API terus menolak setelah ${maxRetries} percobaan (HTTP ${response.status}).`);
                 }
-                
+
                 console.warn(`[Gemini] Server sibuk (HTTP ${response.status}). Menunggu ${delayMs / 1000} detik sebelum mencoba lagi... (Upaya ${attempt}/${maxRetries})`);
-                
+
                 // Jeda (Sleep)
                 await new Promise(resolve => setTimeout(resolve, delayMs));
-                
+
                 // Lipat gandakan waktu tunggu untuk percobaan berikutnya (2s -> 4s -> 8s)
-                delayMs *= 2; 
+                delayMs *= 2;
                 continue; // Ulangi loop fetch
             }
 
@@ -204,8 +205,8 @@ function buildQuizGenerationPrompt(
     const cognitiveLevel = isEarlyChunk
         ? "comprehension and recall (Bloom's Level 1–2: Remember / Understand) — test whether the learner grasped the core concept just introduced"
         : isLateChunk
-        ? "analysis and application (Bloom's Level 3–4: Apply / Analyze) — test whether the learner can use or reason about the concept, not just recall it"
-        : "conceptual understanding and application (Bloom's Level 2–3: Understand / Apply) — test whether the learner understands the mechanism behind the concept";
+            ? "analysis and application (Bloom's Level 3–4: Apply / Analyze) — test whether the learner can use or reason about the concept, not just recall it"
+            : "conceptual understanding and application (Bloom's Level 2–3: Understand / Apply) — test whether the learner understands the mechanism behind the concept";
 
     const depthNote =
         durationMinutes >= 10
@@ -226,14 +227,15 @@ Your task is to write exactly 1 (one) multiple-choice question for an adaptive p
 2. **One unambiguously correct answer.** Based strictly on the transcript excerpt provided.
 3. **Three high-quality distractors.** Each wrong option must represent a plausible misconception or a partially correct idea. A learner who only skimmed the content should NOT immediately spot the correct answer. Avoid obviously absurd options.
 4. **No A/B/C/D or numbering inside option text.** The option strings themselves must be clean.
-5. **Adaptive explanation.** The explanation must: (a) clearly state why the correct answer is right using evidence from the transcript, and (b) address the most tempting wrong answer and explain why it fails.
-6. **Language matching.** Detect the language of the transcript and write the entire question, all options, and the explanation in that SAME language.
+5. **Randomize correct answer position.** Do NOT always put the correct answer at the first index. Randomly place it in the second, third, or fourth position as well.
+6. **Adaptive explanation.** The explanation must: (a) clearly state why the correct answer is right using evidence from the transcript, and (b) address the most tempting wrong answer and explain why it fails.
+7. **Language matching.** Detect the language of the transcript and write the entire question, all options, and the explanation in that SAME language.
 
 ## Strict Output Format
 Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing text:
 {
   "question": "A clear, conceptual question ending with a question mark?",
-  "options": ["Correct answer text", "Plausible wrong answer", "Plausible wrong answer", "Plausible wrong answer"],
+  "options": ["Plausible wrong answer", "Correct answer text", "Plausible wrong answer", "Plausible wrong answer"],
   "correct_answer": "Correct answer text",
   "explanation": "The correct answer is [X] because [evidence from transcript]. A common mistake is choosing [distractor] because [why it seems right], but [why it is actually wrong]."
 }
@@ -246,45 +248,81 @@ ${transcriptText}
 """`;
 }
 
-function buildFullAssessmentPrompt(fullTranscript: string): string {
-    return `You are an Expert Instructional Designer creating a final summative assessment for an educational video.
-I will provide you with the full transcript of the video. 
+function buildFullAssessmentPrompt(fullTranscript: string, currentBloomLevel: number = 1): string {
+    // currentBloomLevel bisa dikirim dari database (1 = C1, dst.)
+    // Untuk summative assessment (akhir), kita bisa minta AI menyebar dari C1 sampai C6
 
-Your task is to generate EXACTLY 10 questions based on the entire transcript. 
-The questions must test deep comprehension, not just surface-level recall.
+    return `You are an expert in Adaptive Learning Systems and Instructional Design.
+I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
 
-## Question Type Distribution Requirements
-You must provide a mix of question types. Aim for approximately:
-- 5 Multiple Choice Questions (multiple_choice)
-- 3 Short Answer / Fill-in-the-blank Questions (short_answer)
-- 2 Essay Questions (essay)
+## Bloom's Taxonomy Integration
+Distribute the 10 questions across the following levels based on the current target level (${currentBloomLevel}):
+- If level is low (C1-C2): Focus on definitions and conceptual understanding.
+- If level is high (C4-C6): Focus on analysis, case studies, and creation.
+- Map each question to a specific 'bloom_level' (C1, C2, C3, C4, C5, or C6).
 
-## Formatting Rules per Question Type
-1. **multiple_choice**: 
-   - Must have exactly 4 plausible options in the "options" array.
-   - "correct_answers" must contain an array with exactly one string (the exact text of the correct option).
-2. **short_answer**: 
-   - "options" must be null or an empty array.
-   - "correct_answers" must contain an array of 1 to 3 acceptable exact string matches.
-3. **essay**: 
-   - "options" must be null.
-   - "correct_answers" must contain the AI Evaluation Rubric (key points the student must mention for a perfect score).
+## Question Style Rules (No Multiple Choice)
+1. **short_answer**: Requires a concise explanation (1-3 sentences).
+2. **essay**: Requires deep reasoning and connection between concepts.
+3. Every question MUST be evaluatable via Semantic Similarity. This means you must provide a "reference_answer" that is rich in keywords and core concepts.
 
-## Strict Output Format
-Return ONLY a valid JSON array containing exactly 10 objects. Do not wrap it in markdown blockquotes (\`\`\`json). Just the raw array.
+## Formatting Rules
+- "bloom_level": String (e.g., "C3 - Applying").
+- "reference_answer": A comprehensive ideal answer used as a baseline for semantic comparison.
+- "semantic_keywords": An array of 5-10 essential terms that must be present in the student's response.
 
+## Strict Output Format (JSON Only)
 [
   {
-    "type": "multiple_choice", // or "short_answer" or "essay"
-    "difficulty_level": 3, // integer between 1 (easy) and 5 (hard)
-    "question": "Clear, contextual question text?",
-    "options": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
-    "correct_answers": ["Option 2"], // See rules above based on type
-    "explanation": "Why this answer is correct and why common misconceptions are wrong."
+    "type": "short_answer",
+    "bloom_level": "C2",
+    "difficulty_level": 2,
+    "question": "Text of the question?",
+    "reference_answer": "The ideal complete answer for semantic matching...",
+    "semantic_keywords": ["keyword1", "keyword2"],
+    "explanation": "Logic behind the correct concept."
   }
 ]
 
 ## Full Video Transcript
+"""
+${fullTranscript}
+"""`;
+}
+
+function buildSemanticAssessmentPrompt(fullTranscript: string, targetLevel: string, quantity: number): string {
+    return `You are an expert Instructional Designer specializing in Adaptive Learning Systems and Psychometrics. Your task is to generate high-quality assessment questions based on a video transcript using Bloom's Taxonomy and Semantic Similarity principles.
+
+### OBJECTIVES
+- Generate exactly ${quantity} questions that specifically target the **${targetLevel}** level of Bloom's Taxonomy.
+- For every question, provide a "reference_answer" that will serve as the ground truth for Semantic Similarity evaluation (Vector Embedding comparison).
+- Include "semantic_keywords" that represent the core technical concepts that MUST be present in a correct response.
+
+### BLOOM'S TAXONOMY GUIDELINES (Target: ${targetLevel})
+- **C1 (Remember):** Focus on recalling facts, terms, and basic concepts.
+- **C2 (Understand):** Focus on explaining ideas or concepts in own words.
+- **C3 (Apply):** Focus on using information in new situations/scenarios.
+- **C4 (Analyze):** Focus on drawing connections among ideas; breaking info into parts.
+- **C5 (Evaluate):** Focus on justifying a stand or decision; critiquing.
+- **C6 (Create):** Focus on producing new or original work based on the material.
+
+### OUTPUT FORMAT (Strict JSON)
+Return ONLY a JSON array of objects. Do not include markdown formatting or explanations outside the JSON.
+
+[
+  {
+    "type": "short_answer",
+    "bloom_level": "${targetLevel}",
+    "difficulty_level": 3,
+    "question": "The question text here...",
+    "reference_answer": "A detailed, ideal answer (2-4 sentences) that covers all key points for semantic matching.",
+    "semantic_keywords": ["keyword1", "keyword2", "keyword3"],
+    "explanation": "Pedagogical explanation of why this is the correct concept."
+  }
+]
+
+### INPUT DATA
+**Video Transcript:**
 """
 ${fullTranscript}
 """`;
@@ -718,25 +756,27 @@ function createMcpServer(): McpServer {
                 assessment_status: "analyzing",
             });
 
-            let generatedQuestions: AssessmentQuestion[] = [];
+            let generatedQuestions: SemanticAssessmentQuestion[] = [];
             let failedAttempts = 0;
-            const maxAttempts = 2;
+            const maxAttempts = 3;
             let lastErrorMessage = "Format penilaian dari AI tidak valid.";
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
                     const prompt = buildFullAssessmentPrompt(fullTranscript);
                     const rawLlmOutput = await callGeminiApi(prompt, true);
-                    let parsedQuestions = parseAssessmentFromLlmOutput(rawLlmOutput);
+                    let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuestions || parsedQuestions.length === 0) {
                         const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly 10 objects — no markdown, no preamble:
                         [
                           {
-                            "type": "multiple_choice",
+                            "type": "short_answer",
+                            "bloom_level": "C2",
+                            "difficulty_level": 2,
                             "question": "string",
-                            "options": ["string", "string", "string", "string"],
-                            "correct_answers": ["string"],
+                            "reference_answer": "string",
+                            "semantic_keywords": ["string"],
                             "explanation": "string"
                           }
                         ]
@@ -744,16 +784,16 @@ function createMcpServer(): McpServer {
                         Your previous output to fix:
                         ${rawLlmOutput}`;
                         const repairedOutput = await callGeminiApi(repairPrompt, true);
-                        parsedQuestions = parseAssessmentFromLlmOutput(repairedOutput);
+                        parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
                     }
 
-                    if (parsedQuestions && parsedQuestions.length >= 8) {
-                        // Accept if we get at least 8 out of 10
+                    if (parsedQuestions && parsedQuestions.length === 10) {
+                        // Accept only if we get exactly 10
                         generatedQuestions = parsedQuestions.slice(0, 10);
                         break;
                     } else {
                         throw new Error(
-                            `Generated only ${parsedQuestions?.length ?? 0} valid questions, need at least 8.`
+                            `Generated only ${parsedQuestions?.length ?? 0} valid questions, need exactly 10.`
                         );
                     }
                 } catch (error) {
@@ -780,7 +820,7 @@ function createMcpServer(): McpServer {
                 }
             }
 
-            if (generatedQuestions.length < 8) {
+            if (generatedQuestions.length < 10) {
                 emitNotificationToUser(userIdStr, {
                     event: "assessment_generation_failed",
                     video_id: videoId,
@@ -806,13 +846,14 @@ function createMcpServer(): McpServer {
             let savedAssessmentCount = 0;
             const assessmentEndpoint = `${ENV.backendUrl}/questions`;
 
-            const toAssessmentPayload = (question: AssessmentQuestion) => ({
+            const toAssessmentPayload = (question: SemanticAssessmentQuestion) => ({
                 video_id: String(videoId),
                 type: question.type,
                 question: question.question,
-                options: question.options,
-                accepted_answers: question.correct_answers,
+                options: question.semantic_keywords,
+                accepted_answers: [question.reference_answer],
                 explanation: question.explanation,
+                bloom_level: question.bloom_level,
             });
 
             // Save questions individually (backend apiResource store handles one at a time)
@@ -880,6 +921,178 @@ function createMcpServer(): McpServer {
                         ]
                             .filter(Boolean)
                             .join(" | "),
+                    },
+                ],
+            };
+        }
+    );
+
+    // Tool: generateSemanticAssessment
+    server.tool(
+        "generateSemanticAssessment",
+        "Generate a set of semantic similarity questions targeting a specific Bloom's Taxonomy level.",
+        {
+            token: z.string().describe("Bearer token of the currently logged-in user"),
+            userId: z.union([z.number(), z.string()]).describe("User ID for realtime progress notifications"),
+            videoId: z.union([z.number(), z.string()]).describe("ID of the target video"),
+            targetLevel: z.enum(["C1", "C2", "C3", "C4", "C5", "C6"]).describe("Target Bloom's Taxonomy Level"),
+            quantity: z.number().describe("Number of questions to generate"),
+        },
+        async ({ token, userId, videoId, targetLevel, quantity }) => {
+            const userIdStr = String(userId);
+
+            emitNotificationToUser(userIdStr, {
+                event: "semantic_generation_started",
+                video_id: videoId,
+                message: `Memulai pembuatan pertanyaan semantik level ${targetLevel}...`,
+                assessment_progress: 0,
+                assessment_status: "starting",
+            });
+
+            const transcriptResponse = await fetch(
+                `${ENV.backendUrl}/videos/${videoId}/transcript`,
+                { method: "GET", headers: buildAuthHeaders(token) }
+            );
+
+            if (!transcriptResponse.ok) {
+                const errorText = await transcriptResponse.text();
+                return {
+                    content: [
+                        { type: "text", text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}` },
+                    ],
+                };
+            }
+
+            const transcriptBody = await transcriptResponse.json();
+            const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
+
+            if (transcriptSegments.length === 0) {
+                return { content: [{ type: "text", text: "No transcript segments found." }] };
+            }
+
+            const fullTranscript = transcriptSegments.map((seg) => seg.text).join(" ").trim();
+
+            if (!fullTranscript) {
+                return { content: [{ type: "text", text: "Transcript is empty." }] };
+            }
+
+            emitNotificationToUser(userIdStr, {
+                event: "semantic_generation_analyzing",
+                video_id: videoId,
+                message: `Membuat ${quantity} soal semantik...`,
+                assessment_progress: 5,
+                assessment_status: "analyzing",
+            });
+
+            let generatedQuestions: SemanticAssessmentQuestion[] = [];
+            let failedAttempts = 0;
+            const maxAttempts = 2;
+            let lastErrorMessage = "Format dari AI tidak valid.";
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    const prompt = buildSemanticAssessmentPrompt(fullTranscript, targetLevel, quantity);
+                    const rawLlmOutput = await callGeminiApi(prompt, true);
+                    let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
+
+                    if (!parsedQuestions || parsedQuestions.length === 0) {
+                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly ${quantity} objects — no markdown, no preamble:
+                        [
+                          {
+                            "type": "short_answer",
+                            "bloom_level": "${targetLevel}",
+                            "difficulty_level": 3,
+                            "question": "string",
+                            "reference_answer": "string",
+                            "semantic_keywords": ["string"],
+                            "explanation": "string"
+                          }
+                        ]
+
+                        Your previous output to fix:
+                        ${rawLlmOutput}`;
+                        const repairedOutput = await callGeminiApi(repairPrompt, true);
+                        parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
+                    }
+
+                    if (parsedQuestions && parsedQuestions.length >= Math.max(1, quantity - 2)) {
+                        generatedQuestions = parsedQuestions.slice(0, quantity);
+                        break;
+                    } else {
+                        throw new Error(
+                            `Generated only ${parsedQuestions?.length ?? 0} valid questions, expected at least ${Math.max(1, quantity - 2)}.`
+                        );
+                    }
+                } catch (error) {
+                    failedAttempts++;
+                    lastErrorMessage = error instanceof Error ? error.message : "Unknown error";
+                    if (attempt < maxAttempts - 1) {
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                    }
+                }
+            }
+
+            if (generatedQuestions.length === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "semantic_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal membuat pertanyaan: ${lastErrorMessage}`,
+                });
+                return {
+                    content: [{ type: "text", text: `Generation failed. Detail: ${lastErrorMessage}` }],
+                };
+            }
+
+            emitNotificationToUser(userIdStr, {
+                event: "semantic_generation_saving",
+                video_id: videoId,
+                assessment_progress: 95,
+                message: "Menyimpan pertanyaan semantik ke server...",
+            });
+
+            let savedAssessmentCount = 0;
+            const assessmentEndpoint = `${ENV.backendUrl}/questions`;
+
+            const toAssessmentPayload = (question: SemanticAssessmentQuestion) => ({
+                video_id: String(videoId),
+                type: question.type,
+                question: question.question,
+                options: question.semantic_keywords,
+                accepted_answers: [question.reference_answer],
+                explanation: question.explanation,
+                bloom_level: question.bloom_level,
+            });
+
+            for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
+                const question = generatedQuestions[qIndex];
+                try {
+                    const saveResponse = await fetch(assessmentEndpoint, {
+                        method: "POST",
+                        headers: buildAuthHeaders(token),
+                        body: JSON.stringify(toAssessmentPayload(question)),
+                    });
+
+                    if (saveResponse.ok) {
+                        savedAssessmentCount++;
+                    }
+                } catch (error) {
+                    console.error(`[Semantic Assessment] Error saving question ${qIndex + 1}:`, error);
+                }
+            }
+
+            emitNotificationToUser(userIdStr, {
+                event: "semantic_generation_completed",
+                video_id: videoId,
+                assessment_progress: 100,
+                assessment_saved_count: savedAssessmentCount,
+                message: `${savedAssessmentCount} pertanyaan semantik berhasil dibuat dan disimpan.`,
+            });
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Done! Generated and saved ${savedAssessmentCount} semantic similarity questions.`,
                     },
                 ],
             };

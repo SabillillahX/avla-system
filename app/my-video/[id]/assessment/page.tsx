@@ -18,19 +18,16 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
 
   // State for tracking user answers per question
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({})
-  const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set())
-  const [results, setResults] = useState<Record<string, { isCorrect: boolean, feedback: string }>>({})
+  const [isSubmittingAll, setIsSubmittingAll] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [showResults, setShowResults] = useState(false)
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
+    setIsClient(true)
     const fetchQuestions = async () => {
       try {
         const response = await assessmentApi.getQuestions(params.id)
         setQuestions(response.data)
-        if (response.data.length > 0 && response.data.every((q: any) => q.has_answered)) {
-          setShowResults(true)
-        }
       } catch (err: any) {
         setError(err.message || "Failed to load assessment questions")
       } finally {
@@ -48,7 +45,6 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
   }
 
   const isAllAnswered = questions.length > 0 && Object.keys(userAnswers).length === questions.length
-  const [isSubmittingAll, setIsSubmittingAll] = useState(false)
 
   const handleSubmitAll = async () => {
     if (!isAllAnswered) return
@@ -70,32 +66,15 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
         return { questionId: question.uuid, response }
       })
 
-      const resultsArray = await Promise.all(submitPromises)
+      await Promise.all(submitPromises)
 
-      // Process results
-      const newResults = { ...results }
-      const newQuestions = [...questions]
-
-      resultsArray.forEach((item) => {
-        if (!item) return
-
-        newResults[item.questionId] = {
-          isCorrect: item.response.data.is_correct,
-          feedback: item.response.message
-        }
-
-        const qIndex = newQuestions.findIndex(q => q.uuid === item.questionId)
-        if (qIndex !== -1) {
-          newQuestions[qIndex] = {
-            ...newQuestions[qIndex],
-            has_answered: true,
-            accepted_answers: item.response.data.question.accepted_answers
-          }
-        }
-      })
-
-      setResults(newResults)
-      setQuestions(newQuestions)
+      // Mark visually
+      const updatedQuestions = questions.map(q => ({
+        ...q,
+        has_answered: true
+      }))
+      setQuestions(updatedQuestions)
+      
       setShowSuccessModal(true)
     } catch (err: any) {
       console.error("Failed to submit answers:", err)
@@ -159,7 +138,6 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
           </div>
 
           {questions.map((question, index) => {
-            const result = results[question.uuid]
             const isAnswered = question.has_answered
 
             return (
@@ -223,43 +201,6 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
                     />
                   )}
                 </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-4">
-                  {(result || isAnswered) && showResults && (
-                    <div className={`p-4 rounded-lg flex items-start gap-3 select-text ${result?.isCorrect
-                        ? "bg-green-50 text-green-800 border border-green-200"
-                        : result && !result.isCorrect
-                          ? "bg-red-50 text-red-800 border border-red-200"
-                          : "bg-blue-50 text-blue-800 border border-blue-200"
-                      }`}>
-                      {result?.isCorrect ? (
-                        <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-                      ) : result && !result.isCorrect ? (
-                        <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                      ) : null}
-                      <div>
-                        {result && (
-                          <p className="font-semibold mb-1">
-                            {result.isCorrect ? "Jawaban Benar" : "Jawaban Kurang Tepat"}
-                          </p>
-                        )}
-                        <p className="text-sm">
-                          <strong>Penjelasan:</strong> {question.explanation}
-                        </p>
-                        {question.accepted_answers && question.accepted_answers.length > 0 && (
-                          <div className="mt-2 text-sm opacity-90">
-                            <strong>Jawaban yang diterima:</strong>
-                            <ul className="list-disc list-inside ml-2 mt-1">
-                              {question.accepted_answers.map((ans, i) => (
-                                <li key={i}>{ans}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             )
           })}
@@ -290,10 +231,10 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
             <p className="text-gray-500 dark:text-gray-400 mb-8">
               Semua jawaban Anda telah berhasil disimpan.
             </p>
-            <Button 
+            <Button
               onClick={() => {
                 setShowSuccessModal(false)
-                setShowResults(true)
+                router.push(`/my-video/${params.id}/results`)
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg rounded-xl"
             >

@@ -14,6 +14,16 @@ export interface AssessmentQuestion {
     explanation: string;
 }
 
+export interface SemanticAssessmentQuestion {
+    type: 'short_answer' | 'essay';
+    bloom_level: string;
+    difficulty_level: number;
+    question: string;
+    reference_answer: string;
+    semantic_keywords: string[];
+    explanation: string;
+}
+
 export interface TranscriptSegment {
     text: string;
     end: number;
