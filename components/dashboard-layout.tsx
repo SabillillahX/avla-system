@@ -25,29 +25,15 @@ import {
   Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react"
 
-interface Project {
-  id: string
-  name: string
-  color: string
-}
-
 interface DashboardLayoutProps {
   children: React.ReactNode
-  projects: Project[]
-  onAddProject: (project: Omit<Project, "id">) => void
 }
 
-export default function DashboardLayout({ children, projects, onAddProject }: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { user, logout } = useAuth()
-
-  // AI process state now comes from the global NotificationContext.
   const { aiProcessState, aiProgress, aiStatusMessage } = useNotification()
-
-  const [newProjectName, setNewProjectName] = useState("")
-  const [newProjectColor, setNewProjectColor] = useState("bg-blue-200")
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
 
   const currentUser = user || people.find((p) => p.id === "people_11") || people[11]
 
@@ -61,15 +47,6 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
     { name: "Receipts", icon: Receipt, path: "/receipts" },
   ]
 
-  const colorOptions = [
-    { name: "Blue", value: "bg-blue-200 dark:bg-blue-800" },
-    { name: "Pink", value: "bg-pink-200 dark:bg-pink-800" },
-    { name: "Green", value: "bg-green-200 dark:bg-green-800" },
-    { name: "Yellow", value: "bg-yellow-200 dark:bg-yellow-800" },
-    { name: "Purple", value: "bg-purple-200 dark:bg-purple-800" },
-    { name: "Red", value: "bg-red-200 dark:bg-red-800" },
-  ]
-
   const notifications = [
     { id: 1, title: "New task assigned", message: `${people[0].name} assigned you to 'Help DStudio get more customers'`, time: "2 minutes ago", unread: true },
     { id: 2, title: "Meeting reminder", message: "Kickoff Meeting starts in 30 minutes", time: "28 minutes ago", unread: true },
@@ -77,22 +54,10 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
     { id: 4, title: "Comment added", message: `${people[1].name} commented on 'Plan a trip'`, time: "2 hours ago", unread: false },
   ]
 
-  const handleAddProject = () => {
-    if (!newProjectName.trim()) return
-    onAddProject({ name: newProjectName.trim(), color: newProjectColor })
-    setNewProjectName("")
-    setNewProjectColor("bg-blue-200 dark:bg-blue-800")
-    setIsProjectDialogOpen(false)
-  }
-
-  // ---------------------------------------------------------------------------
-  // Sidebar
-  // ---------------------------------------------------------------------------
-
   const sidebarContent = (
     <>
       <div className="p-6">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Mondays</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">AvlaSystem</h1>
       </div>
 
       <nav className="flex-1 px-4 overflow-y-auto">
@@ -112,61 +77,7 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
       </nav>
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-900 dark:text-white">Projects</span>
-            <Dialog open={isProjectDialogOpen} onOpenChange={setIsProjectDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-white dark:bg-gray-800">
-                <DialogHeader>
-                  <DialogTitle className="text-gray-900 dark:text-white">Add New Project</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="project-name" className="text-gray-700 dark:text-gray-300">Project Name</Label>
-                    <Input
-                      id="project-name"
-                      value={newProjectName}
-                      onChange={(e) => setNewProjectName(e.target.value)}
-                      placeholder="Enter project name"
-                      className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-gray-700 dark:text-gray-300">Project Color</Label>
-                    <div className="flex space-x-2 mt-2">
-                      {colorOptions.map((color) => (
-                        <button
-                          key={color.value}
-                          onClick={() => setNewProjectColor(color.value)}
-                          className={`w-8 h-8 rounded-full ${color.value} border-2 ${newProjectColor === color.value
-                            ? "border-gray-800 dark:border-gray-200"
-                            : "border-gray-300 dark:border-gray-600"
-                            }`}
-                          title={color.name}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={() => setIsProjectDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleAddProject}>Add Project</Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          {projects.map((project) => (
-            <div key={project.id} className="flex items-center mb-2">
-              <div className={`w-3 h-3 rounded-full ${project.color} mr-2`} />
-              <span className="text-sm text-gray-600 dark:text-gray-300">{project.name}</span>
-            </div>
-          ))}
-        </div>
+
 
         <div className="space-y-2">
           <button className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
@@ -182,10 +93,6 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
       </div>
     </>
   )
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
@@ -214,43 +121,9 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
                   </SheetContent>
                 </Sheet>
               </div>
-
-              <div className="relative flex-1 max-w-[200px] md:max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
-                <Input
-                  placeholder="Search..."
-                  className="pl-9 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 h-9 w-full rounded-md"
-                />
-              </div>
-              <span className="hidden md:inline-block text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">⌘ F</span>
             </div>
 
             <div className="flex items-center space-x-2 md:space-x-4">
-              <div className="items-center hidden sm:flex">
-                <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 rounded-r-none h-9">
-                  <Plus className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline-block">New Project</span>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 rounded-l-none border-l border-blue-500 dark:border-blue-600 px-2 h-9">
-                      <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                    <DropdownMenuItem className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <Folder className="w-4 h-4 mr-2" /> New Folder
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <Template className="w-4 h-4 mr-2" /> From Template
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <Import className="w-4 h-4 mr-2" /> Import Project
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
               <ThemeToggle />
 
               <Popover>

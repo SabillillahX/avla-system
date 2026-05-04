@@ -46,10 +46,9 @@ import {
 } from "lucide-react"
 import { Video as VideoType, VideoStatus, ViewMode } from "@/lib/types/handle-videos"
 import { videosApi } from "@/lib/api/handle-videos"
+import api from "@/lib/api/axios"
 import { getStorageUrl } from "@/lib/utils/storage-url"
 import { useNotification } from "@/components/notification"
-
-// ─── Status config ────────────────────────────────────────────────────────────
 
 const statusConfig: Record<
   VideoStatus,
@@ -93,8 +92,21 @@ function formatDate(dateStr: string) {
   })
 }
 
+function getCategoryId(category: VideoType["category"]): string {
+  if (!category) return ""
+  if (typeof category === "string") return category
+  return category.id
+}
+
+function getCategoryName(category: VideoType["category"]): string {
+  if (!category) return ""
+  if (typeof category === "string") return category
+  return category.name
+}
+
 export default function MyVideoPage() {
   const [videos, setVideos] = useState<VideoType[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -102,7 +114,6 @@ export default function MyVideoPage() {
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
 
-  // Upload dialog state
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [titleInput, setTitleInput] = useState("")
   const [descriptionInput, setDescriptionInput] = useState("")
@@ -116,7 +127,6 @@ export default function MyVideoPage() {
   const videoInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
 
-  // Edit dialog state
   const [videoToEdit, setVideoToEdit] = useState<VideoType | null>(null)
   const [isEditModalVisible, setIsEditModalVisible] = useState(false)
   const [editTitleInput, setEditTitleInput] = useState("")
@@ -127,7 +137,6 @@ export default function MyVideoPage() {
   const [editError, setEditError] = useState<string | null>(null)
   const editThumbnailInputRef = useRef<HTMLInputElement>(null)
 
-  // Delete dialog state
   const [videoToDelete, setVideoToDelete] = useState<VideoType | null>(null)
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -136,20 +145,21 @@ export default function MyVideoPage() {
   const router = useRouter()
   const { aiProcessState, aiProcessingVideoId } = useNotification()
 
-  // Toast state for blocked navigation
   const [blockedToast, setBlockedToast] = useState<{ videoId: string; message: string } | null>(null)
   const blockedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // ── Fetch videos ────────────────────────────────────────────────────────────
 
   const fetchVideos = useCallback(async () => {
     setIsLoading(true)
     setFetchError(null)
     try {
-      const pageData = await videosApi.getVideos()
-      setVideos(pageData.data)
+      const [pageData, categoriesData] = await Promise.all([
+        videosApi.getVideos(),
+        api.get("/categories"),
+      ])
+      setVideos(Array.isArray(pageData) ? pageData : (pageData?.data || []))
+      setCategories(categoriesData.data?.data || [])
     } catch {
-      setFetchError("Failed to load videos. Please try again.")
+      setFetchError("Failed to load data. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -159,10 +169,9 @@ export default function MyVideoPage() {
     fetchVideos()
   }, [fetchVideos])
 
-  // ── Listener untuk Auto-Refresh dari Global SSE ────────────────────────────
   useEffect(() => {
     const handleRefresh = () => {
-      console.log('🔄 Berhasil refresh UI video di background (dari global listener)...');
+      console.log('Berhasil refresh UI video di background (dari global listener)...');
       fetchVideos();
     };
 
@@ -170,7 +179,6 @@ export default function MyVideoPage() {
     return () => window.removeEventListener('videoListRefresh', handleRefresh);
   }, [fetchVideos]);
 
-  // ── Listener untuk update status video secara real-time ─────────────────────
   useEffect(() => {
     const handleStatusChange = (e: Event) => {
       const { videoId, status } = (e as CustomEvent<{ videoId: string; status: string }>).detail;
@@ -185,9 +193,8 @@ export default function MyVideoPage() {
     return () => window.removeEventListener('videoStatusChanged', handleStatusChange);
   }, []);
 
-  // ── Auto-polling: re-fetch saat ada video pending/processing ────────────────
   const hasUnfinishedVideos = useMemo(
-    () => videos.some((v) => v.status === "pending" || v.status === "processing"),
+    () => (videos || []).some((v) => v.status === "pending" || v.status === "processing"),
     [videos]
   )
 
@@ -197,11 +204,11 @@ export default function MyVideoPage() {
     const interval = setInterval(async () => {
       try {
         const pageData = await videosApi.getVideos()
-        setVideos(pageData.data)
+        setVideos(Array.isArray(pageData) ? pageData : (pageData?.data || []))
       } catch {
-        // silent — next tick will retry
+
       }
-    }, 10_000) // poll every 10 seconds
+    }, 10_000)
 
     return () => clearInterval(interval)
   }, [hasUnfinishedVideos]);
@@ -262,7 +269,7 @@ export default function MyVideoPage() {
       await videosApi.uploadVideo({
         title,
         description,
-        category,
+        category_id: category,
         thumbnail_file: thumbnailFileInput,
         source_type: sourceType,
         video_file: sourceType === "file" ? videoFileInput ?? undefined : undefined,
@@ -279,13 +286,11 @@ export default function MyVideoPage() {
     }
   }
 
-  // ── Edit ────────────────────────────────────────────────────────────────────
-
   const openEditModal = (video: VideoType) => {
     setVideoToEdit(video)
     setEditTitleInput(video.title)
     setEditDescriptionInput(video.description || "")
-    setEditCategoryInput(video.category || "")
+    setEditCategoryInput(getCategoryId(video.category))
     setEditThumbnailFileInput(null)
     setEditError(null)
     if (editThumbnailInputRef.current) editThumbnailInputRef.current.value = ""
@@ -307,7 +312,7 @@ export default function MyVideoPage() {
       await videosApi.updateVideo(videoToEdit.id, {
         title,
         description: editDescriptionInput.trim() || undefined,
-        category: editCategoryInput.trim() || undefined,
+        category_id: editCategoryInput.trim() || undefined,
         thumbnail_file: editThumbnailFileInput ?? undefined,
       })
       setIsEditModalVisible(false)
@@ -319,8 +324,6 @@ export default function MyVideoPage() {
       setIsEditing(false)
     }
   }
-
-  // ── Delete ──────────────────────────────────────────────────────────────────
 
   const openDeleteModal = (video: VideoType) => {
     setVideoToDelete(video)
@@ -346,8 +349,6 @@ export default function MyVideoPage() {
     }
   }
 
-  // ── Filtering ───────────────────────────────────────────────────────────────
-
   const filteredList = useMemo(
     () =>
       videos.filter((v) => {
@@ -364,8 +365,6 @@ export default function MyVideoPage() {
     processing: videos.filter((v) => v.status === "processing").length,
     pending: videos.filter((v) => v.status === "pending").length,
   }), [videos])
-
-  // ── Sub-components ──────────────────────────────────────────────────────────
 
   const StatCard = ({
     icon: Icon,
@@ -399,7 +398,6 @@ export default function MyVideoPage() {
 
   const handleVideoClick = (video: VideoType) => {
     if (!isVideoReady(video.status)) {
-      // Video belum selesai diproses backend
       if (blockedToastTimer.current) clearTimeout(blockedToastTimer.current)
       const statusLabel = video.status === "processing" ? "sedang diproses" : video.status === "pending" ? "menunggu antrian" : "gagal diproses"
       setBlockedToast({ videoId: String(video.id), message: `Video ${statusLabel}. Harap tunggu hingga selesai.` })
@@ -408,7 +406,6 @@ export default function MyVideoPage() {
     }
 
     if (isAiProcessingVideo(String(video.id))) {
-      // Backend selesai tapi AI masih generate soal
       if (blockedToastTimer.current) clearTimeout(blockedToastTimer.current)
       setBlockedToast({ videoId: String(video.id), message: "AI sedang membuat kuis & soal. Harap tunggu sebentar..." })
       blockedToastTimer.current = setTimeout(() => setBlockedToast(null), 3500)
@@ -418,7 +415,6 @@ export default function MyVideoPage() {
     router.push(`/my-video/${video.id}`)
   }
 
-  // Processing overlay shared between list & grid cards (icon only)
   const ProcessingOverlay = ({ video }: { video: VideoType }) => {
     const aiProcessing = isVideoReady(video.status) && isAiProcessingVideo(String(video.id))
     if (isVideoReady(video.status) && !aiProcessing) return null
@@ -429,7 +425,7 @@ export default function MyVideoPage() {
 
     return (
       <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-lg transition-all">
-        {isProcessing && (
+        {/* {isProcessing && (
           <div className="relative">
             <Loader2 className="w-9 h-9 text-amber-400 animate-spin" />
             <div className="absolute inset-0 w-9 h-9 rounded-full border-2 border-amber-400/30 animate-ping" />
@@ -437,7 +433,7 @@ export default function MyVideoPage() {
         )}
         {isPending && (
           <Clock className="w-9 h-9 text-white/70" />
-        )}
+        )} */}
         {isFailed && (
           <AlertCircle className="w-9 h-9 text-red-400" />
         )}
@@ -453,9 +449,8 @@ export default function MyVideoPage() {
     if (viewMode === "list") {
       return (
         <Card
-          className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow relative group ${
-            ready ? "hover:shadow-md cursor-pointer" : "cursor-not-allowed opacity-90"
-          }`}
+          className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow relative group ${ready ? "hover:shadow-md cursor-pointer" : "cursor-not-allowed opacity-90"
+            }`}
           onClick={() => handleVideoClick(video)}
         >
 
@@ -517,7 +512,7 @@ export default function MyVideoPage() {
                 </Badge>
                 {video.category && (
                   <Badge variant="secondary" className="text-xs">
-                    {video.category}
+                    {getCategoryName(video.category)}
                   </Badge>
                 )}
                 <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
@@ -531,12 +526,10 @@ export default function MyVideoPage() {
       )
     }
 
-    // Grid card
     return (
       <Card
-        className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow group overflow-hidden relative ${
-          ready ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"
-        }`}
+        className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow group overflow-hidden relative ${ready ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"
+          }`}
         onClick={() => handleVideoClick(video)}
       >
 
@@ -599,7 +592,7 @@ export default function MyVideoPage() {
             </span>
             {video.category && (
               <Badge variant="secondary" className="text-[10px]">
-                {video.category}
+                {getCategoryName(video.category)}
               </Badge>
             )}
           </div>
@@ -623,8 +616,6 @@ export default function MyVideoPage() {
       </p>
     </div>
   )
-
-  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6">
@@ -690,13 +681,18 @@ export default function MyVideoPage() {
                 {/* Category */}
                 <div>
                   <Label className="text-gray-700 dark:text-gray-300">Category <span className="text-red-500">*</span></Label>
-                  <Input
+                  <select
                     value={categoryInput}
                     onChange={(e) => setCategoryInput(e.target.value)}
-                    placeholder="e.g. Education, Gaming, Music"
-                    maxLength={100}
-                    className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                  />
+                    className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="" disabled>Select a category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Thumbnail */}
@@ -875,22 +871,32 @@ export default function MyVideoPage() {
 
               <div>
                 <Label className="text-gray-700 dark:text-gray-300">Description</Label>
-                <Input
+                <textarea
                   value={editDescriptionInput}
                   onChange={(e) => setEditDescriptionInput(e.target.value)}
                   placeholder="Optional description"
-                  className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                />
+                  maxLength={2000}
+                  rows={3}
+                  className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                ></textarea>
               </div>
 
               <div>
                 <Label className="text-gray-700 dark:text-gray-300">Category</Label>
-                <Input
+                <select
                   value={editCategoryInput}
                   onChange={(e) => setEditCategoryInput(e.target.value)}
-                  placeholder="Optional category"
-                  className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                />
+                  className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="" disabled>
+                    Select a category
+                  </option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

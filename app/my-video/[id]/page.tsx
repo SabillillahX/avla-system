@@ -27,7 +27,6 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch Video Data
   useEffect(() => {
     const fetchVideo = async () => {
       try {
@@ -131,7 +130,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
 
               {video.category && (
                 <Badge variant="secondary" className="px-3 py-1 font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-transparent transition-colors">
-                  {video.category}
+                  {typeof video.category === 'object' ? (video.category as any).name : video.category}
                 </Badge>
               )}
 
@@ -163,7 +162,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
           className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2"
         >
           <BookOpen className="w-5 h-5" />
-          Hasil Belajar
+          Learning Result
         </Button>
         <Button
           size="lg"

@@ -7,7 +7,7 @@ export interface Video {
   user_id: number;
   title: string;
   description: string | null;
-  category: string | null;
+  category: { id: string; name: string } | string | null;
   thumbnail_path: string | null;
   source_type: VideoSourceType;
   original_url: string | null;
@@ -53,7 +53,7 @@ export interface QuizListResponse {
 export interface UploadVideoPayload {
   title: string;
   description?: string;
-  category?: string;
+  category_id?: string;
   thumbnail_file?: File;
   source_type: VideoSourceType;
   video_file?: File;
@@ -63,6 +63,6 @@ export interface UploadVideoPayload {
 export interface UpdateVideoPayload {
   title?: string;
   description?: string;
-  category?: string;
+  category_id?: string;
   thumbnail_file?: File;
 }
