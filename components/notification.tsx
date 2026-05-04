@@ -1,17 +1,5 @@
 "use client"
 
-/**
- * NotificationContext
- *
- * Owns the single long-lived SSE connection to the MCP notification server.
- * Because this context lives at the app root (above DashboardLayout), the
- * EventSource is never torn down during client-side page navigations —
- * eliminating the "disconnect window" that caused buffered events to be lost.
- *
- * DashboardLayout (and any other component) subscribes to AI process state
- * via the exposed context value instead of managing the connection itself.
- */
-
 import React, {
     createContext,
     useContext,
@@ -23,23 +11,7 @@ import React, {
 import { useAuth } from "@/contexts/AuthContext"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type AiProcessState = "idle" | "connecting" | "generating" | "success" | "error"
-
-export interface NotificationContextValue {
-    aiProcessState: AiProcessState
-    aiProgress: number
-    aiStatusMessage: string
-    aiProcessingVideoId: string | null
-}
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
+import { AiProcessState, NotificationContextValue } from "@/lib/types/notification"
 
 const NotificationContext = createContext<NotificationContextValue>({
     aiProcessState: "idle",
@@ -52,14 +24,10 @@ export function useNotification(): NotificationContextValue {
     return useContext(NotificationContext)
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const MCP_SERVER_URL = "http://localhost:8081"
+const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL
 const MCP_MAX_CONNECT_ATTEMPTS = 4
-const SSE_HEARTBEAT_TIMEOUT_MS = 45_000   // treat as dead if no heartbeat within 45 s
-const STALE_PROCESS_TIMEOUT_MS = 60_000   // abort if no progress update within 60 s
+const SSE_HEARTBEAT_TIMEOUT_MS = 45_000
+const STALE_PROCESS_TIMEOUT_MS = 60_000
 
 // ---------------------------------------------------------------------------
 // Provider

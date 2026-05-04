@@ -10,9 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import AdaptiveVideoPlayer from "@/components/AdaptiveVideoPlayer"
 import { useAuth } from "@/contexts/AuthContext"
 import { useNotification } from "@/components/notification"
-import { 
-  ArrowLeft, 
-  Loader2, 
+import {
+  ArrowLeft,
+  Loader2,
   AlertCircle,
   Calendar,
   Sparkles
@@ -63,17 +63,17 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
     )
   }
 
-  const videoSrc = video.compressed_video_path 
+  const videoSrc = video.compressed_video_path
     ? getStorageUrl(video.compressed_video_path)
-    : video.original_path 
+    : video.original_path
       ? getStorageUrl(video.original_path)
       : video.original_url || ""
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto min-h-screen">
-      <Button 
-        variant="ghost" 
-        onClick={() => router.back()} 
+      <Button
+        variant="ghost"
+        onClick={() => router.back()}
         className="mb-6 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors"
       >
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to My Videos
@@ -119,7 +119,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
               {video.title}
             </h1>
-            
+
             <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
               <span className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <Calendar className="w-4 h-4 mr-1.5" />
@@ -127,19 +127,18 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
                   month: "long", day: "numeric", year: "numeric"
                 })}
               </span>
-              
+
               {video.category && (
                 <Badge variant="secondary" className="px-3 py-1 font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-transparent transition-colors">
                   {video.category}
                 </Badge>
               )}
 
-              <Badge className={`px-3 py-1 font-medium capitalize ${
-                video.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 hover:bg-emerald-200' :
+              <Badge className={`px-3 py-1 font-medium capitalize ${video.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 hover:bg-emerald-200' :
                 video.status === 'processing' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 hover:bg-amber-200' :
-                video.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 hover:bg-red-200' :
-                'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200'
-              } border-transparent transition-colors`}>
+                  video.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 hover:bg-red-200' :
+                    'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200'
+                } border-transparent transition-colors`}>
                 {video.status}
               </Badge>
             </div>
@@ -156,13 +155,12 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
       </div>
 
       <div className="mt-8 flex justify-end">
-        <Button 
+        <Button
           size="lg"
           onClick={() => router.push(`/my-video/${params.id}/assessment`)}
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-6 rounded-xl shadow-md transition-all hover:shadow-lg flex items-center gap-2"
         >
-          <Sparkles className="w-5 h-5" />
-          Mulai Penilaian
+          Start Assessment
         </Button>
       </div>
     </div>
