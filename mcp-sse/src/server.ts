@@ -248,18 +248,15 @@ ${transcriptText}
 """`;
 }
 
-function buildFullAssessmentPrompt(fullTranscript: string, currentBloomLevel: number = 1): string {
-    // currentBloomLevel bisa dikirim dari database (1 = C1, dst.)
-    // Untuk summative assessment (akhir), kita bisa minta AI menyebar dari C1 sampai C6
-
+function buildFullAssessmentPrompt(fullTranscript: string, targetBloomLevels: string = "C1, C2, and C3"): string {
     return `You are an expert in Adaptive Learning Systems and Instructional Design.
 I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
 
 ## Bloom's Taxonomy Integration
-Distribute the 10 questions across the following levels based on the current target level (${currentBloomLevel}):
-- If level is low (C1-C2): Focus on definitions and conceptual understanding.
-- If level is high (C4-C6): Focus on analysis, case studies, and creation.
-- Map each question to a specific 'bloom_level' (C1, C2, C3, C4, C5, or C6).
+Distribute the 10 questions across the following levels: ${targetBloomLevels}
+- If targeting C1-C3: Focus on definitions, conceptual understanding, and application.
+- If targeting C4-C5: Focus on analysis, evaluation, and drawing connections among ideas.
+- Map each question to a specific 'bloom_level' (must be one of the targeted levels, e.g. "C1", "C2", etc.).
 
 ## Question Style Rules (No Multiple Choice)
 1. **short_answer**: Requires a concise explanation (1-3 sentences).
@@ -687,7 +684,7 @@ function createMcpServer(): McpServer {
             emitNotificationToUser(userIdStr, {
                 event: "assessment_generation_started",
                 video_id: videoId,
-                message: "Memulai pembuatan penilaian ringkasan...",
+                message: "Starting to create assessment...",
                 assessment_progress: 0,
                 assessment_status: "starting",
             });
@@ -721,7 +718,7 @@ function createMcpServer(): McpServer {
                 emitNotificationToUser(userIdStr, {
                     event: "assessment_generation_failed",
                     video_id: videoId,
-                    message: "Transkrip video kosong, penilaian tidak bisa dibuat.",
+                    message: "No transcript segments found, cannot create assessment.",
                 });
                 return {
                     content: [{ type: "text", text: "No transcript segments found." }],
@@ -738,7 +735,7 @@ function createMcpServer(): McpServer {
                 emitNotificationToUser(userIdStr, {
                     event: "assessment_generation_failed",
                     video_id: videoId,
-                    message: "Transkrip kosong, penilaian tidak bisa dibuat.",
+                    message: "Transcript is empty, cannot create assessment.",
                 });
                 return {
                     content: [{ type: "text", text: "Transcript is empty." }],
@@ -751,19 +748,51 @@ function createMcpServer(): McpServer {
             emitNotificationToUser(userIdStr, {
                 event: "assessment_generation_analyzing",
                 video_id: videoId,
-                message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — membuat 10 soal penilaian...`,
+                message: `Video duration: ${durationMinutes.toFixed(1)} minutes — creating 10 assessment questions...`,
                 assessment_progress: 5,
                 assessment_status: "analyzing",
             });
 
+            // Determine target Bloom level based on previous assessment results
+            let targetBloomLevels = "C1, C2, and C3"; // Default for the first generated assessment
+            try {
+                const qaResponse = await fetch(`${ENV.backendUrl}/question-answers?per_page=100`, {
+                    method: "GET",
+                    headers: buildAuthHeaders(token),
+                });
+                if (qaResponse.ok) {
+                    const qaBody = await qaResponse.json();
+                    const answers = qaBody.data || [];
+                    if (answers.length > 0) {
+                        // Get the newest video_id
+                        const newestVideoId = answers[0].question?.video_id;
+                        if (newestVideoId) {
+                            // Filter answers by this video_id
+                            const videoAnswers = answers.filter((a: any) => a.question?.video_id === newestVideoId);
+                            // Count correct answers
+                            const correctCount = videoAnswers.filter((a: any) => a.is_correct === true).length;
+                            // Check if more than 6 out of 10 are right
+                            if (correctCount > 6) {
+                                targetBloomLevels = "C4 and C5";
+                                console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Upgrading to C4-C5.`);
+                            } else {
+                                console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Maintaining C1-C3.`);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("[Assessment] Error fetching previous question answers:", err);
+            }
+
             let generatedQuestions: SemanticAssessmentQuestion[] = [];
             let failedAttempts = 0;
             const maxAttempts = 3;
-            let lastErrorMessage = "Format penilaian dari AI tidak valid.";
+            let lastErrorMessage = "Assessment format from AI is invalid.";
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    const prompt = buildFullAssessmentPrompt(fullTranscript);
+                    const prompt = buildFullAssessmentPrompt(fullTranscript, targetBloomLevels);
                     const rawLlmOutput = await callGeminiApi(prompt, true);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
@@ -824,7 +853,7 @@ function createMcpServer(): McpServer {
                 emitNotificationToUser(userIdStr, {
                     event: "assessment_generation_failed",
                     video_id: videoId,
-                    message: `Gagal membuat penilaian: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} upaya gagal)`,
+                    message: `Failed to create assessment: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} attempts failed)`,
                 });
                 return {
                     content: [
@@ -840,7 +869,7 @@ function createMcpServer(): McpServer {
                 event: "assessment_generation_saving",
                 video_id: videoId,
                 assessment_progress: 95,
-                message: "Menyimpan penilaian ke server...",
+                message: "Saving assessment to server...",
             });
 
             let savedAssessmentCount = 0;
@@ -886,7 +915,7 @@ function createMcpServer(): McpServer {
                 emitNotificationToUser(userIdStr, {
                     event: "assessment_generation_failed",
                     video_id: videoId,
-                    message: `Gagal menyimpan penilaian: Tidak ada soal yang berhasil disimpan.`,
+                    message: `Failed to save assessment: No questions were saved successfully.`,
                 });
                 return {
                     content: [
@@ -903,7 +932,7 @@ function createMcpServer(): McpServer {
                 video_id: videoId,
                 assessment_progress: 100,
                 assessment_saved_count: savedAssessmentCount,
-                message: `${savedAssessmentCount} soal penilaian berhasil dibuat dan disimpan.`,
+                message: `${savedAssessmentCount} assessment questions successfully created and saved.`,
             });
 
             const questionSummary = generatedQuestions

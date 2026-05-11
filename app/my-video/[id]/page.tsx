@@ -88,7 +88,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              AI sedang membuat kuis & soal penilaian...
+              AI is creating quiz & assessment...
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
               {aiStatusMessage || `Progress: ${aiProgress}%`}

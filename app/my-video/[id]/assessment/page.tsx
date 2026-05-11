@@ -74,7 +74,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
         has_answered: true
       }))
       setQuestions(updatedQuestions)
-      
+
       setShowSuccessModal(true)
     } catch (err: any) {
       console.error("Failed to submit answers:", err)
@@ -88,7 +88,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-gray-400">
         <Loader2 className="w-8 h-8 animate-spin" />
-        <span>Memuat soal penilaian...</span>
+        <span>Loading assessment questions...</span>
       </div>
     )
   }
@@ -115,9 +115,9 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
           onClick={() => router.back()}
           className="hover:bg-gray-100 dark:hover:bg-gray-800"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Video
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Video
         </Button>
-        <h1 className="text-2xl font-bold">Penilaian Keseluruhan</h1>
+        <h1 className="text-2xl font-bold">Assessment</h1>
       </div>
 
       {questions.length === 0 ? (
@@ -134,7 +134,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
         >
           <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 mb-2 px-2">
             <span className="text-red-500 font-bold text-base mt-1">*</span>
-            <span>Wajib diisi</span>
+            <span>Must be answered</span>
           </div>
 
           {questions.map((question, index) => {
@@ -158,7 +158,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 pointer-events-none">
                     {index + 1}. {question.question}
-                    <span className="text-red-500 ml-1.5" title="Wajib diisi">*</span>
+                    <span className="text-red-500 ml-1.5" title="Must be answered">*</span>
                   </h3>
                 </div>
 
