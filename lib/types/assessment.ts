@@ -35,3 +35,10 @@ export interface SubmitAnswerResponse {
     updated_at: string
   }
 }
+
+export interface EvaluateAnswerResponse {
+  score: number
+  decision: "correct" | "partial" | "wrong"
+  feedback: string
+  similarity: number
+}

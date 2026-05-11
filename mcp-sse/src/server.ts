@@ -131,6 +131,8 @@ async function callGeminiApi(prompt: string, expectJson: boolean = true): Promis
     throw new Error("Gagal memanggil API Gemini secara tidak terduga.");
 }
 
+
+
 function getVideoDurationSeconds(segments: TranscriptSegment[]): number {
     if (segments.length === 0) return 0;
     return segments[segments.length - 1].end;
@@ -1128,6 +1130,160 @@ function createMcpServer(): McpServer {
         }
     );
 
+    server.tool(
+        "evaluateAssessmentAnswers",
+        "Evaluates the user's answers for a given video assessment and saves the scores to the database.",
+        {
+            videoId: z.string().describe("ID of the video"),
+            userId: z.string().describe("User ID"),
+            token: z.string().describe("Bearer token for API access"),
+        },
+        async ({ videoId, userId, token }) => {
+            try {
+                emitNotificationToUser(userId, {
+                    event: "assessment_evaluation_started",
+                    video_id: videoId,
+                    message: "Memulai evaluasi jawaban...",
+                });
+
+                // Fetch questions for the video
+                const qResponse = await fetch(`${ENV.backendUrl}/questions?video_id=${videoId}`, {
+                    method: "GET",
+                    headers: buildAuthHeaders(token),
+                });
+                if (!qResponse.ok) throw new Error("Failed to fetch questions");
+                const qData = await qResponse.json();
+                const questions = qData.data || [];
+
+                // Fetch all user answers for this video
+                const ansResponse = await fetch(`${ENV.backendUrl}/question-answers?video_id=${videoId}&per_page=100`, {
+                    method: "GET",
+                    headers: buildAuthHeaders(token),
+                });
+                if (!ansResponse.ok) throw new Error("Failed to fetch answers");
+                const ansData = await ansResponse.json();
+                const allAnswers = ansData.data || [];
+
+                // Find answers that need evaluation (e.g. score is null, or just re-evaluate all for this video)
+                // We'll evaluate all answers we fetched.
+                const evaluationItems: Array<{
+                    question_id: string;
+                    question: string;
+                    reference: string;
+                    student_answer: string;
+                }> = [];
+                for (const ans of allAnswers) {
+                    const question = questions.find((q: any) => q.uuid === ans.question.uuid || q.uuid === ans.question_id);
+                    if (!question) continue;
+
+                    let referenceAnswer = "";
+                    if (Array.isArray(question.accepted_answers)) {
+                        referenceAnswer = question.accepted_answers.join(" ");
+                    } else if (typeof question.accepted_answers === "string") {
+                        referenceAnswer = question.accepted_answers;
+                    }
+
+                    evaluationItems.push({
+                        question_id: question.uuid,
+                        question: question.question,
+                        reference: referenceAnswer,
+                        student_answer: ans.user_answer
+                    });
+                }
+
+                if (evaluationItems.length === 0) {
+                    return { content: [{ type: "text", text: "No valid questions matched to evaluate" }] };
+                }
+
+                // Evaluate using Gemini
+                const prompt = `You are a warm, supportive study advisor — not a cold grading machine. You speak Indonesian using "kamu" (never "Anda"). Your tone is like a trusted senior friend who genuinely cares about the student's growth.
+
+## Your Task
+Evaluate each student answer against the reference answer using semantic similarity. Then write a short, personal feedback (1-3 sentences max) in Indonesian.
+
+## Feedback Style Guide
+- **Correct answers:** Acknowledge specifically what the student understood well. Example: "Bagus, kamu sudah memahami konsep X dengan tepat." Don't just say "benar" — point out the insight they demonstrated.
+- **Partially correct:** Recognize what they got right first, then gently point out what's missing. Example: "Kamu sudah di jalur yang benar soal X, tapi coba perdalam lagi bagian Y."
+- **Wrong answers:** Never say "salah" bluntly. Instead: (1) acknowledge their effort, (2) explain the key concept briefly, (3) give one concrete learning tip. Example: "Sepertinya konsep X masih perlu diperkuat. Coba review ulang bagian tentang Y — buat catatan kecil poin-poin pentingnya supaya lebih mudah diingat."
+- **Irrelevant answers:** Be honest but kind. Example: "Jawaban kamu belum nyambung dengan pertanyaannya. Coba baca ulang materinya pelan-pelan, fokus ke bagian tentang X."
+
+## Rules
+- Always write in Indonesian, casual but respectful
+- Never be patronizing or overly dramatic
+- Keep it practical — if suggesting a study method, make it specific (e.g. "coba buat mind map", "highlight kata kunci", "ulangi bagian video menit ke-X")
+- Match the depth of feedback to the question type (short_answer = brief feedback, essay = slightly more detailed)
+
+## Input Data
+${JSON.stringify(evaluationItems, null, 2)}
+
+## Output Format (STRICT JSON, no markdown)
+[
+  {
+    "question_id": "uuid string",
+    "score": number (0-100),
+    "decision": "correct" | "partial" | "wrong",
+    "feedback": "Personal feedback in Indonesian as described above."
+  }
+]`;
+
+                const rawOutput = await callGeminiApi(prompt, true);
+                let parsedResults = [];
+                try {
+                    const cleanedOutput = rawOutput.replace(/```json/g, '').replace(/```/g, '').trim();
+                    parsedResults = JSON.parse(cleanedOutput);
+                } catch (e) {
+                    console.error("[Evaluate Tool] Failed to parse Gemini response:", rawOutput);
+                    throw new Error("Failed to parse evaluation response");
+                }
+
+                // Save Scores to Laravel backend concurrently via PUT (update existing answers)
+                const savePromises = parsedResults.map(async (result: any) => {
+                    const studentAns = evaluationItems.find((a: any) => a.question_id === result.question_id);
+                    if (!studentAns) return;
+
+                    const updatePayload = {
+                        score: result.score,
+                        is_correct: result.decision === "correct",
+                        feedback: result.feedback
+                    };
+
+                    console.log(`[Evaluate Tool] Updating score for ${result.question_id}:`, updatePayload);
+
+                    const saveResponse = await fetch(`${ENV.backendUrl}/question-answers/${result.question_id}/score`, {
+                        method: "PUT",
+                        headers: buildAuthHeaders(token),
+                        body: JSON.stringify(updatePayload),
+                    });
+
+                    if (!saveResponse.ok) {
+                        const errText = await saveResponse.text();
+                        console.error(`[Evaluate Tool] Failed to update ${result.question_id}:`, saveResponse.status, errText);
+                    } else {
+                        console.log(`[Evaluate Tool] Successfully updated ${result.question_id}`);
+                    }
+                });
+
+                await Promise.allSettled(savePromises);
+
+                emitNotificationToUser(userId, {
+                    event: "assessment_evaluation_completed",
+                    video_id: videoId,
+                    message: "Evaluasi jawaban selesai.",
+                });
+
+                return { content: [{ type: "text", text: `Evaluated ${parsedResults.length} answers successfully.` }] };
+            } catch (error) {
+                console.error("[Evaluate Tool Error]", error);
+                emitNotificationToUser(userId, {
+                    event: "assessment_evaluation_failed",
+                    video_id: videoId,
+                    message: "Evaluasi jawaban gagal.",
+                });
+                return { content: [{ type: "text", text: `Failed to evaluate answers: ${error instanceof Error ? error.message : "Unknown error"}` }] };
+            }
+        }
+    );
+
     return server;
 }
 
@@ -1178,7 +1334,7 @@ app.get("/notifications", (req: Request, res: Response) => {
     res.write(":\n\n");
 
     notificationClientsByUserId.set(userId, res);
-    console.log(`[Notifications] Client connected: userId=${userId}`);
+    console.log(`[Notifications] Client connected: userId = ${userId}`);
 
     flushPendingNotifications(userId, res);
 
@@ -1189,7 +1345,7 @@ app.get("/notifications", (req: Request, res: Response) => {
     req.on("close", () => {
         clearInterval(heartbeatInterval);
         notificationClientsByUserId.delete(userId);
-        console.log(`[Notifications] Client disconnected: userId=${userId}`);
+        console.log(`[Notifications] Client disconnected: userId = ${userId}`);
     });
 });
 
@@ -1214,7 +1370,7 @@ app.post("/webhook/transcription-done", express.json(), (req: Request, res: Resp
             video_id,
         });
         console.log(
-            `[Webhook] transcription_ready sent: videoId=${video_id}, userId=${user_id}`
+            `[Webhook] transcription_ready sent: videoId = ${video_id}, userId = ${user_id}`
         );
     }
 
@@ -1236,11 +1392,13 @@ app.post("/webhook/video-status", express.json(), (req: Request, res: Response) 
         status,
     });
     console.log(
-        `[Webhook] video_status_changed sent: videoId=${video_id}, userId=${user_id}, status=${status}`
+        `[Webhook] video_status_changed sent: videoId = ${video_id}, userId = ${user_id}, status = ${status}`
     );
 
     res.status(200).json({ received: true });
 });
+
+
 
 app.get("/sse", async (req: Request, res: Response) => {
     const allowedOrigin = resolveAllowedOriginHeader(req.headers.origin);
@@ -1274,7 +1432,7 @@ app.post("/messages", async (req: Request, res: Response) => {
         await transport.handlePostMessage(req, res);
     } catch (error) {
         console.error(
-            `[SSE] Error handling message for session ${sessionId}:`,
+            `[SSE] Error handling message for session ${sessionId}: `,
             error
         );
         if (!res.headersSent) {

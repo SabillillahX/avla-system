@@ -7,10 +7,12 @@ import { AssessmentQuestion } from "@/lib/types/assessment"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Loader2, ArrowLeft, CheckCircle2, XCircle, CheckCircle } from "lucide-react"
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 
 export default function AssessmentPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
 
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -51,9 +53,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
     setIsSubmittingAll(true)
 
     try {
-      // Create an array of submit promises
       const submitPromises = questions.map(async (question) => {
-        // Skip if already answered previously
         if (question.has_answered) return null
 
         const answer = userAnswers[question.uuid]
@@ -67,6 +67,27 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
       })
 
       await Promise.all(submitPromises)
+
+      // Connect to MCP Server directly to evaluate answers synchronously
+      const mcpUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || "http://localhost:8081"
+      const transport = new SSEClientTransport(new URL(`${mcpUrl}/sse`))
+      const mcpClient = new Client({ name: "nextjs-assessment", version: "1.0.0" }, { capabilities: {} })
+      
+      try {
+        await mcpClient.connect(transport)
+        await mcpClient.callTool({
+          name: "evaluateAssessmentAnswers",
+          arguments: {
+            videoId: params.id,
+            userId: String(user?.id || ""),
+            token: token as string,
+          }
+        }, undefined, { timeout: 120_000 })
+      } catch (err) {
+        console.error("Evaluation tool failed:", err)
+      } finally {
+        mcpClient.close()
+      }
 
       // Mark visually
       const updatedQuestions = questions.map(q => ({
@@ -214,7 +235,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-6 rounded-xl shadow-md transition-all flex items-center gap-2"
               >
                 {isSubmittingAll && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-                {isAllAnswered ? "Submit All" : "Fill all the question to submit"}
+                {isAllAnswered ? "Submit Answer" : "Fill all the question to submit"}
               </Button>
             </div>
           )}

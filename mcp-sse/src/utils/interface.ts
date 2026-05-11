@@ -51,3 +51,9 @@ export interface NotificationPayload {
 }
 
 export type UnknownRecord = Record<string, unknown>;
+
+export interface EvaluationResult {
+    score: number;
+    decision: "correct" | "partial" | "wrong";
+    feedback: string;
+}

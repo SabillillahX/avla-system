@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle, Sparkles } from "lucide-react"
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle, MessageCircleHeart, Lightbulb } from "lucide-react"
 import { useRouter } from "next/navigation"
 import api from "@/lib/api/axios"
 
@@ -31,10 +31,72 @@ interface AssessmentResult {
   user_answer: string;
   is_correct: boolean;
   score: number;
-  ai_feedback: string | null;
+  feedback: string | null;
   created_at: string;
   question: QuestionData;
 }
+
+// ─── Friendly label helpers ───────────────────────────────────────────────────
+
+function getStatusLabel(isCorrect: boolean, score?: number) {
+  if (isCorrect) {
+    if (score !== undefined && score >= 90) return "Nailed it! 🎉"
+    return "Got it! ✓"
+  }
+  if (score !== undefined && score >= 40) return "Almost there"
+  return "Not quite yet"
+}
+
+function getScoreColor(score: number): string {
+  if (score >= 70) return "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800"
+  if (score >= 40) return "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800"
+  return "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-900/30 dark:border-rose-800"
+}
+
+// ─── Stats summary ────────────────────────────────────────────────────────────
+
+function StatsSummary({ assessmentResults, quizResults, activeTab }: {
+  assessmentResults: AssessmentResult[];
+  quizResults: QuizResult[];
+  activeTab: "assessment" | "quiz";
+}) {
+  const data = activeTab === "assessment" ? assessmentResults : quizResults
+  const total = data.length
+  const correct = data.filter(d => d.is_correct).length
+  const wrong = total - correct
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
+
+  const totalScore = activeTab === "assessment" && assessmentResults.length > 0
+    ? Math.round(assessmentResults.reduce((s, r) => s + Number(r.score ?? 0), 0))
+    : null
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-4">
+        <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Total</p>
+        <p className="text-2xl font-semibold text-gray-900 dark:text-white">{total}</p>
+      </div>
+      <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4">
+        <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Correct</p>
+        <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{correct}</p>
+      </div>
+      <div className="bg-rose-50 dark:bg-rose-900/20 rounded-xl p-4">
+        <p className="text-xs text-rose-500 dark:text-rose-400 uppercase tracking-wider mb-1">Not yet</p>
+        <p className="text-2xl font-semibold text-rose-600 dark:text-rose-300">{wrong}</p>
+      </div>
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+        <p className="text-xs text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-1">
+          {totalScore !== null ? "Total Score" : "Accuracy"}
+        </p>
+        <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">
+          {totalScore !== null ? `${totalScore}` : `${accuracy}%`}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ResultsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -52,43 +114,32 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
           api.get(`/quiz-results?per_page=50&video_id=${params.id}`),
           api.get(`/question-answers?per_page=50&video_id=${params.id}`)
         ])
-
         setQuizResults(quizRes.data.data || [])
         setAssessmentResults(assessmentRes.data.data || [])
       } catch (err: any) {
         console.error("Failed to fetch results", err)
-        setError("Failed to load learning results.")
+        setError("Couldn't load your results. Try refreshing the page.")
       } finally {
         setIsLoading(false)
       }
     }
-
     fetchResults()
   }, [])
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date)
-  }
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-gray-400">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <span>Loading...</span>
+        <Loader2 className="w-7 h-7 animate-spin" />
+        <span className="text-sm">Loading your results...</span>
       </div>
     )
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto min-h-screen">
-      <div className="flex items-center gap-4 mb-8">
+    <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto min-h-screen">
+
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-7">
         <button
           onClick={() => router.back()}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
@@ -96,250 +147,248 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Learning Results</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Review your quiz and assessment history</p>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your learning recap</h1>
+          <p className="text-gray-400 dark:text-gray-500 text-sm">Here's how it went — no stress, just growth</p>
         </div>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg flex items-center gap-3">
-          <AlertCircle className="w-5 h-5" />
+        <div className="mb-5 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl flex items-center gap-3 text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <p>{error}</p>
         </div>
       )}
 
+      {/* Stats */}
+      <StatsSummary
+        assessmentResults={assessmentResults}
+        quizResults={quizResults}
+        activeTab={activeTab}
+      />
+
       {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-8 w-fit">
-        <button
-          onClick={() => setActiveTab("assessment")}
-          className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "assessment"
-            ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
-            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            }`}
-        >
-          Assessment
-        </button>
-        <button
-          onClick={() => setActiveTab("quiz")}
-          className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "quiz"
-            ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
-            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            }`}
-        >
-          Quiz (Pop-up Video)
-        </button>
+      <div className="flex border-b border-gray-100 dark:border-gray-800 mb-6">
+        {(["assessment", "quiz"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${activeTab === tab
+              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
+              : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+          >
+            {tab === "assessment" ? "Assessment" : "Quiz (Pop-up Video)"}
+          </button>
+        ))}
       </div>
 
-      {/* Content */}
-      <div className="space-y-6">
+      {/* Cards */}
+      <div className="space-y-4">
         {activeTab === "assessment" && (
-          <>
-            {assessmentResults.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-                <BookOpen className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Empty assessment results</h3>
-                <p className="text-gray-500">You have not completed any assessments yet.</p>
-              </div>
-            ) : (
-              assessmentResults.map((result) => (
-                <AssessmentResultCard
-                  key={`assessment-${result.id}`}
-                  isCorrect={result.is_correct}
-                  score={result.score ?? 0}
-                  question={result.question.question}
-                  userAnswer={result.user_answer}
-                  correctAnswer={result.question.accepted_answers?.[0] || "-"}
-                  aiFeedback={result.ai_feedback}
-                  explanation={result.question.explanation}
-                  type={result.question.type}
-                />
-              ))
-            )}
-          </>
+          assessmentResults.length === 0
+            ? <EmptyState message="No assessments yet — jump in and give one a try!" />
+            : assessmentResults.map((result) => (
+              <AssessmentResultCard key={`assessment-${result.id}`} result={result} />
+            ))
         )}
 
         {activeTab === "quiz" && (
-          <>
-            {quizResults.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-                <BookOpen className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Empty quiz results</h3>
-                <p className="text-gray-500">You have not answered any pop-up quizzes yet.</p>
-              </div>
-            ) : (
-              quizResults.map((result) => (
-                <QuizResultCard
-                  key={`quiz-${result.id}`}
-                  isCorrect={result.is_correct}
-                  question={result.quiz.question}
-                  userAnswer={result.user_answer}
-                  correctAnswer={result.quiz.correct_answer}
-                  explanation={result.quiz.explanation}
-                />
-              ))
-            )}
-          </>
+          quizResults.length === 0
+            ? <EmptyState message="No pop-up quizzes answered yet. Keep watching!" />
+            : quizResults.map((result) => (
+              <QuizResultCard key={`quiz-${result.id}`} result={result} />
+            ))
         )}
       </div>
     </div>
   )
 }
 
-function AssessmentResultCard({
-  isCorrect,
-  score,
-  question,
-  userAnswer,
-  correctAnswer,
-  aiFeedback,
-  explanation,
-  type
-}: {
-  isCorrect: boolean;
-  score: number;
-  question: string;
-  userAnswer: string;
-  correctAnswer: string;
-  aiFeedback: string | null;
-  explanation: string;
-  type: string;
-}) {
-  const scoreColor = score >= 70
-    ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800"
-    : score >= 40
-      ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800"
-      : "text-red-700 bg-red-50 border-red-200 dark:text-red-300 dark:bg-red-900/30 dark:border-red-800"
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="text-center py-14 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+      <BookOpen className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+      <p className="text-gray-500 dark:text-gray-400 text-sm">{message}</p>
+    </div>
+  )
+}
+
+// ─── Assessment card ──────────────────────────────────────────────────────────
+
+function AssessmentResultCard({ result }: { result: AssessmentResult }) {
+  const { is_correct, score, question, user_answer, feedback } = result
+  const statusLabel = getStatusLabel(is_correct, score)
+  const scoreColorClass = getScoreColor(score ?? 0)
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 mb-4">
-        <div className="flex items-start gap-3">
-          <div className="mt-1">
-            {isCorrect ? (
-              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            ) : (
-              <XCircle className="w-6 h-6 text-red-500" />
-            )}
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border-l-4 border border-gray-100 dark:border-gray-700 ${is_correct ? "border-l-emerald-400" : "border-l-rose-400"
+      }`}>
+
+      {/* Top row */}
+      <div className="flex items-start gap-3 mb-4">
+        <div className="mt-0.5 flex-shrink-0">
+          {is_correct
+            ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            : <XCircle className="w-5 h-5 text-rose-400" />
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+              : "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"
+              }`}>
+              {statusLabel}
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full capitalize">
+              {question.type.replace("_", " ")}
+            </span>
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ml-auto ${scoreColorClass}`}>
+              {score ?? 0}/100
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className={`text-sm font-semibold px-2.5 py-0.5 rounded ${isCorrect
-                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                }`}>
-                {isCorrect ? "Correct" : "Wrong"}
-              </span>
-              <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium px-2 py-0.5 rounded capitalize">
-                {type.replace("_", " ")}
-              </span>
-              <span className={`text-sm font-bold px-3 py-0.5 rounded-full border ${scoreColor}`}>
-                Score: {score}/100
-              </span>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mt-2">
-              {question}
-            </h3>
-          </div>
+          <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{question.question}</p>
         </div>
       </div>
 
-      <div className="ml-0 sm:ml-9 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Your answer</span>
-            <p className="text-gray-900 dark:text-gray-100">{userAnswer || "-"}</p>
+      {/* Answers */}
+      <div className="ml-8 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/50">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">You said</span>
+            <p className="text-sm text-gray-800 dark:text-gray-200">{user_answer || "—"}</p>
           </div>
-          <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1 block">Reference answer</span>
-            <p className="text-gray-900 dark:text-gray-100">{correctAnswer}</p>
+          <div className="bg-blue-50/60 dark:bg-blue-900/10 rounded-xl p-3 border border-blue-100 dark:border-blue-900/30">
+            <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider block mb-1">Reference answer</span>
+            <p className="text-sm text-gray-800 dark:text-gray-200">{question.accepted_answers?.[0] || "—"}</p>
           </div>
         </div>
 
-        {aiFeedback ? (
-          <div className={`p-4 rounded-xl border ${isCorrect
-            ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30"
-            : "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30"
-            }`}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <Sparkles className={`w-3.5 h-3.5 ${isCorrect ? "text-emerald-600" : "text-amber-600"}`} />
-              <span className={`text-xs font-semibold uppercase tracking-wider ${isCorrect ? "text-emerald-600" : "text-amber-600"}`}>
-                AI Analysis & Feedback
-              </span>
-            </div>
-            <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed">{aiFeedback}</p>
-          </div>
-        ) : explanation ? (
-          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30">
-            <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1 block">Explanation</span>
-            <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed">{explanation}</p>
-          </div>
+        {/* Friendly AI feedback */}
+        {feedback ? (
+          <FriendlyFeedback isCorrect={is_correct} feedback={feedback} />
+        ) : question.explanation ? (
+          <HintBox explanation={question.explanation} />
         ) : null}
       </div>
     </div>
   )
 }
 
-function QuizResultCard({
-  isCorrect,
-  question,
-  userAnswer,
-  correctAnswer,
-  explanation,
-}: {
-  isCorrect: boolean;
-  question: string;
-  userAnswer: string;
-  correctAnswer: string;
-  explanation: string;
-}) {
+// ─── Quiz card ────────────────────────────────────────────────────────────────
+
+function QuizResultCard({ result }: { result: QuizResult }) {
+  const { is_correct, user_answer, quiz } = result
+  const statusLabel = getStatusLabel(is_correct)
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 mb-4">
-        <div className="flex items-start gap-3">
-          <div className="mt-1">
-            {isCorrect ? (
-              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            ) : (
-              <XCircle className="w-6 h-6 text-red-500" />
-            )}
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border-l-4 border border-gray-100 dark:border-gray-700 ${is_correct ? "border-l-emerald-400" : "border-l-rose-400"
+      }`}>
+
+      <div className="flex items-start gap-3 mb-4">
+        <div className="mt-0.5 flex-shrink-0">
+          {is_correct
+            ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            : <XCircle className="w-5 h-5 text-rose-400" />
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+              : "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"
+              }`}>
+              {statusLabel}
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+              Multiple choice
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`text-sm font-semibold px-2.5 py-0.5 rounded ${isCorrect
-                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                }`}>
-                {isCorrect ? "Correct" : "Wrong"}
-              </span>
-              <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium px-2 py-0.5 rounded capitalize">
-                Multiple Choice
-              </span>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mt-2">
-              {question}
-            </h3>
-          </div>
+          <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{quiz.question}</p>
         </div>
       </div>
 
-      <div className="ml-0 sm:ml-9 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Your answer</span>
-            <p className="text-gray-900 dark:text-gray-100">{userAnswer || "-"}</p>
+      <div className="ml-8 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/50">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">You said</span>
+            <p className="text-sm text-gray-800 dark:text-gray-200">{user_answer || "—"}</p>
           </div>
-          <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1 block">Correct answer</span>
-            <p className="text-gray-900 dark:text-gray-100">{correctAnswer}</p>
+          <div className="bg-blue-50/60 dark:bg-blue-900/10 rounded-xl p-3 border border-blue-100 dark:border-blue-900/30">
+            <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider block mb-1">Correct answer</span>
+            <p className="text-sm text-gray-800 dark:text-gray-200">{quiz.correct_answer}</p>
           </div>
         </div>
 
-        {explanation && (
-          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30">
-            <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1 block">Explanation</span>
-            <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed">{explanation}</p>
-          </div>
-        )}
+        {quiz.explanation && <HintBox explanation={quiz.explanation} />}
+      </div>
+    </div>
+  )
+}
+
+// ─── Friendly feedback block ──────────────────────────────────────────────────
+//
+// This is the heart of the "best friend" feel.
+// Warm, conversational container — not a verdict box.
+
+function FriendlyFeedback({ isCorrect, feedback }: { isCorrect: boolean; feedback: string }) {
+  return (
+    <div className={`rounded-xl p-4 border ${isCorrect
+      ? "bg-emerald-50/60 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30"
+      : "bg-amber-50/60 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30"
+      }`}>
+      <div className="flex items-start gap-2.5">
+        <MessageCircleHeart className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isCorrect ? "text-emerald-500" : "text-amber-500"
+          }`} />
+        <div>
+          <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+            }`}>
+            A little note from your study buddy
+          </p>
+          {/*
+            ── AI Feedback tone guidelines ────────────────────────────────
+            When generating ai_feedback on the backend, prompt the model to:
+
+            • Speak like a close, smart friend — casual, warm, never preachy.
+            • Start with acknowledgement ("You were on the right track...")
+              not a verdict ("This answer is incorrect.").
+            • For wrong answers: explain *why* the right answer makes sense,
+              not just what the right answer is.
+            • Use "we" or "you" language, avoid passive voice.
+            • End with a micro-encouragement, never a lecture.
+            • Keep it under 3 sentences.
+
+            Example good feedback:
+              "You were close! The key thing to remember is that Babylonia
+               built on the Sumerian system — same base-60, just more refined.
+               Next time you'll nail it 💪"
+
+            Example bad feedback:
+              "The correct answer is Babylon. The user's answer was incorrect
+               as it did not mention the Babylonian civilization."
+          */}
+          <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{feedback}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Hint / explanation block ─────────────────────────────────────────────────
+
+function HintBox({ explanation }: { explanation: string }) {
+  return (
+    <div className="bg-amber-50/50 dark:bg-amber-900/10 rounded-xl p-4 border border-amber-100 dark:border-amber-900/30">
+      <div className="flex items-start gap-2.5">
+        <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+        <div>
+          <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1.5">
+            Here's a hint to remember it next time
+          </p>
+          <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{explanation}</p>
+        </div>
       </div>
     </div>
   )
