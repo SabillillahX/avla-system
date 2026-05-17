@@ -90,6 +90,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         videoId: string | number
         userId: string | number
     }) => {
+        if (!MCP_SERVER_URL) {
+            throw new Error("MCP server URL is not configured")
+        }
         const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
         let lastError: unknown = null
 
@@ -156,6 +159,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, [armStaleProtection])
 
     const connectSse = useCallback(() => {
+        if (!MCP_SERVER_URL) return
         if (isUnmountedRef.current || !user?.id) return
 
         eventSourceRef.current?.close()
@@ -336,6 +340,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // ---------------------------------------------------------------------------
 
     useEffect(() => {
+        if (!MCP_SERVER_URL) return
         if (!user?.id) return
 
         isUnmountedRef.current = false

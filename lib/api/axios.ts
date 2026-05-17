@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const useMockAuth = process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true';
+const BASE_URL = useMockAuth ? '/api' : process.env.NEXT_PUBLIC_BACKEND_URL;
 
 const api = axios.create({
   baseURL: BASE_URL,
