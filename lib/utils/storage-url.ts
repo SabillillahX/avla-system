@@ -9,6 +9,9 @@
  */
 export function getStorageUrl(path: string | null | undefined): string {
   if (!path) return ""
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:")) {
+    return path;
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_STORAGE_URL || ""
 

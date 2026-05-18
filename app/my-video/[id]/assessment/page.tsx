@@ -72,7 +72,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
       const mcpUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || "http://localhost:8081"
       const transport = new SSEClientTransport(new URL(`${mcpUrl}/sse`))
       const mcpClient = new Client({ name: "nextjs-assessment", version: "1.0.0" }, { capabilities: {} })
-      
+
       try {
         await mcpClient.connect(transport)
         await mcpClient.callTool({
@@ -143,7 +143,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
 
       {questions.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center border">
-          <p className="text-gray-500">Belum ada soal untuk video ini.</p>
+          <p className="text-gray-500">There are no questions yet.</p>
         </div>
       ) : (
         <div

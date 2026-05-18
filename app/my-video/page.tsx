@@ -124,6 +124,8 @@ export default function MyVideoPage() {
   const [videoFileInput, setVideoFileInput] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [uploadingVideoData, setUploadingVideoData] = useState<VideoType | null>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
 
@@ -263,7 +265,27 @@ export default function MyVideoPage() {
     }
 
     setIsUploading(true)
+    setUploadProgress(0)
     setUploadError(null)
+
+    const dummyVideo: VideoType = {
+      id: "uploading-" + Date.now(),
+      user_id: 0,
+      title,
+      description,
+      category: categories.find((c) => String(c.id) === String(category)) || category,
+      thumbnail_path: thumbnailFileInput ? URL.createObjectURL(thumbnailFileInput) : null,
+      source_type: sourceType as "file" | "url",
+      original_url: sourceType === "url" ? videoUrl : null,
+      original_path: null,
+      compressed_video_path: null,
+      mp3_audio_path: null,
+      status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    setUploadingVideoData(dummyVideo)
+    handleOpenChange(false)
 
     try {
       await videosApi.uploadVideo({
@@ -271,18 +293,25 @@ export default function MyVideoPage() {
         description,
         category_id: category,
         thumbnail_file: thumbnailFileInput,
-        source_type: sourceType,
+        source_type: sourceType as "file" | "url",
         video_file: sourceType === "file" ? videoFileInput ?? undefined : undefined,
         video_url: sourceType === "url" ? videoUrl : undefined,
+      }, (progressEvent) => {
+        if (progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
       })
-      handleOpenChange(false)
       fetchVideos()
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Upload failed. Please try again."
       setUploadError(msg)
+      setIsUploadOpen(true)
     } finally {
       setIsUploading(false)
+      setUploadingVideoData(null)
+      setUploadProgress(null)
     }
   }
 
@@ -441,7 +470,7 @@ export default function MyVideoPage() {
     )
   }
 
-  const VideoCard = ({ video }: { video: VideoType }) => {
+  const VideoCard = ({ video, progress }: { video: VideoType; progress?: number | null }) => {
     const cfg = statusConfig[video.status]
     const StatusIcon = cfg.icon
     const ready = isVideoReady(video.status) && !isAiProcessingVideo(String(video.id))
@@ -519,6 +548,14 @@ export default function MyVideoPage() {
                   <Calendar className="w-3 h-3" />
                   {formatDate(video.created_at)}
                 </span>
+                {typeof progress === 'number' && (
+                  <div className="flex items-center gap-2 w-32 ml-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                      <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                    </div>
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{progress}%</span>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -586,10 +623,20 @@ export default function MyVideoPage() {
             </div>
           </div>
           <div className="flex items-center justify-between text-[11px] text-gray-400 dark:text-gray-500 mt-2 pt-1 border-t border-gray-100 dark:border-gray-800">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {formatDate(video.created_at)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                {formatDate(video.created_at)}
+              </span>
+              {typeof progress === 'number' && (
+                <div className="flex items-center gap-1 w-20">
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
+                    <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                  </div>
+                  <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">{progress}%</span>
+                </div>
+              )}
+            </div>
             {video.category && (
               <Badge variant="secondary" className="text-[10px]">
                 {getCategoryName(video.category)}
@@ -646,12 +693,12 @@ export default function MyVideoPage() {
                 Upload Video
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-white dark:bg-gray-800">
+            <DialogContent className="bg-white dark:bg-gray-800 sm:max-w-[600px] max-h-[90vh]">
               <DialogHeader>
                 <DialogTitle className="text-gray-900 dark:text-white">Upload New Video</DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
                 {/* Title */}
                 <div>
                   <Label className="text-gray-700 dark:text-gray-300">Video Title <span className="text-red-500">*</span></Label>
@@ -853,12 +900,12 @@ export default function MyVideoPage() {
 
         {/* Edit Dialog */}
         <Dialog open={isEditModalVisible} onOpenChange={setIsEditModalVisible}>
-          <DialogContent className="bg-white dark:bg-gray-800">
+          <DialogContent className="bg-white dark:bg-gray-800 sm:max-w-[600px] max-h-[90vh]">
             <DialogHeader>
               <DialogTitle className="text-gray-900 dark:text-white">Edit Video</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
               <div>
                 <Label className="text-gray-700 dark:text-gray-300">Video Title</Label>
                 <Input
@@ -1076,12 +1123,18 @@ export default function MyVideoPage() {
           <EmptyState />
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {uploadingVideoData && (
+              <VideoCard key="uploading" video={uploadingVideoData} progress={uploadProgress} />
+            )}
             {filteredList.map((v) => (
               <VideoCard key={v.id} video={v} />
             ))}
           </div>
         ) : (
           <div className="space-y-3">
+            {uploadingVideoData && (
+              <VideoCard key="uploading" video={uploadingVideoData} progress={uploadProgress} />
+            )}
             {filteredList.map((v) => (
               <VideoCard key={v.id} video={v} />
             ))}

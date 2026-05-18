@@ -8,6 +8,7 @@ import {
   UploadVideoPayload,
   Video,
 } from "../types/handle-videos";
+import { AxiosProgressEvent } from "axios";
 
 export const videosApi = {
   getVideos: async (page = 1): Promise<PaginatedVideos> => {
@@ -27,7 +28,10 @@ export const videosApi = {
     return response.data.data;
   },
 
-  uploadVideo: async (payload: UploadVideoPayload): Promise<Video> => {
+  uploadVideo: async (
+    payload: UploadVideoPayload,
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  ): Promise<Video> => {
     const formData = new FormData();
     formData.append("title", payload.title);
     formData.append("source_type", payload.source_type);
@@ -44,6 +48,7 @@ export const videosApi = {
 
     const response = await api.post<ApiResponse<Video>>("/videos", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress,
     });
     return response.data.data;
   },
