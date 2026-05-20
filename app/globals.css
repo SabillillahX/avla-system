@@ -2,7 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --font-poppins: 'Poppins', system-ui, sans-serif;
+  --font-open-sans: 'Open Sans', system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-marquee-vertical {
+    animation: none !important;
+  }
+}
 
 @layer utilities {
   .bg-noise {
@@ -52,6 +64,17 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-foreground;
+    font-family: var(--font-open-sans), system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  .font-display {
+    font-family: var(--font-poppins), system-ui, sans-serif;
   }
 }

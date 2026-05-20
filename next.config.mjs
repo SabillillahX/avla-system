@@ -22,6 +22,16 @@ const nextConfig = {
         hostname: 'backend.sabill.me',
         pathname: '/storage/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.simpleicons.org',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
     ],
   },
 }

@@ -2,30 +2,120 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import {
+  BarChart3,
+  Building2,
+  GraduationCap,
+  Shield,
+  Sparkles,
+  Video,
+} from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import DocumentationSection from "@/components/documentation-section"
 import TestimonialsSection from "../components/testimonials-section"
 import FAQSection from "../components/faq-section"
-import PricingSection from "../components/pricing-section"
 import CTASection from "@/components/cta-section"
 import FooterSection from "@/components/footer-section"
-import { Hero2 } from "@/components/ui/hero-2-1"
+import { HeroSection } from "@/components/ui/hero-section-1"
+import { BentoCard, BentoGrid } from "@/components/ui/bento-grid"
+import { Marquee } from "@/components/ui/marquee"
+import { cn } from "@/lib/utils"
 
-const featureItems = [
+const metricCards = [
+  { label: "Assessments", value: "12.4k" },
+  { label: "Avg. score", value: "87%" },
+  { label: "Teams", value: "340+" },
+  { label: "Uptime", value: "99.9%" },
+]
+
+const bentoFeatures = [
   {
-    title: "AI-Powered Video Assessment",
+    Icon: Video,
+    name: "AI-Powered Video Assessment",
     description:
       "Generate questions and evaluations automatically from video content using advanced AI analysis.",
+    href: "#features",
+    cta: "Explore AI tools",
+    className: "col-span-3 lg:col-span-2",
+    background: (
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/90 via-white/50 to-sky-50/60" />
+    ),
   },
   {
-    title: "Real-time Analytics Dashboard",
+    Icon: BarChart3,
+    name: "Real-time Analytics",
     description:
-      "Monitor engagement and performance metrics with comprehensive analytics and reporting.",
+      "Monitor engagement and performance metrics with comprehensive dashboards and reporting.",
+    href: "#features",
+    cta: "View analytics",
+    className: "col-span-3 lg:col-span-1",
+    background: (
+      <Marquee
+        vertical
+        pauseOnHover
+        className="absolute top-4 right-0 h-[280px] w-full [--duration:28s] [mask-image:linear-gradient(to_top,transparent_10%,#000_85%)]"
+      >
+        {metricCards.map((card) => (
+          <figure
+            key={card.label}
+            className={cn(
+              "relative w-36 cursor-default overflow-hidden rounded-xl border border-blue-100 bg-white p-3 shadow-sm",
+              "transition-colors duration-200 hover:border-blue-200"
+            )}
+          >
+            <figcaption className="text-xs font-medium text-gray-500">
+              {card.label}
+            </figcaption>
+            <p className="mt-1 text-lg font-semibold text-gray-900">
+              {card.value}
+            </p>
+          </figure>
+        ))}
+      </Marquee>
+    ),
   },
   {
-    title: "Secure Cloud Infrastructure",
+    Icon: Shield,
+    name: "Secure Cloud Infrastructure",
     description:
-      "Enterprise-grade security with end-to-end encryption and compliance with industry standards.",
+      "Enterprise-grade security with end-to-end encryption and industry-standard compliance.",
+    href: "#pricing",
+    cta: "Security details",
+    className: "col-span-3 lg:col-span-1",
+    background: (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex h-32 w-32 items-center justify-center rounded-full border border-blue-100 bg-blue-50/80">
+          <Shield className="h-14 w-14 text-primary/80" aria-hidden />
+        </div>
+      </div>
+    ),
+  },
+  {
+    Icon: Sparkles,
+    name: "Workflow Automation",
+    description:
+      "Orchestrate assessments, approvals, and notifications with measurable, scalable IT service flows.",
+    href: "/auth/register",
+    cta: "Start free trial",
+    className: "col-span-3 lg:col-span-2",
+    background: (
+      <div className="absolute inset-0 overflow-hidden">
+        <Marquee
+          pauseOnHover
+          className="absolute top-8 [--duration:32s] [mask-image:linear-gradient(to_top,transparent_20%,#000_90%)]"
+        >
+          {["SOC 2", "ISO 27001", "GDPR", "HIPAA-ready", "SSO", "RBAC"].map(
+            (badge) => (
+              <span
+                key={badge}
+                className="mx-2 inline-flex cursor-default items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm"
+              >
+                {badge}
+              </span>
+            )
+          )}
+        </Marquee>
+      </div>
+    ),
   },
 ]
 
@@ -40,39 +130,70 @@ export default function LandingPage() {
   }, [isLoading, isAuthenticated, router])
 
   return (
-    <div className="min-h-screen bg-[#EFF6FF] text-gray-900">
-      {/* Full-bleed Hero — has its own nav, no outer header */}
-      <Hero2 />
+    <div className="min-h-screen overflow-x-hidden bg-[#EFF6FF] text-gray-900">
+      <HeroSection />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-12">
-        <section id="features" className="grid gap-4 md:grid-cols-3">
-          {featureItems.map((item) => (
+      <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-20 px-6 py-16">
+
+        <section id="features" className="scroll-mt-24">
+          <div className="mb-10 text-center">
+            <h1 className="mt-4 text-4xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              Everything you need for video assessment
+            </h1>
+            <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-gray-600">
+              Effective learning process, standardized curriculum, and real-time dashboard —
+              designed for effective learning process.
+            </p>
+          </div>
+
+          <BentoGrid>
+            {bentoFeatures.map((feature) => (
+              <BentoCard key={feature.name} {...feature} />
+            ))}
+          </BentoGrid>
+        </section>
+
+        <section aria-label="Use cases" className="grid gap-4 sm:grid-cols-3">
+          {[
+            {
+              icon: Building2,
+              title: "Enterprise IT",
+              text: "Managed services dengan SLA dan audit trail.",
+            },
+            {
+              icon: GraduationCap,
+              title: "L&D Teams",
+              text: "Onboarding dan sertifikasi berbasis video.",
+            },
+            {
+              icon: BarChart3,
+              title: "Operations",
+              text: "Dashboard real-time untuk keputusan cepat.",
+            },
+          ].map((item) => (
             <div
               key={item.title}
-              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:shadow-md"
+              className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm transition-colors duration-200 hover:border-blue-200"
             >
-              <h3 className="text-base font-semibold text-gray-900">
+              <item.icon className="h-6 w-6 text-primary" aria-hidden />
+              <h3 className="mt-3 text-base font-semibold text-gray-900">
                 {item.title}
               </h3>
-              <p className="mt-2 text-sm text-gray-600">{item.description}</p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                {item.text}
+              </p>
             </div>
           ))}
         </section>
-
-        <DocumentationSection />
       </main>
 
-      {/* Full-bleed dark testimonials — matches hero palette */}
-      <div className="w-full bg-black py-16 px-6">
+      <div className="w-full bg-slate-900 py-16 px-6">
         <div className="mx-auto max-w-6xl">
           <TestimonialsSection />
         </div>
       </div>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-12">
-        <div id="pricing">
-          <PricingSection />
-        </div>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-16">
         <FAQSection />
         <CTASection />
         <FooterSection />

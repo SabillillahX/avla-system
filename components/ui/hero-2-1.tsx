@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Menu, X } from "lucide-react";
+import { ArrowRight, Menu, X, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 const Hero2 = () => {
@@ -23,8 +23,8 @@ const Hero2 = () => {
         {/* Navigation */}
         <nav className="container mx-auto flex items-center justify-between px-4 py-4 mt-6">
           <Link href="/" className="flex items-center">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black">
-              <span className="font-bold">⚡</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-pink-600">
+              <Zap className="h-4 w-4" aria-hidden />
             </div>
             <span className="ml-2 text-xl font-bold text-white">Avla</span>
           </Link>
@@ -73,8 +73,8 @@ const Hero2 = () => {
             >
               <div className="flex items-center justify-between">
                 <Link href="/" className="flex items-center">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black">
-                    <span className="font-bold">⚡</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-pink-600">
+                    <Zap className="h-4 w-4" aria-hidden />
                   </div>
                   <span className="ml-2 text-xl font-bold text-white">Avla</span>
                 </Link>
@@ -107,9 +107,9 @@ const Hero2 = () => {
         </AnimatePresence>
 
         {/* Badge */}
-        <div className="mx-auto mt-6 flex max-w-fit items-center justify-center space-x-2 rounded-full bg-white/10 px-4 py-2 backdrop-blur-sm">
+        <div className="mx-auto mt-6 flex max-w-fit items-center justify-center space-x-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-md">
           <span className="text-sm font-medium text-white">
-            Platform AI Assessment Video Terdepan
+            AI Learning Platform 
           </span>
           <ArrowRight className="h-4 w-4 text-white" />
         </div>
@@ -129,22 +129,16 @@ const Hero2 = () => {
               href="/auth/register"
               className="h-12 rounded-full bg-white px-8 text-base font-medium text-black hover:bg-white/90 inline-flex items-center"
             >
-              Mulai 7 Hari Gratis
-            </Link>
-            <Link
-              href="/auth/login"
-              className="h-12 rounded-full border border-gray-600 px-8 text-base font-medium text-white hover:bg-white/10 inline-flex items-center"
-            >
-              Lihat Demo
+              Try for free
             </Link>
           </div>
 
-          <div className="relative mx-auto my-20 w-full max-w-6xl">
-            <div className="absolute inset-0 rounded shadow-lg bg-white blur-[10rem] opacity-20" />
+          <div className="relative mx-auto my-20 w-full max-w-6xl overflow-hidden rounded-2xl border border-white/20 bg-white/5 p-1 shadow-2xl backdrop-blur-sm">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-pink-500/30 via-transparent to-amber-400/20 blur-3xl" />
             <img
               src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1920&q=75&auto=format&fit=crop"
               alt="Avla Dashboard — AI Video Assessment Platform"
-              className="relative w-full h-auto shadow-md rounded grayscale"
+              className="relative w-full h-auto rounded-xl border border-white/10 object-cover"
             />
           </div>
         </div>
