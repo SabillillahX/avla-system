@@ -268,8 +268,12 @@ export default function AdaptiveVideoPlayer({
   const handleSubmit = useCallback(async () => {
     if (!activeQuiz || !selectedOption) return
 
-    setIsSubmitting(true)
-    setSubmitError(null)
+    // Save values for the fetch call because handleContinue resets state
+    const quizId = activeQuiz.id
+    const answer = selectedOption
+
+    // Call synchronously to ensure the browser allows the video to play
+    handleContinue()
 
     try {
       const response = await fetch(`${apiBaseUrl}/quiz-results`, {
@@ -280,23 +284,16 @@ export default function AdaptiveVideoPlayer({
         },
         credentials: accessToken ? "omit" : "include",
         body: JSON.stringify({
-          quiz_id: activeQuiz.id,
-          user_answer: selectedOption,
+          quiz_id: quizId,
+          user_answer: answer,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to submit answer")
+        console.error("Failed to submit answer:", response.statusText)
       }
-
-      await response.json()
-
-      handleContinue()
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Failed to submit answer"
-      )
-      setIsSubmitting(false)
+      console.error("Failed to submit answer:", error)
     }
   }, [accessToken, activeQuiz, apiBaseUrl, selectedOption, handleContinue])
 
@@ -355,11 +352,12 @@ export default function AdaptiveVideoPlayer({
                 : `${shownQuizIdsRef.current.size} dari ${quizzes.length} kuis`}
           </span>
           <Button
+            type="button"
             onClick={handleSubmit}
             disabled={!selectedOption || isSubmitting}
             className="h-9 px-5 border-0 !bg-slate-900 !text-slate-50 hover:!bg-slate-900/90 dark:!bg-slate-50 dark:!text-slate-900 dark:hover:!bg-slate-50/90 disabled:!opacity-50"
           >
-            {isSubmitting ? "Sending..." : "Continue Video"}
+            Continue Video
           </Button>
         </div>
       </div>
