@@ -4,24 +4,24 @@ import { useState } from "react"
 
 const faqItems = [
   {
-    question: "Bagaimana AI membuat soal dari video?",
+    question: "Bagaimana cara kerja sistem AI untuk pembuatan soal dari video?",
     answer:
-      "Sistem mengekstrak transcript, mengenali topik, lalu menyusun soal sesuai konteks materi beserta opsi jawaban.",
+      "Sistem AI kami menganalisis konten video dan secara otomatis membuat soal evaluasi yang sesuai dengan konteks video.",
   },
   {
-    question: "Apakah jawaban kuis aman dari manipulasi frontend?",
+    question: "Berapa lama waktu pemrosesan untuk setiap video?",
     answer:
-      "Ya. Evaluasi dilakukan di server-side. Frontend hanya mengirim quiz_id dan user_answer.",
+      "Waktu pemrosesan bervariasi tergantung panjang video, biasanya antara 30 detik hingga beberapa menit.",
   },
   {
-    question: "Bisakah kuis muncul di waktu tertentu pada video?",
+    question: "Apakah hasil evaluasi kuis dapat diintegrasikan dengan LMS kami?",
     answer:
-      "Bisa. Setiap soal memiliki trigger_time sehingga pertanyaan tampil sesuai momen pembelajaran.",
+      "Ya, hasil evaluasi dapat diintegrasikan dengan LMS Anda melalui API kami.",
   },
   {
-    question: "Apakah bisa dipakai untuk corporate training?",
+    question: "Apakah platform mendukung kolaborasi tim?",
     answer:
-      "Bisa. Platform mendukung alur kelas internal perusahaan, progress tracking, dan dashboard performa.",
+      "Platform kami mendukung kolaborasi tim dengan fitur berbagi dan komentar real-time.",
   },
 ]
 
@@ -33,7 +33,7 @@ export default function FAQSection() {
       <div className="mx-auto max-w-3xl">
         <p className="text-sm font-medium text-blue-700">FAQ</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">
-          Pertanyaan yang paling sering ditanyakan
+          Pertanyaan umum seputar platform video assessment
         </h2>
 
         <div className="mt-6 space-y-3">

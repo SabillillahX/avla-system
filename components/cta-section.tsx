@@ -8,16 +8,16 @@ export default function CTASection() {
         <div>
           <p className="text-sm font-medium text-blue-700">Get Started</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">
-            Siap meluncurkan LMS berbasis AI dari video?
+            Siap meluncurkan platform video assessment berbasis AI?
           </h2>
           <p className="mt-3 text-sm leading-6 text-gray-600 sm:text-base">
-            Mulai dari satu kelas, ukur hasilnya, lalu skalakan ke seluruh program pembelajaran Anda.
+            Mulai dengan solusi yang sesuai kebutuhan Anda, lalu skalakan ke seluruh organisasi.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Button asChild className="text-white">
+            <Button asChild className="bg-[#22C55E] text-white hover:bg-[#16A34A]">
               <Link href="/auth/register">Mulai Sekarang</Link>
             </Button>
-            <Button asChild variant="outline" className="text-white">
+            <Button asChild variant="outline" className="border-[#1E40AF] text-[#1E40AF] hover:bg-[#1E40AF] hover:text-white">
               <Link href="/auth/login">Lihat Demo</Link>
             </Button>
           </div>

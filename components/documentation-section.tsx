@@ -1,19 +1,19 @@
 export default function DocumentationSection() {
   const items = [
     {
-      title: "Video Ingestion Pipeline",
+      title: "AI Video Processing",
       description:
-        "Upload materi video, lalu sistem memproses transcript dan struktur topik secara otomatis.",
+        "Advanced AI-powered analysis of video content to automatically generate questions and assessments.",
     },
     {
-      title: "AI Question Authoring",
+      title: "Real-time Collaboration",
       description:
-        "Buat soal sesuai konteks video dengan opsi jawaban terarah dan tingkat kesulitan terukur.",
+        "Work simultaneously with your team on video assessment projects in real-time.",
     },
     {
-      title: "Learning Analytics",
+      title: "Advanced Analytics",
       description:
-        "Pantau performa per siswa, per video, dan per kompetensi dalam satu dashboard.",
+        "Get detailed insights into video performance and engagement metrics.",
     },
   ]
 
@@ -23,11 +23,11 @@ export default function DocumentationSection() {
         <div>
           <p className="text-sm font-medium text-blue-700">Platform Features</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">
-            Workflow LMS modern dari video ke evaluasi AI
+            Platform SaaS profesional untuk layanan teknologi informasi terkelola
           </h2>
           <p className="mt-3 text-sm leading-6 text-gray-600 sm:text-base">
-            Dirancang untuk institusi yang membutuhkan proses belajar digital yang
-            cepat, aman, dan siap digunakan lintas kelas.
+            Dirancang untuk perusahaan yang membutuhkan layanan teknologi informasi terkelola
+            yang cepat, aman, dan siap digunakan.
           </p>
           <div className="mt-6 space-y-4">
             {items.map((item) => (

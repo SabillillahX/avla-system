@@ -395,7 +395,7 @@ export default function MyVideoPage() {
     pending: videos.filter((v) => v.status === "pending").length,
   }), [videos])
 
-  const StatCard = ({
+  const renderStatCard = ({
     icon: Icon,
     label,
     value,
@@ -444,7 +444,7 @@ export default function MyVideoPage() {
     router.push(`/my-video/${video.id}`)
   }
 
-  const ProcessingOverlay = ({ video }: { video: VideoType }) => {
+  const renderProcessingOverlay = (video: VideoType) => {
     const aiProcessing = isVideoReady(video.status) && isAiProcessingVideo(String(video.id))
     if (isVideoReady(video.status) && !aiProcessing) return null
 
@@ -470,7 +470,7 @@ export default function MyVideoPage() {
     )
   }
 
-  const VideoCard = ({ video, progress }: { video: VideoType; progress?: number | null }) => {
+  const renderVideoCard = (key: React.Key, video: VideoType, progress?: number | null) => {
     const cfg = statusConfig[video.status]
     const StatusIcon = cfg.icon
     const ready = isVideoReady(video.status) && !isAiProcessingVideo(String(video.id))
@@ -478,6 +478,7 @@ export default function MyVideoPage() {
     if (viewMode === "list") {
       return (
         <Card
+          key={key}
           className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow relative group ${ready ? "hover:shadow-md cursor-pointer" : "cursor-not-allowed opacity-90"
             }`}
           onClick={() => handleVideoClick(video)}
@@ -499,7 +500,7 @@ export default function MyVideoPage() {
                   <Play className="w-5 h-5 text-white ml-0.5" />
                 </div>
               )}
-              <ProcessingOverlay video={video} />
+              {renderProcessingOverlay(video)}
             </div>
 
             {/* Info */}
@@ -565,6 +566,7 @@ export default function MyVideoPage() {
 
     return (
       <Card
+        key={key}
         className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow group overflow-hidden relative ${ready ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"
           }`}
         onClick={() => handleVideoClick(video)}
@@ -585,7 +587,7 @@ export default function MyVideoPage() {
               <Play className="w-6 h-6 text-white ml-0.5" />
             </div>
           ) : null}
-          <ProcessingOverlay video={video} />
+          {renderProcessingOverlay(video)}
         </div>
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-1">
@@ -648,7 +650,7 @@ export default function MyVideoPage() {
     )
   }
 
-  const EmptyState = () => (
+  const renderEmptyState = () => (
     <div className="text-center py-20">
       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
         <Video className="w-8 h-8 text-gray-400 dark:text-gray-500" />
@@ -705,6 +707,7 @@ export default function MyVideoPage() {
                   <Input
                     value={titleInput}
                     onChange={(e) => setTitleInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                     placeholder="Enter video title"
                     maxLength={255}
                     className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
@@ -797,6 +800,7 @@ export default function MyVideoPage() {
                     {(["file", "url"] as const).map((type) => (
                       <Button
                         key={type}
+                        type="button"
                         size="sm"
                         variant={sourceType === type ? "default" : "outline"}
                         onClick={() => setSourceType(type)}
@@ -862,6 +866,7 @@ export default function MyVideoPage() {
                     <Input
                       value={videoUrlInput}
                       onChange={(e) => setVideoUrlInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                       placeholder="https://example.com/video.mp4"
                       className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
                     />
@@ -878,10 +883,11 @@ export default function MyVideoPage() {
 
                 {/* Actions */}
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isUploading}>
+                  <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isUploading}>
                     Cancel
                   </Button>
                   <Button
+                    type="button"
                     onClick={handleSubmit}
                     disabled={isUploading}
                     className="bg-blue-600 hover:bg-blue-700 min-w-[90px]"
@@ -911,6 +917,7 @@ export default function MyVideoPage() {
                 <Input
                   value={editTitleInput}
                   onChange={(e) => setEditTitleInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                   placeholder="Enter video title"
                   className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
                 />
@@ -985,10 +992,10 @@ export default function MyVideoPage() {
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setIsEditModalVisible(false)} disabled={isEditing}>
+                <Button type="button" variant="outline" onClick={() => setIsEditModalVisible(false)} disabled={isEditing}>
                   Cancel
                 </Button>
-                <Button onClick={handleEditSubmit} disabled={isEditing} className="bg-blue-600 hover:bg-blue-700 min-w-[90px]">
+                <Button type="button" onClick={handleEditSubmit} disabled={isEditing} className="bg-blue-600 hover:bg-blue-700 min-w-[90px]">
                   {isEditing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
                 </Button>
               </div>
@@ -1031,10 +1038,10 @@ export default function MyVideoPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={Video} label="Total Videos" value={stats.total} accent="bg-blue-600" />
-        <StatCard icon={CheckCircle2} label="Completed" value={stats.completed} accent="bg-emerald-600" />
-        <StatCard icon={TrendingUp} label="Processing" value={stats.processing} accent="bg-amber-500" />
-        <StatCard icon={Clock} label="Pending" value={stats.pending} accent="bg-violet-600" />
+        {renderStatCard({ icon: Video, label: "Total Videos", value: stats.total, accent: "bg-blue-600" })}
+        {renderStatCard({ icon: CheckCircle2, label: "Completed", value: stats.completed, accent: "bg-emerald-600" })}
+        {renderStatCard({ icon: TrendingUp, label: "Processing", value: stats.processing, accent: "bg-amber-500" })}
+        {renderStatCard({ icon: Clock, label: "Pending", value: stats.pending, accent: "bg-violet-600" })}
       </div>
 
       {/* Toolbar */}
@@ -1120,24 +1127,16 @@ export default function MyVideoPage() {
             </Button>
           </div>
         ) : filteredList.length === 0 ? (
-          <EmptyState />
+          renderEmptyState()
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {uploadingVideoData && (
-              <VideoCard key="uploading" video={uploadingVideoData} progress={uploadProgress} />
-            )}
-            {filteredList.map((v) => (
-              <VideoCard key={v.id} video={v} />
-            ))}
+            {uploadingVideoData && renderVideoCard("uploading", uploadingVideoData, uploadProgress)}
+            {filteredList.map((v) => renderVideoCard(v.id, v))}
           </div>
         ) : (
           <div className="space-y-3">
-            {uploadingVideoData && (
-              <VideoCard key="uploading" video={uploadingVideoData} progress={uploadProgress} />
-            )}
-            {filteredList.map((v) => (
-              <VideoCard key={v.id} video={v} />
-            ))}
+            {uploadingVideoData && renderVideoCard("uploading", uploadingVideoData, uploadProgress)}
+            {filteredList.map((v) => renderVideoCard(v.id, v))}
           </div>
         )}
       </div>

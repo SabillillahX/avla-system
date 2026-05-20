@@ -316,7 +316,7 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Documents</h1>
-        <p className="text-gray-600 dark:text-gray-400">Manage and organize your project files</p>
+        <p className="text-gray-600 dark:text-gray-400">Manage and organize your service documents and files</p>
       </div>
 
       {/* Controls */}

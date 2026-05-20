@@ -25,7 +25,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className="text-gray-600 dark:text-gray-400">
-                Welcome to your dashboard! This is where you'll see an overview of all your projects, tasks, and analytics.
+                Selamat datang di dashboard layanan Anda! Di sini Anda akan melihat ikhtisar semua proyek, tugas, dan analitik Anda.
               </p>
             </div>
           </div>

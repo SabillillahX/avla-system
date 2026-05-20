@@ -14,6 +14,7 @@ import {
     SemanticAssessmentQuestion
 } from "./utils/interface.js";
 import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
+import { TranscriptContext, getOrLoadTranscriptContext } from "./utils/cacheManager.js";
 
 // In memory stores
 const activeSSESessions = new Map<string, SSEServerTransport>();
@@ -64,14 +65,29 @@ function emitNotificationToUser(userId: string, payload: NotificationPayload): v
     client.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-async function callGeminiApi(prompt: string, expectJson: boolean = true): Promise<string> {
-    // Pastikan menggunakan model flash yang terbaru dan efisien
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${ENV.geminiApiKey}`;
+async function callGeminiApi(
+    prompt: string, 
+    expectJson: boolean = true, 
+    transcriptContext?: TranscriptContext
+): Promise<string> {
+    // If we are using the cache, we MUST use standard flash, not flash-lite
+    const model = transcriptContext?.isCached ? "gemini-1.5-flash" : "gemini-3.1-flash-lite-preview";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ENV.geminiApiKey}`;
 
-    // Siapkan payload standar
+    // If it's NOT cached, we must manually append the raw text to the prompt
+    let finalPrompt = prompt;
+    if (transcriptContext && !transcriptContext.isCached && transcriptContext.rawText) {
+        finalPrompt += `\n\n## Full Video Transcript\n"""\n${transcriptContext.rawText}\n"""`;
+    }
+
     const payload: any = {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: [{ text: finalPrompt }] }],
     };
+
+    // If it IS cached, we tell Gemini to look at the cache URI
+    if (transcriptContext?.isCached && transcriptContext.cacheName) {
+        payload.cachedContent = transcriptContext.cacheName;
+    }
 
     // 🌟 PERUBAHAN 1: Paksa respons berupa JSON murni agar tidak ada error 500 di Laravel
     if (expectJson) {
@@ -244,13 +260,17 @@ Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing
 
 CRITICAL: The value of "correct_answer" must be an exact character-for-character copy of one of the strings in the "options" array.
 
-## Transcript Excerpt
+## Task
+The full video transcript is provided to you. I want you to write ONE multiple-choice question specifically focusing on the concepts discussed in THIS specific excerpt from the video:
+
 """
 ${transcriptText}
-"""`;
+"""
+
+Ensure the question makes sense in the broader context of the whole video.`;
 }
 
-function buildFullAssessmentPrompt(fullTranscript: string, targetBloomLevels: string = "C1, C2, and C3"): string {
+function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3"): string {
     return `You are an expert in Adaptive Learning Systems and Instructional Design.
 I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
 
@@ -283,13 +303,10 @@ Distribute the 10 questions across the following levels: ${targetBloomLevels}
   }
 ]
 
-## Full Video Transcript
-"""
-${fullTranscript}
-"""`;
+]`;
 }
 
-function buildSemanticAssessmentPrompt(fullTranscript: string, targetLevel: string, quantity: number): string {
+function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number): string {
     return `You are an expert Instructional Designer specializing in Adaptive Learning Systems and Psychometrics. Your task is to generate high-quality assessment questions based on a video transcript using Bloom's Taxonomy and Semantic Similarity principles.
 
 ### OBJECTIVES
@@ -320,11 +337,7 @@ Return ONLY a JSON array of objects. Do not include markdown formatting or expla
   }
 ]
 
-### INPUT DATA
-**Video Transcript:**
-"""
-${fullTranscript}
-"""`;
+]`;
 }
 
 function buildAuthHeaders(token: string): Record<string, string> {
@@ -515,6 +528,8 @@ function createMcpServer(): McpServer {
             let failedChunkCount = 0;
             let lastErrorMessage = "Format kuis dari AI tidak valid.";
 
+            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+
             for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
                 const chunk = transcriptChunks[chunkIndex];
                 if (!chunk.text) continue;
@@ -527,7 +542,7 @@ function createMcpServer(): McpServer {
                         durationMinutes
                     );
 
-                    const rawLlmOutput = await callGeminiApi(prompt, true);
+                    const rawLlmOutput = await callGeminiApi(prompt, true, transcriptContext);
                     let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuiz) {
@@ -792,10 +807,12 @@ function createMcpServer(): McpServer {
             const maxAttempts = 3;
             let lastErrorMessage = "Assessment format from AI is invalid.";
 
+            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    const prompt = buildFullAssessmentPrompt(fullTranscript, targetBloomLevels);
-                    const rawLlmOutput = await callGeminiApi(prompt, true);
+                    const prompt = buildFullAssessmentPrompt(targetBloomLevels);
+                    const rawLlmOutput = await callGeminiApi(prompt, true, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuestions || parsedQuestions.length === 0) {
@@ -1020,10 +1037,12 @@ function createMcpServer(): McpServer {
             const maxAttempts = 2;
             let lastErrorMessage = "Format dari AI tidak valid.";
 
+            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    const prompt = buildSemanticAssessmentPrompt(fullTranscript, targetLevel, quantity);
-                    const rawLlmOutput = await callGeminiApi(prompt, true);
+                    const prompt = buildSemanticAssessmentPrompt(targetLevel, quantity);
+                    const rawLlmOutput = await callGeminiApi(prompt, true, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuestions || parsedQuestions.length === 0) {
@@ -1146,6 +1165,18 @@ function createMcpServer(): McpServer {
                     message: "Memulai evaluasi jawaban...",
                 });
 
+                // Fetch transcript segments to build context for Gemini
+                const transcriptResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
+                    method: "GET",
+                    headers: buildAuthHeaders(token),
+                });
+                let transcriptSegments: TranscriptSegment[] = [];
+                if (transcriptResponse.ok) {
+                    const transcriptData = await transcriptResponse.json();
+                    transcriptSegments = transcriptData.data || [];
+                }
+                const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+
                 // Fetch questions for the video
                 const qResponse = await fetch(`${ENV.backendUrl}/questions?video_id=${videoId}`, {
                     method: "GET",
@@ -1198,6 +1229,9 @@ function createMcpServer(): McpServer {
                 // Evaluate using Gemini
                 const prompt = `You are a warm, supportive study advisor — not a cold grading machine. You speak Indonesian using "kamu" (never "Anda"). Your tone is like a trusted senior friend who genuinely cares about the student's growth.
 
+I have provided the Full Video Transcript. 
+Evaluate the student's answer not just against the reference, but check if their answer demonstrates understanding of the concepts as taught in the video transcript.
+
 ## Your Task
 Evaluate each student answer against the reference answer using semantic similarity. Then write a short, personal feedback (1-3 sentences max) in Indonesian.
 
@@ -1226,7 +1260,7 @@ ${JSON.stringify(evaluationItems, null, 2)}
   }
 ]`;
 
-                const rawOutput = await callGeminiApi(prompt, true);
+                const rawOutput = await callGeminiApi(prompt, true, transcriptContext);
                 let parsedResults = [];
                 try {
                     const cleanedOutput = rawOutput.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -1349,16 +1383,17 @@ app.get("/notifications", (req: Request, res: Response) => {
     });
 });
 
-app.post("/webhook/transcription-done", express.json(), (req: Request, res: Response) => {
-    const { video_id, user_id, status } = req.body ?? {};
+app.post("/webhook/transcription-done", express.json(), async (req: Request, res: Response) => {
+    const { video_id, user_id, status, token } = req.body ?? {};
 
+    // Ensure we have a token or a system-level auth mechanism to talk back to Laravel
     if (!video_id || !user_id || !status) {
         res.status(400).json({ error: "Missing required fields: video_id, user_id, status" });
         return;
     }
 
     if (status === "completed") {
-        // Emit status change so the frontend can update the video card in-place
+        // 1. Notify frontend via SSE immediately
         emitNotificationToUser(String(user_id), {
             event: "video_status_changed",
             video_id,
@@ -1369,12 +1404,26 @@ app.post("/webhook/transcription-done", express.json(), (req: Request, res: Resp
             event: "transcription_ready",
             video_id,
         });
-        console.log(
-            `[Webhook] transcription_ready sent: videoId = ${video_id}, userId = ${user_id}`
-        );
+
+        console.log(`[Webhook] transcription_ready sent for videoId = ${video_id}`);
+
+        // 2. Fire-and-forget background cache warming
+        // Pass the bearer token sent by Laravel so this background process can read the transcript endpoint safely
+        if (token) {
+            getOrLoadTranscriptContext(String(video_id), String(token))
+                .then(() => {
+                    console.log(`[Webhook-Preloader] Success warming cache for video ${video_id}`);
+                })
+                .catch((err) => {
+                    console.error(`[Webhook-Preloader] Failed warming cache background worker:`, err.message);
+                });
+        } else {
+            console.warn(`[Webhook-Preloader] No token provided in payload. Skipping warm-up optimization.`);
+        }
     }
 
-    res.status(200).json({ received: true });
+    // Always respond 200 OK instantly to Laravel so its queue workers don't timeout waiting for Gemini
+    res.status(200).json({ received: true, preloading: status === "completed" && !!token });
 });
 
 // Generic webhook for any video status change (pending → processing → completed / failed)

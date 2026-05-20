@@ -5,10 +5,10 @@ export default function FooterSection() {
     <footer className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
       <div className="grid gap-8 md:grid-cols-4">
         <div className="md:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900">Avla</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Avla Services</h3>
           <p className="mt-2 max-w-md text-sm leading-6 text-gray-600">
-            LMS profesional untuk pembuatan soal berbasis AI dari video pembelajaran,
-            dirancang untuk institusi pendidikan dan corporate learning.
+            Platform SaaS profesional untuk layanan teknologi informasi terkelola,
+            dirancang untuk perusahaan dan organisasi modern.
           </p>
         </div>
 

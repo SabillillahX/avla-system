@@ -1,12 +1,17 @@
 import type React from "react"
-import { Inter } from "next/font/google"
+import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import ClientLayout from "./client-layout"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/contexts/AuthContext"
 import { NotificationProvider } from "@/components/notification"
 
-const inter = Inter({ subsets: ["latin"] })
+const font = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-plus-jakarta-sans",
+})
 
 export default function RootLayout({
     children,
@@ -15,7 +20,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className={inter.className}>
+            <body className={font.className}>
                 <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
                     <AuthProvider>
                         <NotificationProvider>
@@ -29,5 +34,7 @@ export default function RootLayout({
 }
 
 export const metadata = {
+    title: "Avla - AI Video Assessment Platform",
+    description: "Platform SaaS profesional untuk layanan teknologi informasi terkelola",
     generator: "v0.dev",
 }
