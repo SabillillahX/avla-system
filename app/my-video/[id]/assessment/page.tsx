@@ -129,16 +129,16 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
   const isEverythingCompleted = questions.every(q => q.has_answered)
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-[1000px] mx-auto min-h-screen">
+    <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto min-h-screen">
       <div className="flex items-center justify-between mb-8">
         <Button
           variant="ghost"
           onClick={() => router.back()}
-          className="hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Video
         </Button>
-        <h1 className="text-2xl font-bold">Assessment</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Assessment</h1>
       </div>
 
       {questions.length === 0 ? (
@@ -164,15 +164,15 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
             return (
               <div
                 key={question.uuid}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 select-none"
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100 dark:border-gray-700 select-none"
               >
                 <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded capitalize">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize">
                       {question.type.replace("_", " ")}
                     </span>
                     {isAnswered && (
-                      <span className="bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded">
+                      <span className="bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">
                         Selesai
                       </span>
                     )}
@@ -200,7 +200,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
                           />
                           <label
                             htmlFor={`q-${question.uuid}-opt-${i}`}
-                            className={`text-sm ${isAnswered ? "text-gray-500 cursor-not-allowed pointer-events-none" : "text-gray-700 dark:text-gray-300 cursor-pointer"
+                            className={`text-sm select-none ${isAnswered ? "text-gray-500 cursor-not-allowed pointer-events-none" : "text-gray-700 dark:text-gray-300 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                               }`}
                           >
                             {option}
@@ -215,7 +215,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
                       value={userAnswers[question.uuid] || ""}
                       onChange={(e) => handleOptionChange(question.uuid, e.target.value)}
                       disabled={isAnswered || isSubmittingAll}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50 dark:bg-gray-900 dark:border-gray-700 disabled:opacity-50 select-text"
+                      className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none shadow-sm disabled:opacity-60 disabled:cursor-not-allowed select-text"
                       rows={question.type === "essay" ? 4 : 2}
                       placeholder="Ketik jawaban Anda di sini..."
                       onCopy={(e) => e.stopPropagation()}
@@ -226,19 +226,25 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
             )
           })}
 
-          {!isEverythingCompleted && (
-            <div className="pt-6 pb-12 flex justify-end">
-              <Button
-                onClick={handleSubmitAll}
-                disabled={!isAllAnswered || isSubmittingAll}
-                size="lg"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-6 rounded-xl shadow-md transition-all flex items-center gap-2"
-              >
-                {isSubmittingAll && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-                {isAllAnswered ? "Submit Answer" : "Fill all the question to submit"}
-              </Button>
-            </div>
-          )}
+          <div className="pt-6 pb-12 flex justify-end">
+            <Button
+              onClick={handleSubmitAll}
+              disabled={!isAllAnswered || isSubmittingAll || isEverythingCompleted}
+              size="lg"
+              className={`font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2 ${
+                isEverythingCompleted 
+                  ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800" 
+                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
+              }`}
+            >
+              {isSubmittingAll && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+              {isEverythingCompleted 
+                ? "Already Submitted" 
+                : isAllAnswered 
+                  ? "Submit Answer" 
+                  : "Fill all the question to submit"}
+            </Button>
+          </div>
         </div>
       )}
 

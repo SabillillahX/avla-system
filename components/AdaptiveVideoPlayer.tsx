@@ -100,7 +100,7 @@ export default function AdaptiveVideoPlayer({
         }
 
         const quizzesPayload = (await quizzesRes.json()) as { data: Quiz[] }
-        
+
         const answeredIds = new Set<string>()
         if (resultsRes.ok) {
           const resultsPayload = await resultsRes.json()
@@ -111,7 +111,7 @@ export default function AdaptiveVideoPlayer({
             })
           }
         }
-        
+
         shownQuizIdsRef.current = answeredIds
 
         const sorted = [...quizzesPayload.data].sort(
@@ -324,8 +324,8 @@ export default function AdaptiveVideoPlayer({
                   }
                 }}
                 className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/60 ${isSelected
-                    ? "border-blue-400 bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100"
-                    : "border-gray-200 bg-white/80 text-gray-800 hover:border-blue-300 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-200"
+                  ? "border-blue-400 bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100"
+                  : "border-gray-200 bg-white/80 text-gray-800 hover:border-blue-300 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-200"
                   }`}
               >
                 <div className="flex items-start gap-3">

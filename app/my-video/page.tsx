@@ -44,6 +44,7 @@ import {
   ImagePlus,
   RefreshCw,
 } from "lucide-react"
+import { motion, AnimatePresence } from "motion/react"
 import { Video as VideoType, VideoStatus, ViewMode } from "@/lib/types/handle-videos"
 import { videosApi } from "@/lib/api/handle-videos"
 import api from "@/lib/api/axios"
@@ -214,6 +215,45 @@ export default function MyVideoPage() {
 
     return () => clearInterval(interval)
   }, [hasUnfinishedVideos]);
+
+  const handleThumbnailSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran foto adalah 5MB.")
+        if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
+        return
+      }
+      setUploadError(null)
+      setThumbnailFileInput(file)
+    }
+  }
+
+  const handleVideoSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 200 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran video adalah 200MB.")
+        if (videoInputRef.current) videoInputRef.current.value = ""
+        return
+      }
+      setUploadError(null)
+      setVideoFileInput(file)
+    }
+  }
+
+  const handleEditThumbnailSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setEditError("Maksimal ukuran foto adalah 5MB.")
+        if (editThumbnailInputRef.current) editThumbnailInputRef.current.value = ""
+        return
+      }
+      setEditError(null)
+      setEditThumbnailFileInput(file)
+    }
+  }
 
   const resetUploadForm = () => {
     setTitleInput("")
@@ -400,23 +440,29 @@ export default function MyVideoPage() {
     label,
     value,
     accent,
+    iconColor,
   }: {
     icon: React.ElementType
     label: string
     value: string | number
     accent: string
+    iconColor: string
   }) => (
-    <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-      <CardContent className="p-4 flex items-center gap-4">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${accent}`}>
-          <Icon className="w-5 h-5 text-white" />
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 dark:bg-gray-800 dark:border-gray-700"
+    >
+      <div className="flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${accent}`}>
+          <Icon className={`w-6 h-6 ${iconColor}`} />
         </div>
         <div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </motion.div>
   )
 
   const isVideoReady = (status: VideoStatus) => status === "completed"
@@ -477,16 +523,15 @@ export default function MyVideoPage() {
 
     if (viewMode === "list") {
       return (
-        <Card
+        <div
           key={key}
-          className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow relative group ${ready ? "hover:shadow-md cursor-pointer" : "cursor-not-allowed opacity-90"
+          className={`rounded-xl border bg-white dark:bg-gray-800 dark:border-gray-700 relative group transition-all duration-200 ${ready ? "border-blue-100 hover:border-blue-200 hover:shadow-md cursor-pointer" : "border-gray-200 cursor-not-allowed opacity-90"
             }`}
           onClick={() => handleVideoClick(video)}
         >
-
-          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+          <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
             {/* Thumbnail with processing overlay */}
-            <div className="relative w-full sm:w-44 h-40 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <div className="relative w-full sm:w-44 h-40 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
               {video.thumbnail_path ? (
                 <Image
                   src={getStorageUrl(video.thumbnail_path)}
@@ -496,8 +541,8 @@ export default function MyVideoPage() {
                   sizes="(max-width: 768px) 100vw, 176px"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-                  <Play className="w-5 h-5 text-white ml-0.5" />
+                <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                  <Play className="w-5 h-5 text-gray-400 dark:text-gray-500 ml-0.5" />
                 </div>
               )}
               {renderProcessingOverlay(video)}
@@ -536,12 +581,12 @@ export default function MyVideoPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-2 flex-wrap">
-                <Badge className={`text-xs ${cfg.color} border-0`}>
+                <Badge className={`text-xs ${cfg.color} border-0 pointer-events-none`}>
                   <StatusIcon className={`w-3 h-3 mr-1 ${video.status === "processing" ? "animate-spin" : ""}`} />
                   {cfg.label}
                 </Badge>
                 {video.category && (
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-xs text-white pointer-events-none">
                     {getCategoryName(video.category)}
                   </Badge>
                 )}
@@ -559,20 +604,19 @@ export default function MyVideoPage() {
                 )}
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )
     }
 
     return (
-      <Card
+      <div
         key={key}
-        className={`bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 transition-shadow group overflow-hidden relative ${ready ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"
+        className={`rounded-xl border bg-white dark:bg-gray-800 dark:border-gray-700 overflow-hidden relative group transition-all duration-200 ${ready ? "border-blue-100 hover:border-blue-200 hover:shadow-md cursor-pointer" : "border-gray-200 cursor-not-allowed opacity-90"
           }`}
         onClick={() => handleVideoClick(video)}
       >
-
-        <div className="relative h-40 bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+        <div className="relative h-40 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
           {video.thumbnail_path ? (
             <Image
               src={getStorageUrl(video.thumbnail_path)}
@@ -581,21 +625,27 @@ export default function MyVideoPage() {
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
-          ) : null}
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              <Play className="w-6 h-6 text-gray-400 dark:text-gray-500 ml-0.5" />
+            </div>
+          )}
           {ready ? (
-            <div className="relative w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Play className="w-6 h-6 text-white ml-0.5" />
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+              <div className="relative w-12 h-12 rounded-full bg-gray-900/50 backdrop-blur flex items-center justify-center">
+                <Play className="w-6 h-6 text-white ml-0.5" />
+              </div>
             </div>
           ) : null}
           {renderProcessingOverlay(video)}
         </div>
-        <CardContent className="p-4">
+        <div className="p-4">
           <div className="flex items-start justify-between gap-1">
             <div className="flex-1 min-w-0 pr-1">
               <h3 className="text-base font-bold text-gray-900 dark:text-white line-clamp-1">
                 {video.title}
               </h3>
-              <Badge className={`text-[10px] shrink-0 mt-1.5 ${cfg.color} border-0 w-fit inline-flex`}>
+              <Badge className={`text-[10px] shrink-0 mt-1.5 ${cfg.color} border-0 w-fit inline-flex pointer-events-none`}>
                 <StatusIcon className={`w-3 h-3 mr-0.5 ${video.status === "processing" ? "animate-spin" : ""}`} />
                 {cfg.label}
               </Badge>
@@ -640,13 +690,13 @@ export default function MyVideoPage() {
               )}
             </div>
             {video.category && (
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-[10px] text-white pointer-events-none">
                 {getCategoryName(video.category)}
               </Badge>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
@@ -695,46 +745,46 @@ export default function MyVideoPage() {
                 Upload Video
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-white dark:bg-gray-800 sm:max-w-[600px] max-h-[90vh]">
-              <DialogHeader>
-                <DialogTitle className="text-gray-900 dark:text-white">Upload New Video</DialogTitle>
+            <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[600px] max-h-[90vh] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
+              <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Upload New Video</DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
+              <div className="space-y-5 px-6 py-4 max-h-[calc(90vh-140px)] overflow-y-auto">
                 {/* Title */}
-                <div>
-                  <Label className="text-gray-700 dark:text-gray-300">Video Title <span className="text-red-500">*</span></Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Video Title <span className="text-red-500">*</span></Label>
                   <Input
                     value={titleInput}
                     onChange={(e) => setTitleInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                     placeholder="Enter video title"
                     maxLength={255}
-                    className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                    className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus-visible:ring-blue-500 focus-visible:border-blue-500 transition-all h-11"
                   />
                 </div>
 
                 {/* Description */}
-                <div>
-                  <Label className="text-gray-700 dark:text-gray-300">Description <span className="text-red-500">*</span></Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description <span className="text-red-500">*</span></Label>
                   <textarea
                     value={descriptionInput}
                     onChange={(e) => setDescriptionInput(e.target.value)}
                     placeholder="Enter video description"
                     maxLength={2000}
-                    rows={3}
-                    className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    rows={4}
+                    className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none shadow-sm"
                   />
-                  <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-0.5">{descriptionInput.length}/2000</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 text-right font-medium">{descriptionInput.length}/2000</p>
                 </div>
 
                 {/* Category */}
-                <div>
-                  <Label className="text-gray-700 dark:text-gray-300">Category <span className="text-red-500">*</span></Label>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category <span className="text-red-500">*</span></Label>
                   <select
                     value={categoryInput}
                     onChange={(e) => setCategoryInput(e.target.value)}
-                    className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm h-11"
                   >
                     <option value="" disabled>Select a category</option>
                     {categories.map((cat) => (
@@ -755,7 +805,7 @@ export default function MyVideoPage() {
                     <input
                       type="file"
                       ref={thumbnailInputRef}
-                      onChange={(e) => setThumbnailFileInput(e.target.files?.[0] ?? null)}
+                      onChange={handleThumbnailSelection}
                       accept="image/jpeg,image/png,image/webp"
                       className="hidden"
                     />
@@ -823,7 +873,7 @@ export default function MyVideoPage() {
                       <input
                         type="file"
                         ref={videoInputRef}
-                        onChange={(e) => setVideoFileInput(e.target.files?.[0] ?? null)}
+                        onChange={handleVideoSelection}
                         accept="video/mp4,video/webm,video/avi,video/quicktime,video/x-matroska"
                         className="hidden"
                       />
@@ -906,42 +956,42 @@ export default function MyVideoPage() {
 
         {/* Edit Dialog */}
         <Dialog open={isEditModalVisible} onOpenChange={setIsEditModalVisible}>
-          <DialogContent className="bg-white dark:bg-gray-800 sm:max-w-[600px] max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 dark:text-white">Edit Video</DialogTitle>
+          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[600px] max-h-[90vh] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
+            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+              <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Edit Video</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Video Title</Label>
-                <Input
-                  value={editTitleInput}
-                  onChange={(e) => setEditTitleInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-                  placeholder="Enter video title"
-                  className="mt-1 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                />
-              </div>
+            <div className="space-y-5 px-6 py-4 max-h-[calc(90vh-140px)] overflow-y-auto">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Video Title</Label>
+                  <Input
+                    value={editTitleInput}
+                    onChange={(e) => setEditTitleInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                    placeholder="Enter video title"
+                    className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus-visible:ring-blue-500 focus-visible:border-blue-500 transition-all h-11"
+                  />
+                </div>
 
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Description</Label>
-                <textarea
-                  value={editDescriptionInput}
-                  onChange={(e) => setEditDescriptionInput(e.target.value)}
-                  placeholder="Optional description"
-                  maxLength={2000}
-                  rows={3}
-                  className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                ></textarea>
-              </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</Label>
+                  <textarea
+                    value={editDescriptionInput}
+                    onChange={(e) => setEditDescriptionInput(e.target.value)}
+                    placeholder="Optional description"
+                    maxLength={2000}
+                    rows={4}
+                    className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none shadow-sm"
+                  ></textarea>
+                </div>
 
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Category</Label>
-                <select
-                  value={editCategoryInput}
-                  onChange={(e) => setEditCategoryInput(e.target.value)}
-                  className="mt-1 w-full rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</Label>
+                  <select
+                    value={editCategoryInput}
+                    onChange={(e) => setEditCategoryInput(e.target.value)}
+                    className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm h-11"
+                  >
                   <option value="" disabled>
                     Select a category
                   </option>
@@ -962,7 +1012,7 @@ export default function MyVideoPage() {
                   <input
                     type="file"
                     ref={editThumbnailInputRef}
-                    onChange={(e) => setEditThumbnailFileInput(e.target.files?.[0] ?? null)}
+                    onChange={handleEditThumbnailSelection}
                     accept="image/*"
                     className="hidden"
                   />
@@ -1005,29 +1055,29 @@ export default function MyVideoPage() {
 
         {/* Delete Dialog */}
         <Dialog open={isDeleteModalVisible} onOpenChange={setIsDeleteModalVisible}>
-          <DialogContent className="bg-white dark:bg-gray-800">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 dark:text-white">Delete Video</DialogTitle>
+          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[450px] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
+            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
+              <DialogTitle className="text-xl font-semibold text-red-600 dark:text-red-400">Delete Video</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4">
+            <div className="space-y-4 px-6 py-5">
               <p className="text-gray-600 dark:text-gray-300">
                 Are you sure you want to delete <span className="font-semibold">{videoToDelete?.title}</span>?
                 This action cannot be undone.
               </p>
 
               {deleteError && (
-                <p className="text-sm text-red-500 flex items-center gap-1.5">
+                <p className="text-sm text-red-500 flex items-center gap-1.5 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   {deleteError}
                 </p>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setIsDeleteModalVisible(false)} disabled={isDeleting}>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={() => setIsDeleteModalVisible(false)} disabled={isDeleting} className="rounded-xl">
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleDeleteSubmit} disabled={isDeleting} className="min-w-[90px]">
+                <Button variant="destructive" onClick={handleDeleteSubmit} disabled={isDeleting} className="min-w-[90px] rounded-xl bg-red-600 hover:bg-red-700">
                   {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
                 </Button>
               </div>
@@ -1038,10 +1088,10 @@ export default function MyVideoPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {renderStatCard({ icon: Video, label: "Total Videos", value: stats.total, accent: "bg-blue-600" })}
-        {renderStatCard({ icon: CheckCircle2, label: "Completed", value: stats.completed, accent: "bg-emerald-600" })}
-        {renderStatCard({ icon: TrendingUp, label: "Processing", value: stats.processing, accent: "bg-amber-500" })}
-        {renderStatCard({ icon: Clock, label: "Pending", value: stats.pending, accent: "bg-violet-600" })}
+        {renderStatCard({ icon: Video, label: "Total Videos", value: stats.total, accent: "bg-blue-50 dark:bg-blue-900/40", iconColor: "text-blue-600 dark:text-blue-400" })}
+        {renderStatCard({ icon: CheckCircle2, label: "Completed", value: stats.completed, accent: "bg-emerald-50 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400" })}
+        {renderStatCard({ icon: TrendingUp, label: "Processing", value: stats.processing, accent: "bg-amber-50 dark:bg-amber-900/40", iconColor: "text-amber-600 dark:text-amber-400" })}
+        {renderStatCard({ icon: Clock, label: "Pending", value: stats.pending, accent: "bg-gray-50 dark:bg-gray-800", iconColor: "text-gray-600 dark:text-gray-400" })}
       </div>
 
       {/* Toolbar */}
@@ -1128,16 +1178,19 @@ export default function MyVideoPage() {
           </div>
         ) : filteredList.length === 0 ? (
           renderEmptyState()
-        ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {uploadingVideoData && renderVideoCard("uploading", uploadingVideoData, uploadProgress)}
-            {filteredList.map((v) => renderVideoCard(v.id, v))}
-          </div>
         ) : (
-          <div className="space-y-3">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className={viewMode === "grid"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+              : "flex flex-col gap-3"
+            }
+          >
             {uploadingVideoData && renderVideoCard("uploading", uploadingVideoData, uploadProgress)}
             {filteredList.map((v) => renderVideoCard(v.id, v))}
-          </div>
+          </motion.div>
         )}
       </div>
 

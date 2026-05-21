@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { videosApi } from "@/lib/api/handle-videos"
+import { assessmentApi } from "@/lib/api/assessment"
 import { Video as VideoType } from "@/lib/types/handle-videos"
 import { getStorageUrl } from "@/lib/utils/storage-url"
 import { Button } from "@/components/ui/button"
@@ -26,12 +27,20 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
   const [video, setVideo] = useState<VideoType | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isAssessmentSubmitted, setIsAssessmentSubmitted] = useState(false)
 
   useEffect(() => {
     const fetchVideo = async () => {
       try {
-        const data = await videosApi.getVideoById(params.id)
-        setVideo(data)
+        const [videoData, questionsResponse] = await Promise.all([
+          videosApi.getVideoById(params.id),
+          assessmentApi.getQuestions(params.id).catch(() => ({ data: [] }))
+        ])
+        setVideo(videoData)
+
+        const questions = questionsResponse.data || []
+        const isCompleted = questions.length > 0 && questions.every((q: any) => q.has_answered)
+        setIsAssessmentSubmitted(isCompleted)
       } catch (err: any) {
         setError(err.message || "Failed to load video")
       } finally {
@@ -167,9 +176,13 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
         <Button
           size="lg"
           onClick={() => router.push(`/my-video/${params.id}/assessment`)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-8 py-6 rounded-xl shadow-md transition-all hover:shadow-lg flex items-center gap-2"
+          disabled={isAssessmentSubmitted}
+          className={`font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2 ${isAssessmentSubmitted
+            ? "bg-gray-100 text-gray-900 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800"
+            : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
+            }`}
         >
-          Start Assessment
+          {isAssessmentSubmitted ? "Already Submitted" : "Start Assessment"}
         </Button>
       </div>
     </div>

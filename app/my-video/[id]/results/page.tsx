@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle, MessageCircleHeart, Lightbulb } from "lucide-react"
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle, MessageCircle, Lightbulb } from "lucide-react"
 import { useRouter } from "next/navigation"
 import api from "@/lib/api/axios"
 
@@ -48,9 +48,9 @@ function getStatusLabel(isCorrect: boolean, score?: number) {
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 70) return "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800"
-  if (score >= 40) return "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800"
-  return "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-900/30 dark:border-rose-800"
+  if (score >= 70) return "text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-800"
+  if (score >= 40) return "text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-300 dark:bg-sky-900/30 dark:border-sky-800"
+  return "text-gray-700 bg-gray-50 border-gray-200 dark:text-gray-300 dark:bg-gray-900/30 dark:border-gray-800"
 }
 
 // ─── Stats summary ────────────────────────────────────────────────────────────
@@ -72,20 +72,20 @@ function StatsSummary({ assessmentResults, quizResults, activeTab }: {
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-4">
-        <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Total</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
+        <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total</p>
         <p className="text-2xl font-semibold text-gray-900 dark:text-white">{total}</p>
       </div>
-      <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4">
-        <p className="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Correct</p>
-        <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{correct}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-blue-100 dark:border-blue-900/30 shadow-sm">
+        <p className="text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Correct</p>
+        <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">{correct}</p>
       </div>
-      <div className="bg-rose-50 dark:bg-rose-900/20 rounded-xl p-4">
-        <p className="text-xs text-rose-500 dark:text-rose-400 uppercase tracking-wider mb-1">Not yet</p>
-        <p className="text-2xl font-semibold text-rose-600 dark:text-rose-300">{wrong}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
+        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Not yet</p>
+        <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">{wrong}</p>
       </div>
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
-        <p className="text-xs text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-1">
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800 shadow-sm">
+        <p className="text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
           {totalScore !== null ? "Total Score" : "Accuracy"}
         </p>
         <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">
@@ -136,7 +136,7 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto min-h-screen">
+    <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto min-h-screen">
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-7">
@@ -173,8 +173,8 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${activeTab === tab
-              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
-              : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              ? "border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
           >
             {tab === "assessment" ? "Assessment" : "Quiz (Pop-up Video)"}
@@ -223,26 +223,25 @@ function AssessmentResultCard({ result }: { result: AssessmentResult }) {
   const scoreColorClass = getScoreColor(score ?? 0)
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border-l-4 border border-gray-100 dark:border-gray-700 ${is_correct ? "border-l-emerald-400" : "border-l-rose-400"
-      }`}>
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
 
       {/* Top row */}
       <div className="flex items-start gap-3 mb-4">
         <div className="mt-0.5 flex-shrink-0">
           {is_correct
-            ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            : <XCircle className="w-5 h-5 text-rose-400" />
+            ? <CheckCircle2 className="w-5 h-5 text-blue-500" />
+            : <XCircle className="w-5 h-5 text-gray-400" />
           }
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-              : "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"
+              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
               }`}>
               {statusLabel}
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full capitalize">
+            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-2 py-0.5 rounded-full capitalize">
               {question.type.replace("_", " ")}
             </span>
             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ml-auto ${scoreColorClass}`}>
@@ -254,8 +253,8 @@ function AssessmentResultCard({ result }: { result: AssessmentResult }) {
       </div>
 
       {/* Answers */}
-      <div className="ml-8 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="ml-0 sm:ml-8 mt-4 sm:mt-0 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/50">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">You said</span>
             <p className="text-sm text-gray-800 dark:text-gray-200">{user_answer || "—"}</p>
@@ -284,25 +283,24 @@ function QuizResultCard({ result }: { result: QuizResult }) {
   const statusLabel = getStatusLabel(is_correct)
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border-l-4 border border-gray-100 dark:border-gray-700 ${is_correct ? "border-l-emerald-400" : "border-l-rose-400"
-      }`}>
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
 
       <div className="flex items-start gap-3 mb-4">
         <div className="mt-0.5 flex-shrink-0">
           {is_correct
-            ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            : <XCircle className="w-5 h-5 text-rose-400" />
+            ? <CheckCircle2 className="w-5 h-5 text-blue-500" />
+            : <XCircle className="w-5 h-5 text-gray-400" />
           }
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-              : "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"
+              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
               }`}>
               {statusLabel}
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-2 py-0.5 rounded-full">
               Multiple choice
             </span>
           </div>
@@ -310,8 +308,8 @@ function QuizResultCard({ result }: { result: QuizResult }) {
         </div>
       </div>
 
-      <div className="ml-8 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="ml-0 sm:ml-8 mt-4 sm:mt-0 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/50">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">You said</span>
             <p className="text-sm text-gray-800 dark:text-gray-200">{user_answer || "—"}</p>
@@ -329,46 +327,16 @@ function QuizResultCard({ result }: { result: QuizResult }) {
 }
 
 // ─── Friendly feedback block ──────────────────────────────────────────────────
-//
-// This is the heart of the "best friend" feel.
-// Warm, conversational container — not a verdict box.
 
 function FriendlyFeedback({ isCorrect, feedback }: { isCorrect: boolean; feedback: string }) {
   return (
-    <div className={`rounded-xl p-4 border ${isCorrect
-      ? "bg-emerald-50/60 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30"
-      : "bg-amber-50/60 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30"
-      }`}>
+    <div className="rounded-xl p-4 border bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 mt-2">
       <div className="flex items-start gap-2.5">
-        <MessageCircleHeart className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isCorrect ? "text-emerald-500" : "text-amber-500"
-          }`} />
+        <MessageCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
         <div>
-          <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-            }`}>
-            A little note from your study buddy
+          <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5 text-gray-500 dark:text-gray-400">
+            Review Note
           </p>
-          {/*
-            ── AI Feedback tone guidelines ────────────────────────────────
-            When generating ai_feedback on the backend, prompt the model to:
-
-            • Speak like a close, smart friend — casual, warm, never preachy.
-            • Start with acknowledgement ("You were on the right track...")
-              not a verdict ("This answer is incorrect.").
-            • For wrong answers: explain *why* the right answer makes sense,
-              not just what the right answer is.
-            • Use "we" or "you" language, avoid passive voice.
-            • End with a micro-encouragement, never a lecture.
-            • Keep it under 3 sentences.
-
-            Example good feedback:
-              "You were close! The key thing to remember is that Babylonia
-               built on the Sumerian system — same base-60, just more refined.
-               Next time you'll nail it 💪"
-
-            Example bad feedback:
-              "The correct answer is Babylon. The user's answer was incorrect
-               as it did not mention the Babylonian civilization."
-          */}
           <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{feedback}</p>
         </div>
       </div>
@@ -380,12 +348,12 @@ function FriendlyFeedback({ isCorrect, feedback }: { isCorrect: boolean; feedbac
 
 function HintBox({ explanation }: { explanation: string }) {
   return (
-    <div className="bg-amber-50/50 dark:bg-amber-900/10 rounded-xl p-4 border border-amber-100 dark:border-amber-900/30">
+    <div className="bg-gray-50/50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 mt-2">
       <div className="flex items-start gap-2.5">
-        <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+        <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
         <div>
-          <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1.5">
-            Here's a hint to remember it next time
+          <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+            Explanation
           </p>
           <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{explanation}</p>
         </div>
