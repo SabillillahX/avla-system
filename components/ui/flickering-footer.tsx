@@ -323,10 +323,8 @@ export function FlickeringFooter() {
             href="/"
             className="flex cursor-pointer items-center gap-2 transition-opacity duration-200 hover:opacity-90"
           >
-            <div className="flex size-9 items-center justify-center rounded-full bg-primary text-white shadow-sm">
-              <Zap className="size-4" aria-hidden />
-            </div>
-            <p className="text-xl font-semibold text-gray-900">Avla</p>
+            <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto dark:hidden" />
+            <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto hidden dark:block" />
           </Link>
           <p className="font-medium leading-relaxed tracking-tight text-gray-600">
             Platform SaaS profesional untuk layanan teknologi informasi terkelola

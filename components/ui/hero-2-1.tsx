@@ -23,10 +23,7 @@ const Hero2 = () => {
         {/* Navigation */}
         <nav className="container mx-auto flex items-center justify-between px-4 py-4 mt-6">
           <Link href="/" className="flex items-center">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-pink-600">
-              <Zap className="h-4 w-4" aria-hidden />
-            </div>
-            <span className="ml-2 text-xl font-bold text-white">Avla</span>
+            <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}
@@ -73,10 +70,7 @@ const Hero2 = () => {
             >
               <div className="flex items-center justify-between">
                 <Link href="/" className="flex items-center">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-pink-600">
-                    <Zap className="h-4 w-4" aria-hidden />
-                  </div>
-                  <span className="ml-2 text-xl font-bold text-white">Avla</span>
+                  <img src="/logo-white.png" alt="Avla Logo" className="h-8 w-auto" />
                 </Link>
                 <button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
                   <X className="h-6 w-6 text-white" />

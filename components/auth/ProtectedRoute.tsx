@@ -27,7 +27,7 @@ export function ProtectedRoute({ children, requireRole }: ProtectedRouteProps) {
 
       if (!hasRequiredRole) {
         // Redirect to unauthorized page or dashboard
-        router.push('/dashboard');
+        router.push('/my-video');
       }
     }
   }, [isAuthenticated, isLoading, requireRole, user, router]);

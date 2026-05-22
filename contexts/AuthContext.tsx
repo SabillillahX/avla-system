@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(response.token);
     setUser(response.user);
 
-    router.push('/dashboard');
+    router.push('/my-video');
 
   };
 
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(response.token);
       setUser(response.user);
 
-      router.push('/dashboard');
+      router.push('/my-video');
     } catch (error: any) {
       throw error;
     }
