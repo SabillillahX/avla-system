@@ -25,6 +25,7 @@ import {
   User,
   Users,
   Zap,
+  ClipboardList,
 } from "lucide-react"
 
 import { useAuth } from "@/contexts/AuthContext"
@@ -70,8 +71,10 @@ const navItems = [
   { name: "Courses", icon: CheckCircle, path: "/courses" },
   { name: "My Course", icon: Users, path: "/my-course" },
   { name: "Chats", icon: MessageSquare, path: "/chats" },
+  { name: "Group Chat", icon: Users, path: "/group-chat" },
   { name: "Documents", icon: FileText, path: "/documents" },
   { name: "Receipts", icon: Receipt, path: "/receipts" },
+  { name: "Class Management", icon: ClipboardList, path: "/classes" },
 ]
 
 const notifications = [

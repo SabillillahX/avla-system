@@ -1,20 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import { courseCatalog } from "@/lib/mock-courses"
+import { getJoinedCourseIds } from "@/lib/course-storage"
 import { Search, PlayCircle } from "lucide-react"
 
-interface Course {
-  id: string
-  title: string
-  instructor: string
-  category: string
-  imageUrl: string
+interface CourseProgress {
   progress: number
   totalLessons: number
   completedLessons: number
@@ -22,84 +20,84 @@ interface Course {
   status: "in-progress" | "completed"
 }
 
-const myCourses: Course[] = [
-  {
-    id: "my-1",
-    title: "AI Engineer Agentic Track: The Complete Agent & MCP Course",
-    instructor: "Ed Donner",
-    category: "AI Engineering",
-    imageUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
+const progressByCourseId: Record<string, CourseProgress> = {
+  "trend-1": {
     progress: 62,
     totalLessons: 48,
     completedLessons: 30,
     lastLesson: "Building MCP Tools",
     status: "in-progress",
   },
-  {
-    id: "my-2",
-    title: "100 Days of Code: The Complete Python Pro Bootcamp",
-    instructor: "Dr. Angela Yu",
-    category: "Python",
-    imageUrl: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?q=80&w=1200&auto=format&fit=crop",
+  "trend-4": {
     progress: 22,
     totalLessons: 100,
     completedLessons: 22,
     lastLesson: "Day 22: Pong Game",
     status: "in-progress",
   },
-  {
-    id: "my-3",
-    title: "Ultimate AWS Certified Solutions Architect Associate 2026",
-    instructor: "Stephane Maarek",
-    category: "Cloud",
-    imageUrl: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=1200&auto=format&fit=crop",
+  "trend-5": {
     progress: 100,
     totalLessons: 36,
     completedLessons: 36,
     lastLesson: "Final Practice Exam",
     status: "completed",
   },
-  {
-    id: "my-4",
-    title: "Generative AI for Beginners",
-    instructor: "Aakriti E-Learning Academy",
-    category: "AI Basics",
-    imageUrl: "https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7?q=80&w=1200&auto=format&fit=crop",
+  "trend-3": {
     progress: 78,
     totalLessons: 24,
     completedLessons: 19,
     lastLesson: "Prompting Fundamentals",
     status: "in-progress",
   },
-  {
-    id: "my-5",
-    title: "Claude Code - The Practical Guide",
-    instructor: "Maximilian Schwarzmuller",
-    category: "AI Tools",
-    imageUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=1200&auto=format&fit=crop",
+  "dev-2": {
     progress: 100,
     totalLessons: 18,
     completedLessons: 18,
     lastLesson: "Advanced Integrations",
     status: "completed",
   },
-]
+}
 
 type FilterMode = "all" | "in-progress" | "completed"
 
 export default function MyCoursePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
+  const [joinedIds, setJoinedIds] = useState<string[]>([])
+
+  useEffect(() => {
+    setJoinedIds(getJoinedCourseIds())
+  }, [])
+
+  const enrolledCourses = useMemo(() => {
+    return courseCatalog
+      .filter((course) => joinedIds.includes(course.id))
+      .map((course) => {
+        const progress = progressByCourseId[course.id]
+        if (progress) {
+          return { ...course, ...progress }
+        }
+
+        return {
+          ...course,
+          progress: 0,
+          totalLessons: course.lessons,
+          completedLessons: 0,
+          lastLesson: "Not started yet",
+          status: "in-progress" as const,
+        }
+      })
+  }, [joinedIds])
 
   const filteredCourses = useMemo(() => {
-    return myCourses.filter((course) => {
+    return enrolledCourses.filter((course) => {
       const matchesSearch =
         course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         course.instructor.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesFilter = filterMode === "all" || course.status === filterMode
       return matchesSearch && matchesFilter
     })
-  }, [searchQuery, filterMode])
+  }, [enrolledCourses, filterMode, searchQuery])
 
   return (
     <ProtectedRoute>
@@ -190,10 +188,12 @@ export default function MyCoursePage() {
                   }>
                     {course.status === "completed" ? "Completed" : "In Progress"}
                   </Badge>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <PlayCircle className="w-4 h-4" />
-                    {course.status === "completed" ? "Review" : "Continue"}
-                  </Button>
+                  <Link href={`/my-course/${encodeURIComponent(course.title)}`}>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <PlayCircle className="w-4 h-4" />
+                      {course.status === "completed" ? "Review" : "Continue"}
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
@@ -202,7 +202,10 @@ export default function MyCoursePage() {
 
         {filteredCourses.length === 0 && (
           <div className="text-center py-16 text-gray-500 dark:text-gray-400">
-            No courses found. Try a different search.
+            <p className="mb-4">No courses found. Join a course to start learning.</p>
+            <Link href="/courses">
+              <Button variant="outline">Browse Courses</Button>
+            </Link>
           </div>
         )}
       </div>

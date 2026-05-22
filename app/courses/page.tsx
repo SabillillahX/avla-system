@@ -1,151 +1,22 @@
 'use client'
 
+import Link from "next/link"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import { topDevelopmentCourses, trendingCourses } from "@/lib/mock-courses"
+import { getJoinedCourseIds } from "@/lib/course-storage"
 import { ChevronRight, Star } from "lucide-react"
-
-interface Course {
-  id: string
-  title: string
-  subtitle: string
-  author: string
-  rating: number
-  ratingCount: number
-  price: string
-  originalPrice: string
-  badges: string[]
-  imageUrl: string
-}
-
-const trendingCourses: Course[] = [
-  {
-    id: "trend-1",
-    title: "AI Engineer Agentic Track: The Complete Agent & MCP Course",
-    subtitle: "Ed Donner, Licency",
-    author: "Ed Donner, Licency",
-    rating: 4.7,
-    ratingCount: 39719,
-    price: "Rp129,000",
-    originalPrice: "Rp169,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "trend-2",
-    title: "AI Engineer Core Track: LLM Engineering, RAG, QLoRA, ...",
-    subtitle: "Licency, Ed Donner",
-    author: "Licency, Ed Donner",
-    rating: 4.7,
-    ratingCount: 34560,
-    price: "Rp129,000",
-    originalPrice: "Rp169,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "trend-3",
-    title: "Generative AI for Beginners",
-    subtitle: "Aakriti E-Learning Academy",
-    author: "Aakriti E-Learning Academy",
-    rating: 4.5,
-    ratingCount: 111895,
-    price: "Rp129,000",
-    originalPrice: "Rp169,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "trend-4",
-    title: "100 Days of Code: The Complete Python Pro Bootcamp",
-    subtitle: "Dr. Angela Yu",
-    author: "Dr. Angela Yu",
-    rating: 4.7,
-    ratingCount: 423099,
-    price: "Rp129,000",
-    originalPrice: "Rp169,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1522204523234-8729aa6e3d5f?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "trend-5",
-    title: "Ultimate AWS Certified Solutions Architect Associate 2026",
-    subtitle: "Stephane Maarek",
-    author: "Stephane Maarek",
-    rating: 4.7,
-    ratingCount: 289163,
-    price: "Rp129,000",
-    originalPrice: "Rp169,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=1200&auto=format&fit=crop",
-  },
-]
-
-const topDevelopmentCourses: Course[] = [
-  {
-    id: "dev-1",
-    title: "AI Coder: Complete Claude Code & Coding Agents Course",
-    subtitle: "Licency, Ed Donner",
-    author: "Licency, Ed Donner",
-    rating: 4.7,
-    ratingCount: 5352,
-    price: "Rp109,000",
-    originalPrice: "Rp149,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1487014679447-9f8336841d58?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "dev-2",
-    title: "Claude Code - The Practical Guide",
-    subtitle: "Academind by Maximilian Schwarzmuller",
-    author: "Academind by Maximilian Schwarzmuller",
-    rating: 4.6,
-    ratingCount: 8257,
-    price: "Rp109,000",
-    originalPrice: "Rp149,000",
-    badges: ["Premium"],
-    imageUrl: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "dev-3",
-    title: "OpenClaw: Run Powerful & Autonomous AI Agents Securely",
-    subtitle: "Arnold Oberleiter",
-    author: "Arnold Oberleiter",
-    rating: 4.7,
-    ratingCount: 725,
-    price: "Rp109,000",
-    originalPrice: "Rp149,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "dev-4",
-    title: "AI Builder: Create Agents, Voice Agents & Automations in n8n",
-    subtitle: "Licency, Ed Donner",
-    author: "Licency, Ed Donner",
-    rating: 4.8,
-    ratingCount: 2284,
-    price: "Rp109,000",
-    originalPrice: "Rp149,000",
-    badges: ["Premium", "Bestseller"],
-    imageUrl: "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "dev-5",
-    title: "AI Engineer Production Track: Deploy LLMs & Agents at Scale",
-    subtitle: "Licency, Ed Donner",
-    author: "Licency, Ed Donner",
-    rating: 4.7,
-    ratingCount: 2902,
-    price: "Rp129,000",
-    originalPrice: "Rp169,000",
-    badges: ["Premium"],
-    imageUrl: "https://images.unsplash.com/photo-1484417894907-623942c8ee29?q=80&w=1200&auto=format&fit=crop",
-  },
-]
 
 const formatCount = (value: number) => value.toLocaleString("en-US")
 
 export default function CoursesPage() {
+  const [joinedIds, setJoinedIds] = useState<string[]>([])
+
+  useEffect(() => {
+    setJoinedIds(getJoinedCourseIds())
+  }, [])
+
   return (
     <ProtectedRoute>
       <div className="p-6 space-y-10">
@@ -196,17 +67,21 @@ export default function CoursesPage() {
             <div className="flex gap-5 overflow-x-auto pb-2 pr-10">
               {trendingCourses.map((course) => (
                 <div key={course.id} className="w-[250px] shrink-0">
-                  <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                    <img
-                      src={course.imageUrl}
-                      alt={course.title}
-                      className="h-[140px] w-full object-cover"
-                    />
-                  </div>
+                  <Link href={`/courses/${course.id}`} className="block">
+                    <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      <img
+                        src={course.imageUrl}
+                        alt={course.title}
+                        className="h-[140px] w-full object-cover"
+                      />
+                    </div>
+                  </Link>
                   <div className="mt-3 space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
-                      {course.title}
-                    </h3>
+                    <Link href={`/courses/${course.id}`} className="block">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
+                        {course.title}
+                      </h3>
+                    </Link>
                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
                       {course.subtitle}
                     </p>
@@ -234,6 +109,11 @@ export default function CoursesPage() {
                       <span className="text-xs text-gray-400 line-through">{course.originalPrice}</span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                      {joinedIds.includes(course.id) && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          Joined
+                        </span>
+                      )}
                       {course.badges.map((badge) => (
                         <span
                           key={`${course.id}-${badge}`}
@@ -270,17 +150,21 @@ export default function CoursesPage() {
             <div className="flex gap-5 overflow-x-auto pb-2 pr-10">
               {topDevelopmentCourses.map((course) => (
                 <div key={course.id} className="w-[250px] shrink-0">
-                  <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                    <img
-                      src={course.imageUrl}
-                      alt={course.title}
-                      className="h-[140px] w-full object-cover"
-                    />
-                  </div>
+                  <Link href={`/courses/${course.id}`} className="block">
+                    <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      <img
+                        src={course.imageUrl}
+                        alt={course.title}
+                        className="h-[140px] w-full object-cover"
+                      />
+                    </div>
+                  </Link>
                   <div className="mt-3 space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
-                      {course.title}
-                    </h3>
+                    <Link href={`/courses/${course.id}`} className="block">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
+                        {course.title}
+                      </h3>
+                    </Link>
                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
                       {course.subtitle}
                     </p>
@@ -308,6 +192,11 @@ export default function CoursesPage() {
                       <span className="text-xs text-gray-400 line-through">{course.originalPrice}</span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                      {joinedIds.includes(course.id) && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          Joined
+                        </span>
+                      )}
                       {course.badges.map((badge) => (
                         <span
                           key={`${course.id}-${badge}`}
