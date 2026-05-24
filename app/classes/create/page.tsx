@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { addClass, ClassItem, getClassById, updateClass } from "@/lib/class-storage"
+import { classesApi } from "@/lib/api/classes"
+import { categoriesApi, type CategoryItem } from "@/lib/api/categories"
+import { formatPrice, normalizeLevel, parsePrice } from "@/lib/class-utils"
 import { ArrowLeft } from "lucide-react"
 
 const emptyForm = {
@@ -26,6 +28,16 @@ export default function CreateClassPage() {
   const editId = searchParams.get("edit")
   const [formState, setFormState] = useState(emptyForm)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [categories, setCategories] = useState<CategoryItem[]>([])
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const response = await categoriesApi.list()
+      setCategories(response.data)
+    }
+
+    loadCategories()
+  }, [])
 
   useEffect(() => {
     if (!editId) {
@@ -33,21 +45,22 @@ export default function CreateClassPage() {
       return
     }
 
-    const classItem = getClassById(editId)
-    if (!classItem) {
-      setIsEditMode(false)
-      return
+    const loadClass = async () => {
+      const response = await classesApi.get(editId)
+      const classItem = response.data
+
+      setIsEditMode(true)
+      setFormState({
+        title: classItem.name,
+        category: classItem.category?.name || "",
+        price: formatPrice(classItem.price),
+        level: classItem.level || "",
+        imageUrl: classItem.thumbnail_url || "",
+        description: classItem.description || "",
+      })
     }
 
-    setIsEditMode(true)
-    setFormState({
-      title: classItem.title,
-      category: classItem.category,
-      price: classItem.price,
-      level: classItem.level,
-      imageUrl: classItem.imageUrl,
-      description: classItem.description,
-    })
+    loadClass()
   }, [editId])
 
   const handleChange = (field: keyof typeof formState, value: string) => {
@@ -58,45 +71,41 @@ export default function CreateClassPage() {
     setFormState(emptyForm)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formState.title.trim()) return
 
+    const matchedCategory = categories.find(
+      (category) => category.name.toLowerCase() === formState.category.trim().toLowerCase()
+    )
+
     if (isEditMode && editId) {
-      updateClass(editId, {
-        title: formState.title,
-        category: formState.category || "General",
-        price: formState.price || "Rp0",
-        level: formState.level || "Beginner",
-        imageUrl:
-          formState.imageUrl ||
-          "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
-        description: formState.description || "No description yet.",
-        updatedAt: "May 22, 2026",
+      await classesApi.update(editId, {
+        name: formState.title,
+        description: formState.description || "",
+        short_description: formState.description || "",
+        thumbnail_url: formState.imageUrl || null,
+        price: parsePrice(formState.price) ?? 0,
+        level: normalizeLevel(formState.level) || "beginner",
+        category_id: matchedCategory?.id || null,
       })
     } else {
-      const newItem: ClassItem = {
-        id: `class-${Date.now()}`,
-        title: formState.title,
-        category: formState.category || "General",
-        price: formState.price || "Rp0",
-        level: formState.level || "Beginner",
-        imageUrl:
-          formState.imageUrl ||
-          "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
-        description: formState.description || "No description yet.",
+      await classesApi.create({
+        name: formState.title,
+        description: formState.description || "",
+        short_description: formState.description || "",
+        thumbnail_url: formState.imageUrl || null,
+        price: parsePrice(formState.price) ?? 0,
+        level: normalizeLevel(formState.level) || "beginner",
         status: "draft",
-        students: 0,
-        updatedAt: "May 22, 2026",
-      }
-
-      addClass(newItem)
+        category_id: matchedCategory?.id || null,
+      })
     }
     resetForm()
     router.push("/classes")
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireRole={["admin", "teacher"]}>
       <div className="p-6 space-y-6">
         <div className="flex items-start gap-3">
           <Link href="/classes">

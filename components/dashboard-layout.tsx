@@ -65,16 +65,23 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-const navItems = [
+type NavItem = {
+  name: string
+  icon: React.ComponentType<{ className?: string }>
+  path: string
+  visibleFor?: string[]
+}
+
+const navItems: NavItem[] = [
   { name: "Dashboard", icon: BarChart3, path: "/dashboard" },
   { name: "My Video", icon: FileText, path: "/my-video" },
-  { name: "Courses", icon: CheckCircle, path: "/courses" },
-  { name: "My Course", icon: Users, path: "/my-course" },
+  { name: "Courses", icon: CheckCircle, path: "/courses", visibleFor: ["student", "admin"] },
+  { name: "My Course", icon: Users, path: "/my-course", visibleFor: ["student", "admin"] },
   { name: "Chats", icon: MessageSquare, path: "/chats" },
   { name: "Group Chat", icon: Users, path: "/group-chat" },
   { name: "Documents", icon: FileText, path: "/documents" },
   { name: "Receipts", icon: Receipt, path: "/receipts" },
-  { name: "Class Management", icon: ClipboardList, path: "/classes" },
+  { name: "Class Management", icon: ClipboardList, path: "/classes", visibleFor: ["teacher", "admin"] },
 ]
 
 const notifications = [
@@ -201,14 +208,24 @@ type SidebarUser = {
 
 function DashboardSidebar({
   currentUser,
+  userRoles,
   onLogout,
 }: {
   currentUser: SidebarUser
+  userRoles?: string[]
   onLogout: () => void
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const reduceMotion = useReducedMotion()
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.visibleFor || !userRoles || userRoles.length === 0) {
+      return true
+    }
+
+    return item.visibleFor.some((role) => userRoles.includes(role))
+  })
 
   const NavWrapper = reduceMotion ? "div" : motion.div
 
@@ -256,7 +273,7 @@ function DashboardSidebar({
                 animate={reduceMotion ? undefined : "visible"}
                 className="flex flex-col gap-0.5"
               >
-                {navItems.map((item) => {
+                {visibleNavItems.map((item) => {
                   const isActive = pathname === item.path
                   const ItemWrapper = reduceMotion ? "div" : motion.div
 
@@ -399,6 +416,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="flex min-h-svh w-full bg-[#EFF6FF]">
         <DashboardSidebar
           currentUser={currentUser}
+          userRoles={user?.roles}
           onLogout={() => logout()}
         />
 

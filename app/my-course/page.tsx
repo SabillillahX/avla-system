@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { courseCatalog } from "@/lib/mock-courses"
-import { getJoinedCourseIds } from "@/lib/course-storage"
+import { useAuth } from "@/contexts/AuthContext"
+import { type CourseClass } from "@/lib/api/classes"
 import { Search, PlayCircle } from "lucide-react"
 
 interface CourseProgress {
@@ -59,41 +59,85 @@ const progressByCourseId: Record<string, CourseProgress> = {
 }
 
 type FilterMode = "all" | "in-progress" | "completed"
+const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000/api"
+
+const extractCourseArray = (value: unknown): CourseClass[] => {
+  if (Array.isArray(value)) {
+    return value as CourseClass[]
+  }
+
+  if (value && typeof value === "object" && "data" in value && Array.isArray((value as { data?: unknown }).data)) {
+    return (value as { data: CourseClass[] }).data
+  }
+
+  return []
+}
 
 export default function MyCoursePage() {
+  const { user, isLoading } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
-  const [joinedIds, setJoinedIds] = useState<string[]>([])
+  const [enrolledClasses, setEnrolledClasses] = useState<CourseClass[]>([])
 
   useEffect(() => {
-    setJoinedIds(getJoinedCourseIds())
-  }, [])
+    const loadEnrolled = async () => {
+      if (isLoading) {
+        return
+      }
+
+      if (!user?.roles?.includes("student")) {
+        setEnrolledClasses([])
+        return
+      }
+
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      const response = await fetch(`${backendBaseUrl}/classes/enrolled`, {
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load enrolled classes: ${response.status}`)
+      }
+
+      const payload = await response.json()
+      setEnrolledClasses(extractCourseArray(payload?.data))
+    }
+
+    loadEnrolled().catch((err) => {
+      console.error('Failed to load enrolled classes', err)
+      setEnrolledClasses([])
+    })
+  }, [isLoading, user?.id, user?.roles])
 
   const enrolledCourses = useMemo(() => {
-    return courseCatalog
-      .filter((course) => joinedIds.includes(course.id))
-      .map((course) => {
-        const progress = progressByCourseId[course.id]
-        if (progress) {
-          return { ...course, ...progress }
-        }
-
+    return (enrolledClasses ?? []).map((course) => {
+      const progress = progressByCourseId[course.id]
+      if (progress) {
         return {
           ...course,
-          progress: 0,
-          totalLessons: course.lessons,
-          completedLessons: 0,
-          lastLesson: "Not started yet",
-          status: "in-progress" as const,
+          ...progress,
         }
-      })
-  }, [joinedIds])
+      }
+
+      return {
+        ...course,
+        progress: 0,
+        totalLessons: 0,
+        completedLessons: 0,
+        lastLesson: "Not started yet",
+        status: "in-progress" as const,
+      }
+    })
+  }, [enrolledClasses])
 
   const filteredCourses = useMemo(() => {
     return enrolledCourses.filter((course) => {
       const matchesSearch =
-        course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        course.instructor.toLowerCase().includes(searchQuery.toLowerCase())
+      course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (course.teacher?.name || "").toLowerCase().includes(searchQuery.toLowerCase())
       const matchesFilter = filterMode === "all" || course.status === filterMode
       return matchesSearch && matchesFilter
     })
@@ -150,19 +194,26 @@ export default function MyCoursePage() {
             <Card key={course.id} className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
               <CardContent className="p-4 space-y-4">
                 <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
-                  <img src={course.imageUrl} alt={course.title} className="h-40 w-full object-cover" />
+                  <img
+                    src={
+                      course.thumbnail_url ||
+                      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop"
+                    }
+                    alt={course.name}
+                    className="h-40 w-full object-cover"
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
-                        {course.title}
+                        {course.name}
                       </h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{course.instructor}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{course.teacher?.name || "Instructor"}</p>
                     </div>
                     <Badge variant="secondary" className="text-[11px]">
-                      {course.category}
+                      {course.category?.name || "General"}
                     </Badge>
                   </div>
 
@@ -188,7 +239,7 @@ export default function MyCoursePage() {
                   }>
                     {course.status === "completed" ? "Completed" : "In Progress"}
                   </Badge>
-                  <Link href={`/my-course/${encodeURIComponent(course.title)}`}>
+                  <Link href={`/my-course/${course.id}`}>
                     <Button variant="outline" size="sm" className="gap-2">
                       <PlayCircle className="w-4 h-4" />
                       {course.status === "completed" ? "Review" : "Continue"}
