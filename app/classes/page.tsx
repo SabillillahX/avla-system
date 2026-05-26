@@ -93,10 +93,10 @@ export default function ClassManagementPage() {
 
   return (
     <ProtectedRoute requireRole={["admin", "teacher"]}>
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Class Management</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Class Management</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Create new classes and manage everything in one place.
           </p>
         </div>
@@ -112,10 +112,10 @@ export default function ClassManagementPage() {
         </div>
 
         <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between gap-3">
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-gray-900 dark:text-white">Class List</h3>
-              <div className="relative w-56">
+              <div className="relative w-full sm:w-56">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search class..."

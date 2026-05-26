@@ -157,13 +157,13 @@ export default function CoursesPage() {
 
   return (
     <ProtectedRoute>
-      <div className="p-6 space-y-10">
+      <div className="p-4 sm:p-6 space-y-6 sm:space-y-10">
         <section>
-          <div className="mb-6">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{todayLabel}</p>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Good Evening! {greetingName}, ready to learn?</h2>
+          <div className="mb-4 sm:mb-6">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">{todayLabel}</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">Good Evening! {greetingName}, ready to learn?</h2>
 
-            <div className="flex items-center space-x-6 mb-6">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
               <Button
                 variant="outline"
                 size="sm"
@@ -205,11 +205,11 @@ export default function CoursesPage() {
             </Card>
           ) : null}
           <div className="relative">
-            <div className="flex gap-5 overflow-x-auto pb-2 pr-10">
+            <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 pr-10 snap-x snap-mandatory">
               {trendingCourses.map((course) => {
                 const card = mapCourseCard(course)
                 return (
-                <div key={course.id} className="w-[250px] shrink-0">
+                <div key={course.id} className="w-[200px] sm:w-[250px] shrink-0 snap-start">
                   <Link href={`/courses/${course.id}`} className="block">
                     <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                       <img
@@ -292,11 +292,11 @@ export default function CoursesPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Top courses in Development</h2>
           </div>
           <div className="relative">
-            <div className="flex gap-5 overflow-x-auto pb-2 pr-10">
+            <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 pr-10 snap-x snap-mandatory">
               {topDevelopmentCourses.map((course) => {
                 const card = mapCourseCard(course)
                 return (
-                <div key={course.id} className="w-[250px] shrink-0">
+                <div key={course.id} className="w-[200px] sm:w-[250px] shrink-0 snap-start">
                   <Link href={`/courses/${course.id}`} className="block">
                     <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                       <img

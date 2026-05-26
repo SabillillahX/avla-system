@@ -105,13 +105,13 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   return (
     <ProtectedRoute>
-      <div className="p-6 space-y-8">
+      <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{course.category?.name || "General"}</p>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">{course.name}</h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">{course.description || course.short_description}</p>
-            <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300 mb-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">{course.name}</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">{course.description || course.short_description}</p>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm text-gray-600 dark:text-gray-300 mb-4">
               <span className="font-semibold text-amber-600 dark:text-amber-400">{(course.rating ?? 0).toFixed(1)}</span>
               <div className="flex items-center gap-1">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -132,7 +132,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 <span className="text-sm text-gray-400 line-through">{getCourseOriginalPrice(course)}</span>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Button onClick={handleJoin} className="min-w-[140px]" disabled={!canEnroll || joined || isCheckingEnrollment}>
                 {isCheckingEnrollment ? "Checking..." : joined ? "Enrolled" : "Join Course"}
               </Button>

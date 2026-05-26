@@ -124,8 +124,8 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
           )}
 
           {/* Video Information */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3">
               {video.title}
             </h1>
 
@@ -163,12 +163,12 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
 
       </div>
 
-      <div className="mt-8 flex justify-end gap-3">
+      <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row sm:justify-end gap-3">
         <Button
           size="lg"
           variant="outline"
           onClick={() => router.push(`/my-video/${params.id}/results`)}
-          className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2"
+          className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <BookOpen className="w-5 h-5" />
           Learning Result
@@ -177,7 +177,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
           size="lg"
           onClick={() => router.push(`/my-video/${params.id}/assessment`)}
           disabled={isAssessmentSubmitted}
-          className={`font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2 ${isAssessmentSubmitted
+          className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${isAssessmentSubmitted
             ? "bg-gray-100 text-gray-900 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800"
             : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
             }`}

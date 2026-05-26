@@ -145,10 +145,10 @@ export default function MyCoursePage() {
 
   return (
     <ProtectedRoute>
-      <div className="p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">My Courses</h1>
-          <p className="text-gray-600 dark:text-gray-400">Track your learning progress and continue where you left off</p>
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">My Courses</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">Track your learning progress and continue where you left off</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -164,7 +164,7 @@ export default function MyCoursePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant={filterMode === "all" ? "default" : "outline"}
               onClick={() => setFilterMode("all")}

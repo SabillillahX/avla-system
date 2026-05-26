@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setUser(null);
 
-      router.push('/auth/login');
+      router.push('/');
     }
   };
 

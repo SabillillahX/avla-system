@@ -51,6 +51,17 @@ export default function AdaptiveVideoPlayer({
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   const activeQuiz = useMemo(
     () => quizzes.find((quiz) => quiz.id === activeQuizId) || null,
@@ -204,6 +215,10 @@ export default function AdaptiveVideoPlayer({
           }
         })
 
+        player.on("fullscreenchange", () => {
+          setIsFullscreen(player.isFullscreen() || false)
+        })
+
         player.on("timeupdate", () => {
           const currentSecondFull = player.currentTime() || 0
           if (currentSecondFull > 0) {
@@ -297,9 +312,17 @@ export default function AdaptiveVideoPlayer({
     }
   }, [accessToken, activeQuiz, apiBaseUrl, selectedOption, handleContinue])
 
+  const isModalOutside = isMobile && !isFullscreen
+
   const quizOverlay = isQuizOpen && activeQuiz ? (
-    <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pointer-events-auto text-base">
-      <div className="w-full max-w-xl rounded-2xl border border-gray-200/70 bg-white/95 p-5 shadow-2xl dark:border-gray-700 dark:bg-gray-900/95 max-h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className={`
+      z-[200] flex items-center justify-center p-4 pointer-events-auto text-base
+      ${isModalOutside ? "fixed inset-0 bg-black/80 backdrop-blur-md" : "absolute inset-0 bg-black/60 backdrop-blur-sm"}
+    `}>
+      <div className={`
+        w-full shadow-2xl overflow-y-auto bg-white dark:bg-gray-900 border
+        ${isModalOutside ? "max-w-[90vw] max-h-[85vh] rounded-2xl border-gray-200 dark:border-gray-700 p-4" : "max-w-xl max-h-full rounded-2xl border-gray-200/70 bg-white/95 dark:bg-gray-900/95 p-5"}
+      `} onClick={(e) => e.stopPropagation()}>
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
             {activeQuiz.question}
@@ -364,11 +387,13 @@ export default function AdaptiveVideoPlayer({
     </div>
   ) : null;
 
+  const portalTarget = isModalOutside ? (mounted ? document.body : null) : playerEl
+
   return (
     <div className={className}>
       <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-black">
         <div ref={videoContainerRef} className="w-full" />
-        {playerEl && createPortal(quizOverlay, playerEl)}
+        {portalTarget && createPortal(quizOverlay, portalTarget)}
       </div>
     </div>
   )

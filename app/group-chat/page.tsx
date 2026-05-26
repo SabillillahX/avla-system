@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAuth } from "@/contexts/AuthContext"
 import { type ClassChatMessage } from "@/lib/api/chat"
 import { type CourseClass } from "@/lib/api/classes"
-import { Paperclip, Image as ImageIcon, Info, MessageCircle, MoreVertical, Phone, Search, Send, Video } from "lucide-react"
+import { Paperclip, Image as ImageIcon, Info, MessageCircle, MoreVertical, Phone, Search, Send, Video, ArrowLeft } from "lucide-react"
 
 type Conversation = {
   id: string
@@ -76,6 +76,7 @@ export default function GroupChatPage() {
   const [messages, setMessages] = useState<ClassChatMessage[]>([])
   const [isLoadingChats, setIsLoadingChats] = useState(true)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+  const [showMobileChat, setShowMobileChat] = useState(false)
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -261,9 +262,9 @@ export default function GroupChatPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-[calc(100vh-72px)] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_35%),linear-gradient(180deg,_#fafafa_0%,_#f3f6fb_100%)] p-4 md:p-6">
-        <div className="mx-auto flex min-h-[calc(100vh-104px)] max-w-[1600px] overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-          <aside className="flex w-full flex-col border-r border-slate-200 bg-white md:w-[340px]">
+      <div className="min-h-[calc(100vh-72px)] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.10),_transparent_35%),linear-gradient(180deg,_#fafafa_0%,_#f3f6fb_100%)] p-0 sm:p-4 md:p-6">
+        <div className="mx-auto flex h-[calc(100vh-72px)] sm:h-[calc(100vh-104px)] max-w-[1600px] overflow-hidden sm:rounded-[28px] border-0 sm:border border-slate-200/80 bg-white shadow-none sm:shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
+          <aside className={`flex w-full flex-col border-r border-slate-200 bg-white md:w-[340px] shrink-0 ${showMobileChat ? "hidden md:flex" : "flex"}`}>
             <div className="border-b border-slate-200 px-5 py-4">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Chats</h1>
               <div className="relative mt-4">
@@ -290,7 +291,10 @@ export default function GroupChatPage() {
                     return (
                       <button
                         key={conversation.id}
-                        onClick={() => setSelectedChatId(conversation.id)}
+                        onClick={() => {
+                          setSelectedChatId(conversation.id)
+                          setShowMobileChat(true)
+                        }}
                         className={`flex w-full items-center gap-3 px-4 py-4 text-left transition ${
                           isActive ? "border-r-4 border-r-blue-500 bg-blue-50/70" : "hover:bg-slate-50"
                         }`}
@@ -334,10 +338,18 @@ export default function GroupChatPage() {
             </ScrollArea>
           </aside>
 
-          <section className="flex min-w-0 flex-1 flex-col bg-slate-50">
-            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 md:px-6">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-12 w-12 border border-white shadow-sm">
+          <section className={`flex min-w-0 flex-1 flex-col bg-slate-50 ${showMobileChat ? "flex" : "hidden md:flex"}`}>
+            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4 md:px-6">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden shrink-0 -ml-2"
+                  onClick={() => setShowMobileChat(false)}
+                >
+                  <ArrowLeft className="h-5 w-5 text-slate-600" />
+                </Button>
+                <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border border-white shadow-sm shrink-0">
                   <AvatarImage src={activeConversation?.avatar || undefined} alt={activeConversation?.name || "Conversation"} />
                   <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-blue-500 text-sm font-semibold text-white">
                     {activeConversation ? getInitials(activeConversation.name) : "GC"}
@@ -353,16 +365,16 @@ export default function GroupChatPage() {
               </div>
 
               <div className="flex items-center gap-1 text-slate-500">
-                <button className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="Call">
+                <button className="grid h-8 w-8 sm:h-10 sm:w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="Call">
                   <Phone className="h-4 w-4" />
                 </button>
-                <button className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="Video call">
+                <button className="grid h-8 w-8 sm:h-10 sm:w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="Video call">
                   <Video className="h-4 w-4" />
                 </button>
-                <button className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="Info">
+                <button className="hidden sm:grid h-10 w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="Info">
                   <Info className="h-4 w-4" />
                 </button>
-                <button className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="More">
+                <button className="grid h-8 w-8 sm:h-10 sm:w-10 place-items-center rounded-full transition hover:bg-slate-100" aria-label="More">
                   <MoreVertical className="h-4 w-4" />
                 </button>
               </div>
@@ -412,33 +424,33 @@ export default function GroupChatPage() {
               </div>
             </ScrollArea>
 
-            <div className="border-t border-slate-200 bg-white px-4 py-4 md:px-6">
-              <div className="flex items-end gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
-                <button className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="Attach file">
+            <div className="border-t border-slate-200 bg-white px-3 py-3 sm:px-4 sm:py-4 md:px-6">
+              <div className="flex items-end gap-2 sm:gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-2 py-2 sm:px-3 sm:py-3 shadow-sm">
+                <button className="hidden sm:grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="Attach file">
                   <Paperclip className="h-5 w-5" />
                 </button>
-                <button className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="Attach image">
-                  <ImageIcon className="h-5 w-5" />
+                <button className="grid h-9 w-9 sm:h-10 sm:w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="Attach image">
+                  <ImageIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
                 <Input
                   value={draftMessage}
                   onChange={(event) => setDraftMessage(event.target.value)}
                   placeholder={activeConversation ? "Type a message..." : "Select a class chat first"}
                   disabled={!activeConversation}
-                  className="h-11 flex-1 rounded-2xl border-slate-200 bg-white px-4 text-sm shadow-none"
+                  className="h-9 sm:h-11 flex-1 rounded-2xl border-slate-200 bg-white px-3 sm:px-4 text-sm shadow-none"
                 />
-                <button className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="Emoji">
+                <button className="hidden sm:grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="Emoji">
                   <MessageCircle className="h-5 w-5" />
                 </button>
                 <Button
-                  className="h-11 rounded-2xl bg-blue-500 px-4 text-white shadow-none hover:bg-blue-600"
+                  className="h-9 w-9 sm:h-11 sm:w-auto rounded-2xl bg-blue-500 p-0 sm:px-4 text-white shadow-none hover:bg-blue-600 shrink-0"
                   onClick={handleSend}
                   disabled={!activeConversation || !draftMessage.trim()}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-slate-500">Chat class aktif dan tersambung ke backend. Hanya kelas yang sudah di-join yang bisa dibuka.</p>
+              <p className="mt-2 hidden sm:block text-xs text-slate-500">Chat class aktif dan tersambung ke backend. Hanya kelas yang sudah di-join yang bisa dibuka.</p>
             </div>
           </section>
         </div>

@@ -106,7 +106,7 @@ export default function CreateClassPage() {
 
   return (
     <ProtectedRoute requireRole={["admin", "teacher"]}>
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="flex items-start gap-3">
           <Link href="/classes">
             <Button variant="ghost" size="icon" aria-label="Back to class management">
@@ -114,10 +114,10 @@ export default function CreateClassPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
               {isEditMode ? "Edit Class" : "Create Class"}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               {isEditMode
                 ? "Update the details of your class."
                 : "Fill in the details to create a new class."}
@@ -126,7 +126,7 @@ export default function CreateClassPage() {
         </div>
 
         <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-4 sm:p-6 space-y-4">
             <div className="space-y-3">
               <Input
                 placeholder="Class title"
