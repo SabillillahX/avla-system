@@ -7,15 +7,54 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { getStoredClasses, removeClass, updateClass, type ClassItem } from "@/lib/class-storage"
+import { classesApi, type CourseClass } from "@/lib/api/classes"
+import { formatDateLabel, formatPrice, normalizeLevel, parsePrice } from "@/lib/class-utils"
 import { Plus, Search } from "lucide-react"
 
+type ClassRow = {
+  id: string
+  title: string
+  category: string
+  price: string
+  level: string
+  imageUrl: string
+  description: string
+  status: "published" | "draft" | "archived"
+  students: number
+  updatedAt: string
+  raw: CourseClass
+}
+
+const mapClassRow = (course: CourseClass): ClassRow => {
+  return {
+    id: course.id,
+    title: course.name,
+    category: course.category?.name || "General",
+    price: formatPrice(course.price),
+    level: course.level || "Beginner",
+    imageUrl:
+      course.thumbnail_url ||
+      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
+    description: course.description || course.short_description || "No description yet.",
+    status: (course.status as ClassRow["status"]) || "draft",
+    students: 0,
+    updatedAt: formatDateLabel(course.updated_at),
+    raw: course,
+  }
+}
+
 export default function ClassManagementPage() {
-  const [classes, setClasses] = useState<ClassItem[]>([])
+  const [classes, setClasses] = useState<ClassRow[]>([])
   const [searchQuery, setSearchQuery] = useState("")
 
+  const loadClasses = async () => {
+    const response = await classesApi.list()
+    const rows = response.data.data.map(mapClassRow)
+    setClasses(rows)
+  }
+
   useEffect(() => {
-    setClasses(getStoredClasses())
+    loadClasses()
   }, [])
 
   const filteredClasses = useMemo(() => {
@@ -27,23 +66,33 @@ export default function ClassManagementPage() {
     )
   }, [classes, searchQuery])
 
-  const handleDelete = (id: string) => {
-    const next = removeClass(id)
-    setClasses(next)
+  const handleDelete = async (id: string) => {
+    await classesApi.remove(id)
+    await loadClasses()
   }
 
-  const togglePublish = (id: string) => {
+  const togglePublish = async (id: string) => {
     const current = classes.find((item) => item.id === id)
     if (!current) return
-    const next = updateClass(id, {
-      status: current.status === "published" ? "draft" : "published",
-      updatedAt: "May 22, 2026",
+    const nextStatus = current.status === "published" ? "draft" : "published"
+    await classesApi.update(id, {
+      name: current.title,
+      description: current.description,
+      category_id: current.raw.category_id,
+      status: nextStatus,
+      short_description: current.raw.short_description,
+      thumbnail_url: current.raw.thumbnail_url,
+      price: parsePrice(current.price) ?? 0,
+      level: normalizeLevel(current.level),
+      is_free: current.raw.is_free,
+      language: current.raw.language,
+      has_certificate: current.raw.has_certificate,
     })
-    setClasses(next)
+    await loadClasses()
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireRole={["admin", "teacher"]}>
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Class Management</h1>

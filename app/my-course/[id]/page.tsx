@@ -1,15 +1,39 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { getCourseByParam } from "@/lib/mock-courses"
+import { classesApi, type CourseClass } from "@/lib/api/classes"
 
 export default function CourseMaterialPage({ params }: { params: { id: string } }) {
-  const course = useMemo(() => getCourseByParam(params.id), [params.id])
+  const [course, setCourse] = useState<CourseClass | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadCourse = async () => {
+      try {
+        const response = await classesApi.get(params.id)
+        setCourse(response.data)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadCourse()
+  }, [params.id])
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute>
+        <div className="p-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Loading course...</h1>
+        </div>
+      </ProtectedRoute>
+    )
+  }
 
   if (!course) {
     return (
@@ -27,12 +51,12 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
     <ProtectedRoute>
       <div className="p-6 space-y-6">
         <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{course.category}</p>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{course.title}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{course.category?.name || "General"}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{course.name}</h1>
           <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-            <span>Instructor: {course.instructor}</span>
-            <Badge variant="secondary">{course.level}</Badge>
-            <span>{course.lessons} lessons</span>
+            <span>Instructor: {course.teacher?.name || "Instructor"}</span>
+            <Badge variant="secondary">{course.level || "Beginner"}</Badge>
+            <span>- lessons</span>
           </div>
         </div>
 
@@ -53,7 +77,7 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
             <CardContent className="p-6">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Course Outline</h3>
               <ol className="space-y-2 text-sm text-gray-600 dark:text-gray-300 list-decimal list-inside">
-                {course.curriculum.map((item) => (
+                {(course.requirements || ["Course outline will be available soon."]).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ol>
