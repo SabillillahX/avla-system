@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  productionBrowserSourceMaps: false,
   experimental: {
     optimizePackageImports: ['lucide-react', '@mui/material', 'lodash'],
   },

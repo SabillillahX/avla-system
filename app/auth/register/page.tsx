@@ -11,7 +11,6 @@ import { GuestRoute } from '@/components/auth/GuestRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
@@ -65,16 +64,57 @@ export default function RegisterPage() {
 
   return (
     <GuestRoute>
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Daftar Akun</CardTitle>
-            <CardDescription className="text-center">
-              Buat akun baru untuk memulai belajar
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <section className="flex min-h-screen bg-zinc-50 px-4 py-16 md:py-32 dark:bg-transparent">
+        <div className="m-auto h-fit w-full max-w-md">
+          <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800">
+            <div>
+              <Link
+                href="/"
+                aria-label="go home"
+                className="inline-block mb-4"
+              >
+                <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto dark:hidden" />
+                <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto hidden dark:block" />
+              </Link>
+              <h1 className="mb-1 mt-4 text-xl font-semibold">Create an Account</h1>
+              <p className="text-muted-foreground text-sm">Welcome! Create an account to get started</p>
+            </div>
+
+            <div className="mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 font-medium"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="1em"
+                  height="1em"
+                  viewBox="0 0 256 262">
+                  <path
+                    fill="#4285f4"
+                    d="M255.878 133.451c0-10.734-.871-18.567-2.756-26.69H130.55v48.448h71.947c-1.45 12.04-9.283 30.172-26.69 42.356l-.244 1.622l38.755 30.023l2.685.268c24.659-22.774 38.875-56.282 38.875-96.027"></path>
+                  <path
+                    fill="#34a853"
+                    d="M130.55 261.1c35.248 0 64.839-11.605 86.453-31.622l-41.196-31.913c-11.024 7.688-25.82 13.055-45.257 13.055c-34.523 0-63.824-22.773-74.269-54.25l-1.531.13l-40.298 31.187l-.527 1.465C35.393 231.798 79.49 261.1 130.55 261.1"></path>
+                  <path
+                    fill="#fbbc05"
+                    d="M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82c0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602z"></path>
+                  <path
+                    fill="#eb4335"
+                    d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251"></path>
+                </svg>
+                <span>Continue with Google</span>
+              </Button>
+            </div>
+
+            <div className="my-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+              <hr className="border-dashed border-zinc-200 dark:border-zinc-800" />
+              <span className="text-muted-foreground text-xs">Or continue with email</span>
+              <hr className="border-dashed border-zinc-200 dark:border-zinc-800" />
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               {error && (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
@@ -82,13 +122,14 @@ export default function RegisterPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="name">Nama Lengkap</Label>
+                <Label htmlFor="name" className="block text-sm">Nama Lengkap</Label>
                 <Input
                   id="name"
                   type="text"
                   placeholder="John Doe"
                   {...register('name')}
                   disabled={isLoading}
+                  className="bg-zinc-50 dark:bg-zinc-900/50"
                 />
                 {errors.name && (
                   <p className="text-sm text-red-500">{errors.name.message}</p>
@@ -96,13 +137,14 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="block text-sm">Email</Label>
                 <Input
                   id="email"
                   type="email"
                   placeholder="nama@example.com"
                   {...register('email')}
                   disabled={isLoading}
+                  className="bg-zinc-50 dark:bg-zinc-900/50"
                 />
                 {errors.email && (
                   <p className="text-sm text-red-500">{errors.email.message}</p>
@@ -110,13 +152,14 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="block text-sm">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   placeholder="••••••••"
                   {...register('password')}
                   disabled={isLoading}
+                  className="bg-zinc-50 dark:bg-zinc-900/50"
                 />
                 {errors.password && (
                   <p className="text-sm text-red-500">{errors.password.message}</p>
@@ -124,35 +167,35 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password_confirmation">Konfirmasi Password</Label>
+                <Label htmlFor="password_confirmation" className="block text-sm">Konfirmasi Password</Label>
                 <Input
                   id="password_confirmation"
                   type="password"
                   placeholder="••••••••"
                   {...register('password_confirmation')}
                   disabled={isLoading}
+                  className="bg-zinc-50 dark:bg-zinc-900/50"
                 />
                 {errors.password_confirmation && (
                   <p className="text-sm text-red-500">{errors.password_confirmation.message}</p>
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full font-medium" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Daftar
+                Continue
               </Button>
             </form>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
-            <div className="text-sm text-center text-muted-foreground">
-              Sudah punya akun?{' '}
-              <Link href="/auth/login" className="text-primary hover:underline font-medium">
-                Login di sini
-              </Link>
-            </div>
-          </CardFooter>
-        </Card>
-      </div>
+          </div>
+
+          <p className="text-muted-foreground text-center text-sm mt-6">
+            Have an account?
+            <Button asChild variant="link" className="px-2 font-semibold">
+              <Link href="/auth/login">Sign In</Link>
+            </Button>
+          </p>
+        </div>
+      </section>
     </GuestRoute>
   );
 }

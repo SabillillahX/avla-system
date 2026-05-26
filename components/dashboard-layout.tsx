@@ -65,15 +65,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-type NavItem = {
-  name: string
-  icon: React.ComponentType<{ className?: string }>
-  path: string
-  visibleFor?: string[]
-}
-
-const navItems: NavItem[] = [
-  { name: "Dashboard", icon: BarChart3, path: "/dashboard" },
+const navItems = [
   { name: "My Video", icon: FileText, path: "/my-video" },
   { name: "Courses", icon: CheckCircle, path: "/courses", visibleFor: ["student", "admin"] },
   { name: "My Course", icon: Users, path: "/my-course", visibleFor: ["student", "admin"] },
@@ -240,17 +232,8 @@ function DashboardSidebar({
             href="/"
             className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-blue-100/60 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-sm">
-              <Zap className="size-4" aria-hidden />
-            </div>
-            <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
-              <span className="truncate text-base font-semibold text-gray-900">
-                Avla
-              </span>
-              <span className="truncate text-xs text-gray-500">
-                Video Assessment
-              </span>
-            </div>
+            <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 dark:hidden" />
+            <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 hidden dark:block" />
           </Link>
 
           <div className="flex items-center justify-between gap-1 px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:px-0">

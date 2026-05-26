@@ -70,10 +70,10 @@ export function HeroSection() {
                   preset="slide"
                   className="flex flex-col items-center"
                 >
-                  <h1 className="mt-8 max-w-4xl text-balance text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl lg:mt-12 lg:text-7xl">
+                  <h1 className="mt-8 max-w-4xl text-balance text-4xl font-extrabold tracking-tight text-blue-950 sm:text-5xl md:text-6xl lg:mt-12 lg:text-7xl">
                     #1 AI Learning Platform with Video Assessment
                   </h1>
-                  <p className="mx-auto mt-6 max-w-2xl text-balance text-base leading-relaxed text-gray-600 sm:text-lg">
+                  <p className="mx-auto mt-6 max-w-2xl text-balance text-base leading-relaxed text-blue-950 sm:text-lg">
                     Avla help people to learn and grow within effective learning process. Everything was standardized and automated.
                   </p>
                 </AnimatedGroup>
@@ -130,12 +130,19 @@ export function HeroSection() {
 const HeroHeader = () => {
   const [menuState, setMenuState] = React.useState(false)
   const [isScrolled, setIsScrolled] = React.useState(false)
+  const [isMounted, setIsMounted] = React.useState(false)
 
   React.useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  React.useEffect(() => {
+    if (!isMounted) return
+
     const handleScroll = () => setIsScrolled(window.scrollY > 50)
     window.addEventListener("scroll", handleScroll, { passive: true })
     return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
+  }, [isMounted])
 
   return (
     <header>
@@ -147,7 +154,7 @@ const HeroHeader = () => {
           className={cn(
             "mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12",
             isScrolled &&
-              "max-w-4xl rounded-2xl border border-blue-100/80 bg-white/90 shadow-sm backdrop-blur-md lg:px-5"
+            "max-w-4xl rounded-2xl border border-blue-100/80 bg-white/90 shadow-sm backdrop-blur-md lg:px-5"
           )}
         >
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
@@ -157,10 +164,8 @@ const HeroHeader = () => {
                 aria-label="Avla home"
                 className="flex cursor-pointer items-center gap-2"
               >
-                <div className="flex size-8 items-center justify-center rounded-full bg-primary text-white">
-                  <Zap className="size-4" aria-hidden />
-                </div>
-                <span className="text-xl font-bold text-gray-900">Avla</span>
+                <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto dark:hidden" />
+                <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto hidden dark:block" />
               </Link>
 
               <button
@@ -203,7 +208,7 @@ const HeroHeader = () => {
                       <Link
                         href={item.href}
                         onClick={() => setMenuState(false)}
-                        className="block cursor-pointer text-gray-600 hover:text-primary"
+                        className="block cursor-pointer text-blue-700 font-medium hover:text-blue-900"
                       >
                         {item.name}
                       </Link>

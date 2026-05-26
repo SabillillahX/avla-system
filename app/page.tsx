@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   BarChart3,
@@ -122,15 +122,24 @@ const bentoFeatures = [
 export default function LandingPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.push("/dashboard")
+      router.push("/my-video")
     }
   }, [isLoading, isAuthenticated, router])
 
+  if (!isMounted) {
+    return null
+  }
+
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#EFF6FF] text-gray-900">
+    <div className="min-h-screen overflow-x-hidden bg-[#EFF6FF] text-gray-900" suppressHydrationWarning>
       <HeroSection />
 
       <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-20 px-6 py-16">

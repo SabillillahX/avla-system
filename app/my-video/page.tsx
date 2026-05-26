@@ -43,6 +43,8 @@ import {
   Trash2,
   ImagePlus,
   RefreshCw,
+  BookOpen,
+  Award,
 } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import { Video as VideoType, VideoStatus, ViewMode } from "@/lib/types/handle-videos"
@@ -431,8 +433,8 @@ export default function MyVideoPage() {
   const stats = useMemo(() => ({
     total: videos.length,
     completed: videos.filter((v) => v.status === "completed").length,
-    processing: videos.filter((v) => v.status === "processing").length,
-    pending: videos.filter((v) => v.status === "pending").length,
+    courses: 0,
+    avgScore: "0%",
   }), [videos])
 
   const renderStatCard = ({
@@ -1090,8 +1092,8 @@ export default function MyVideoPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {renderStatCard({ icon: Video, label: "Total Videos", value: stats.total, accent: "bg-blue-50 dark:bg-blue-900/40", iconColor: "text-blue-600 dark:text-blue-400" })}
         {renderStatCard({ icon: CheckCircle2, label: "Completed", value: stats.completed, accent: "bg-emerald-50 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400" })}
-        {renderStatCard({ icon: TrendingUp, label: "Processing", value: stats.processing, accent: "bg-amber-50 dark:bg-amber-900/40", iconColor: "text-amber-600 dark:text-amber-400" })}
-        {renderStatCard({ icon: Clock, label: "Pending", value: stats.pending, accent: "bg-gray-50 dark:bg-gray-800", iconColor: "text-gray-600 dark:text-gray-400" })}
+        {renderStatCard({ icon: BookOpen, label: "My Course", value: stats.courses, accent: "bg-purple-50 dark:bg-purple-900/40", iconColor: "text-purple-600 dark:text-purple-400" })}
+        {renderStatCard({ icon: Award, label: "Avg. Score", value: stats.avgScore, accent: "bg-amber-50 dark:bg-amber-900/40", iconColor: "text-amber-600 dark:text-amber-400" })}
       </div>
 
       {/* Toolbar */}
