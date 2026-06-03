@@ -1,8 +1,8 @@
-drafin.sabill.me {
+http://drafin.sabill.me {
 	reverse_proxy nextjs:3000
 }
 
-mcp-drafin.sabill.me {
+http://mcp-drafin.sabill.me {
 	reverse_proxy mcp-sse:8081 {
 		flush_interval -1
 	}
