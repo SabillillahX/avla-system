@@ -8,8 +8,11 @@ services:
     env_file: .env.production
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       nextjs:
         condition: service_started
@@ -75,3 +78,7 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
+          
+volumes:
+  caddy_data:
+  caddy_config:

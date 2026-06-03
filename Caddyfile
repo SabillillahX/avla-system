@@ -1,9 +1,9 @@
-http://drafin.sabill.me {
-	reverse_proxy nextjs:3000
+drafin.sabill.my.id {
+    reverse_proxy nextjs:3000
 }
 
-http://mcp-drafin.sabill.me {
-	reverse_proxy mcp-sse:8081 {
-		flush_interval -1
-	}
+mcp-drafin.sabill.my.id {
+    reverse_proxy mcp-sse:8081 {
+        flush_interval -1
+    }
 }
