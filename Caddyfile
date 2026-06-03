@@ -1,9 +1,15 @@
 drafin.sabill.my.id {
     reverse_proxy nextjs:3000
+    tls {
+        dns cloudflare {$CLOUDFLARE_API_TOKEN}
+    }
 }
 
 mcp-drafin.sabill.my.id {
     reverse_proxy mcp-sse:8081 {
         flush_interval -1
+    }
+    tls {
+        dns cloudflare {$CLOUDFLARE_API_TOKEN}
     }
 }

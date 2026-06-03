@@ -6,6 +6,8 @@ services:
     container_name: drafin-caddy
     restart: unless-stopped
     env_file: .env.production
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
     ports:
       - "80:80"
       - "443:443"
