@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -67,8 +68,8 @@ export default function LoginPage() {
                 aria-label="go home"
                 className="inline-block mb-4"
               >
-                <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto dark:hidden" />
-                <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto hidden dark:block" />
+                <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto dark:hidden object-contain" />
+                <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto hidden dark:block object-contain" />
               </Link>
               <h1 className="mb-1 mt-4 text-xl font-semibold">Sign In an account</h1>
               <p className="text-muted-foreground text-sm">Welcome back! Sign in to your account</p>

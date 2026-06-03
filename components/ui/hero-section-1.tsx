@@ -164,8 +164,8 @@ const HeroHeader = () => {
                 aria-label="Avla home"
                 className="flex cursor-pointer items-center gap-2"
               >
-                <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto dark:hidden" />
-                <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto hidden dark:block" />
+                <Image src="/logo-black.png" alt="Avla Logo" width={400} height={400} className="h-8 md:h-16 w-auto dark:hidden" />
+                <Image src="/logo-white.png" alt="Avla Logo" width={400} height={400} className="h-8 md:h-16 w-auto hidden dark:block" />
               </Link>
 
               <button

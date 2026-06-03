@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Menu, X, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import Image from "next/image";
 
 const Hero2 = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -23,7 +24,7 @@ const Hero2 = () => {
         {/* Navigation */}
         <nav className="container mx-auto flex items-center justify-between px-4 py-4 mt-6">
           <Link href="/" className="flex items-center">
-            <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto" />
+            <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}
@@ -70,7 +71,7 @@ const Hero2 = () => {
             >
               <div className="flex items-center justify-between">
                 <Link href="/" className="flex items-center">
-                  <img src="/logo-white.png" alt="Avla Logo" className="h-8 w-auto" />
+                  <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 w-auto" />
                 </Link>
                 <button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
                   <X className="h-6 w-6 text-white" />
@@ -103,7 +104,7 @@ const Hero2 = () => {
         {/* Badge */}
         <div className="mx-auto mt-6 flex max-w-fit items-center justify-center space-x-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-md">
           <span className="text-sm font-medium text-white">
-            AI Learning Platform 
+            AI Learning Platform
           </span>
           <ArrowRight className="h-4 w-4 text-white" />
         </div>

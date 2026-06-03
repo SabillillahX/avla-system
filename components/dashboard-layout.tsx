@@ -2,6 +2,7 @@
 
 import type React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   motion,
@@ -234,8 +235,8 @@ function DashboardSidebar({
             href="/"
             className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-blue-100/60 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
-            <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 dark:hidden" />
-            <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 hidden dark:block" />
+            <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 dark:hidden" />
+            <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 hidden dark:block" />
           </Link>
 
           <div className="flex items-center justify-between gap-1 px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:px-0">

@@ -7,6 +7,7 @@ import Link from "next/link"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 export const getRGBA = (
   cssColor: React.CSSProperties["color"],
@@ -323,8 +324,8 @@ export function FlickeringFooter() {
             href="/"
             className="flex cursor-pointer items-center gap-2 transition-opacity duration-200 hover:opacity-90"
           >
-            <img src="/logo-black.png" alt="Avla Logo" className="h-8 md:h-16 w-auto dark:hidden" />
-            <img src="/logo-white.png" alt="Avla Logo" className="h-8 md:h-16 w-auto hidden dark:block" />
+            <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto dark:hidden" />
+            <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto hidden dark:block" />
           </Link>
           <p className="font-medium leading-relaxed tracking-tight text-gray-600">
             Platform SaaS profesional untuk layanan teknologi informasi terkelola
