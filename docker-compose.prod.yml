@@ -2,7 +2,9 @@ name: drafin
 
 services:
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     container_name: drafin-caddy
     restart: unless-stopped
     env_file: .env.production
