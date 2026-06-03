@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import {
   Search,
   Play,
@@ -453,15 +454,15 @@ export default function MyVideoPage() {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 dark:bg-gray-800 dark:border-gray-700"
+      className="rounded-xl border border-blue-100 bg-white p-3 sm:p-5 shadow-sm transition-colors hover:border-blue-200 dark:bg-gray-800 dark:border-gray-700"
     >
-      <div className="flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${accent}`}>
-          <Icon className={`w-6 h-6 ${iconColor}`} />
+      <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 ${accent}`}>
+          <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColor}`} />
         </div>
-        <div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{value}</p>
+          <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{label}</p>
         </div>
       </div>
     </motion.div>
@@ -531,9 +532,9 @@ export default function MyVideoPage() {
             }`}
           onClick={() => handleVideoClick(video)}
         >
-          <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+          <div className="p-3 sm:p-4 flex flex-row items-start sm:items-center gap-3 sm:gap-5">
             {/* Thumbnail with processing overlay */}
-            <div className="relative w-full sm:w-44 h-40 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <div className="relative w-24 h-16 sm:w-44 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
               {video.thumbnail_path ? (
                 <Image
                   src={getStorageUrl(video.thumbnail_path)}
@@ -554,17 +555,17 @@ export default function MyVideoPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate mt-1">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate mt-0 sm:mt-1">
                     {video.title}
                   </h3>
                   {video.description && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1 pr-2">
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1 pr-2">
                       {video.description}
                     </p>
                   )}
                 </div>
-                {/* Always-visible action button safely placed above date layout and flush right */}
-                <div className="shrink-0 z-10 -mr-5 -mt-1 sm:-mr-4 sm:-mt-2">
+                {/* Always-visible action button safely placed */}
+                <div className="shrink-0 z-10 sm:-mt-1">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-12 sm:w-12 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0">
@@ -582,26 +583,24 @@ export default function MyVideoPage() {
                   </DropdownMenu>
                 </div>
               </div>
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                <Badge className={`text-xs ${cfg.color} border-0 pointer-events-none`}>
+              <div className="flex items-center gap-2 sm:gap-3 mt-1.5 sm:mt-2 flex-wrap">
+                <Badge className={`text-[10px] sm:text-xs ${cfg.color} border-0 pointer-events-none px-1.5 py-0`}>
                   <StatusIcon className={`w-3 h-3 mr-1 ${video.status === "processing" ? "animate-spin" : ""}`} />
                   {cfg.label}
                 </Badge>
                 {video.category && (
-                  <Badge variant="secondary" className="text-xs text-white pointer-events-none">
+                  <Badge variant="secondary" className="text-[10px] sm:text-xs text-white pointer-events-none px-1.5 py-0">
                     {getCategoryName(video.category)}
                   </Badge>
                 )}
-                <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                <span className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
                   {formatDate(video.created_at)}
                 </span>
                 {typeof progress === 'number' && (
-                  <div className="flex items-center gap-2 w-32 ml-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                      <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                    </div>
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{progress}%</span>
+                  <div className="flex items-center gap-1.5 w-24 sm:w-32 ml-1 sm:ml-2">
+                    <Progress value={progress} className="h-1.5 sm:h-2 flex-1" />
+                    <span className="text-[10px] sm:text-xs text-gray-500 font-medium">{Math.round(progress)}%</span>
                   </div>
                 )}
               </div>
@@ -719,11 +718,11 @@ export default function MyVideoPage() {
   )
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-6 w-full max-w-[100vw] overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Videos</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">My Videos</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             Manage and track all your uploaded video content
           </p>
@@ -735,16 +734,17 @@ export default function MyVideoPage() {
             variant="outline"
             onClick={fetchVideos}
             disabled={isLoading}
-            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-transparent"
+            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-transparent text-xs sm:text-sm"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 sm:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
           <Dialog open={isUploadOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800">
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Video
+              <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm">
+                <Upload className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Upload Video</span>
+                <span className="sm:hidden">Upload</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[600px] max-h-[90vh] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
@@ -1089,7 +1089,7 @@ export default function MyVideoPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {renderStatCard({ icon: Video, label: "Total Videos", value: stats.total, accent: "bg-blue-50 dark:bg-blue-900/40", iconColor: "text-blue-600 dark:text-blue-400" })}
         {renderStatCard({ icon: CheckCircle2, label: "Completed", value: stats.completed, accent: "bg-emerald-50 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400" })}
         {renderStatCard({ icon: BookOpen, label: "My Course", value: stats.courses, accent: "bg-purple-50 dark:bg-purple-900/40", iconColor: "text-purple-600 dark:text-purple-400" })}
@@ -1199,7 +1199,7 @@ export default function MyVideoPage() {
       {/* Blocked navigation toast */}
       {blockedToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
-          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xl backdrop-blur-sm border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3 px-4 sm:px-5 py-3 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xl backdrop-blur-sm border border-gray-200 dark:border-gray-700 max-w-[90vw]">
             <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center shrink-0">
               <Loader2 className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
             </div>

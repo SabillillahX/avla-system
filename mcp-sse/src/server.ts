@@ -16,11 +16,10 @@ import {
 import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
 import { TranscriptContext, getOrLoadTranscriptContext } from "./utils/cacheManager.js";
 
-// In memory stores
 const activeSSESessions = new Map<string, SSEServerTransport>();
 const notificationClientsByUserId = new Map<string, Response>();
 
-const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000;
 
 interface BufferedNotification {
     payload: NotificationPayload;
@@ -66,15 +65,13 @@ function emitNotificationToUser(userId: string, payload: NotificationPayload): v
 }
 
 async function callGeminiApi(
-    prompt: string, 
-    expectJson: boolean = true, 
+    prompt: string,
+    expectJson: boolean = true,
     transcriptContext?: TranscriptContext
 ): Promise<string> {
-    // If we are using the cache, we MUST use standard flash, not flash-lite
-    const model = transcriptContext?.isCached ? "gemini-1.5-flash" : "gemini-3.1-flash-lite-preview";
+    const model = transcriptContext?.isCached ? "gemini-2.5-flash" : "gemini-2.0-flash-lite";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ENV.geminiApiKey}`;
 
-    // If it's NOT cached, we must manually append the raw text to the prompt
     let finalPrompt = prompt;
     if (transcriptContext && !transcriptContext.isCached && transcriptContext.rawText) {
         finalPrompt += `\n\n## Full Video Transcript\n"""\n${transcriptContext.rawText}\n"""`;
@@ -84,12 +81,10 @@ async function callGeminiApi(
         contents: [{ parts: [{ text: finalPrompt }] }],
     };
 
-    // If it IS cached, we tell Gemini to look at the cache URI
     if (transcriptContext?.isCached && transcriptContext.cacheName) {
         payload.cachedContent = transcriptContext.cacheName;
     }
 
-    // 🌟 PERUBAHAN 1: Paksa respons berupa JSON murni agar tidak ada error 500 di Laravel
     if (expectJson) {
         payload.generationConfig = {
             responseMimeType: "application/json",
@@ -97,9 +92,8 @@ async function callGeminiApi(
     }
 
     const maxRetries = 3;
-    let delayMs = 2000; // Mulai dengan jeda 2 detik jika gagal
+    let delayMs = 2000;
 
-    // 🌟 PERUBAHAN 2: Exponential Backoff Loop
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const response = await fetch(url, {
@@ -113,7 +107,6 @@ async function callGeminiApi(
                 return data.candidates?.[0]?.content?.parts?.[0]?.text ?? (expectJson ? "[]" : "");
             }
 
-            // Jika kena Rate Limit (429) atau Server Overloaded (503)
             if (response.status === 429 || response.status >= 500) {
                 if (attempt === maxRetries) {
                     throw new Error(`Gemini API terus menolak setelah ${maxRetries} percobaan (HTTP ${response.status}).`);
@@ -121,20 +114,15 @@ async function callGeminiApi(
 
                 console.warn(`[Gemini] Server sibuk (HTTP ${response.status}). Menunggu ${delayMs / 1000} detik sebelum mencoba lagi... (Upaya ${attempt}/${maxRetries})`);
 
-                // Jeda (Sleep)
                 await new Promise(resolve => setTimeout(resolve, delayMs));
 
-                // Lipat gandakan waktu tunggu untuk percobaan berikutnya (2s -> 4s -> 8s)
                 delayMs *= 2;
-                continue; // Ulangi loop fetch
+                continue;
             }
-
-            // Jika error lain (misal 400 Bad Request, API key salah), langsung hentikan
             const errorBody = await response.text().catch(() => "Unknown error");
             throw new Error(`API Error HTTP ${response.status}: ${errorBody}`);
 
         } catch (error) {
-            // Tangani error jaringan (misal koneksi putus tiba-tiba)
             if (attempt === maxRetries) {
                 throw error;
             }
@@ -770,8 +758,7 @@ function createMcpServer(): McpServer {
                 assessment_status: "analyzing",
             });
 
-            // Determine target Bloom level based on previous assessment results
-            let targetBloomLevels = "C1, C2, and C3"; // Default for the first generated assessment
+            let targetBloomLevels = "C1, C2, and C3"; // Default assessment
             try {
                 const qaResponse = await fetch(`${ENV.backendUrl}/question-answers?per_page=100`, {
                     method: "GET",
@@ -781,14 +768,11 @@ function createMcpServer(): McpServer {
                     const qaBody = await qaResponse.json();
                     const answers = qaBody.data || [];
                     if (answers.length > 0) {
-                        // Get the newest video_id
                         const newestVideoId = answers[0].question?.video_id;
                         if (newestVideoId) {
-                            // Filter answers by this video_id
                             const videoAnswers = answers.filter((a: any) => a.question?.video_id === newestVideoId);
-                            // Count correct answers
                             const correctCount = videoAnswers.filter((a: any) => a.is_correct === true).length;
-                            // Check if more than 6 out of 10 are right
+
                             if (correctCount > 6) {
                                 targetBloomLevels = "C4 and C5";
                                 console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Upgrading to C4-C5.`);
@@ -836,7 +820,6 @@ function createMcpServer(): McpServer {
                     }
 
                     if (parsedQuestions && parsedQuestions.length === 10) {
-                        // Accept only if we get exactly 10
                         generatedQuestions = parsedQuestions.slice(0, 10);
                         break;
                     } else {
@@ -862,7 +845,6 @@ function createMcpServer(): McpServer {
                     });
 
                     if (attempt < maxAttempts - 1) {
-                        // Add delay before retry
                         await new Promise((resolve) => setTimeout(resolve, 1000));
                     }
                 }
@@ -904,7 +886,6 @@ function createMcpServer(): McpServer {
                 bloom_level: question.bloom_level,
             });
 
-            // Save questions individually (backend apiResource store handles one at a time)
             for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
                 const question = generatedQuestions[qIndex];
                 try {
@@ -1195,8 +1176,6 @@ function createMcpServer(): McpServer {
                 const ansData = await ansResponse.json();
                 const allAnswers = ansData.data || [];
 
-                // Find answers that need evaluation (e.g. score is null, or just re-evaluate all for this video)
-                // We'll evaluate all answers we fetched.
                 const evaluationItems: Array<{
                     question_id: string;
                     question: string;
@@ -1386,14 +1365,12 @@ app.get("/notifications", (req: Request, res: Response) => {
 app.post("/webhook/transcription-done", express.json(), async (req: Request, res: Response) => {
     const { video_id, user_id, status, token } = req.body ?? {};
 
-    // Ensure we have a token or a system-level auth mechanism to talk back to Laravel
     if (!video_id || !user_id || !status) {
         res.status(400).json({ error: "Missing required fields: video_id, user_id, status" });
         return;
     }
 
     if (status === "completed") {
-        // 1. Notify frontend via SSE immediately
         emitNotificationToUser(String(user_id), {
             event: "video_status_changed",
             video_id,
@@ -1407,8 +1384,6 @@ app.post("/webhook/transcription-done", express.json(), async (req: Request, res
 
         console.log(`[Webhook] transcription_ready sent for videoId = ${video_id}`);
 
-        // 2. Fire-and-forget background cache warming
-        // Pass the bearer token sent by Laravel so this background process can read the transcript endpoint safely
         if (token) {
             getOrLoadTranscriptContext(String(video_id), String(token))
                 .then(() => {
@@ -1422,11 +1397,9 @@ app.post("/webhook/transcription-done", express.json(), async (req: Request, res
         }
     }
 
-    // Always respond 200 OK instantly to Laravel so its queue workers don't timeout waiting for Gemini
     res.status(200).json({ received: true, preloading: status === "completed" && !!token });
 });
 
-// Generic webhook for any video status change (pending → processing → completed / failed)
 app.post("/webhook/video-status", express.json(), (req: Request, res: Response) => {
     const { video_id, user_id, status } = req.body ?? {};
 

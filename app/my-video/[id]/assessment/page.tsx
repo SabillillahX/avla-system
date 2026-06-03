@@ -130,15 +130,15 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto min-h-screen">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 sm:mb-8">
         <Button
           variant="ghost"
           onClick={() => router.back()}
-          className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4"
+          className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full px-4 self-start"
         >
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Video
         </Button>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Assessment</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">Assessment</h1>
       </div>
 
       {questions.length === 0 ? (
@@ -164,7 +164,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
             return (
               <div
                 key={question.uuid}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100 dark:border-gray-700 select-none"
+                className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100 dark:border-gray-700 select-none"
               >
                 <div className="mb-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -226,12 +226,12 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
             )
           })}
 
-          <div className="pt-6 pb-12 flex justify-end">
+          <div className="pt-6 pb-12 flex flex-col sm:flex-row sm:justify-end">
             <Button
               onClick={handleSubmitAll}
               disabled={!isAllAnswered || isSubmittingAll || isEverythingCompleted}
               size="lg"
-              className={`font-medium px-8 py-6 rounded-xl transition-all flex items-center gap-2 ${
+              className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${
                 isEverythingCompleted 
                   ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800" 
                   : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"

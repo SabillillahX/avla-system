@@ -72,23 +72,23 @@ function StatsSummary({ assessmentResults, quizResults, activeTab }: {
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
-        <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total</p>
-        <p className="text-2xl font-semibold text-gray-900 dark:text-white">{total}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
+        <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider mb-1">Total</p>
+        <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">{total}</p>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-blue-100 dark:border-blue-900/30 shadow-sm">
-        <p className="text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Correct</p>
-        <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">{correct}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-blue-100 dark:border-blue-900/30 shadow-sm">
+        <p className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Correct</p>
+        <p className="text-xl sm:text-2xl font-semibold text-blue-700 dark:text-blue-300">{correct}</p>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
-        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Not yet</p>
-        <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">{wrong}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
+        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Not yet</p>
+        <p className="text-xl sm:text-2xl font-semibold text-gray-700 dark:text-gray-300">{wrong}</p>
       </div>
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800 shadow-sm">
-        <p className="text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 sm:p-4 border border-blue-100 dark:border-blue-800 shadow-sm">
+        <p className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
           {totalScore !== null ? "Total Score" : "Accuracy"}
         </p>
-        <p className="text-2xl font-semibold text-blue-700 dark:text-blue-300">
+        <p className="text-xl sm:text-2xl font-semibold text-blue-700 dark:text-blue-300">
           {totalScore !== null ? `${totalScore}` : `${accuracy}%`}
         </p>
       </div>
@@ -147,7 +147,7 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your learning recap</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Your learning recap</h1>
           <p className="text-gray-400 dark:text-gray-500 text-sm">Here's how it went — no stress, just growth</p>
         </div>
       </div>
@@ -223,7 +223,7 @@ function AssessmentResultCard({ result }: { result: AssessmentResult }) {
   const scoreColorClass = getScoreColor(score ?? 0)
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
 
       {/* Top row */}
       <div className="flex items-start gap-3 mb-4">
@@ -283,7 +283,7 @@ function QuizResultCard({ result }: { result: QuizResult }) {
   const statusLabel = getStatusLabel(is_correct)
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
 
       <div className="flex items-start gap-3 mb-4">
         <div className="mt-0.5 flex-shrink-0">

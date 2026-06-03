@@ -19,6 +19,7 @@ import {
   ImageIcon,
   Check,
   CheckCheck,
+  ArrowLeft,
 } from "lucide-react"
 
 interface Message {
@@ -47,6 +48,7 @@ export default function ChatsPage() {
   const [selectedChatId, setSelectedChatId] = useState<string>("chat_1")
   const [searchQuery, setSearchQuery] = useState("")
   const [newMessage, setNewMessage] = useState("")
+  const [showMobileChat, setShowMobileChat] = useState(false)
 
   // Mock chat data
   const [chats] = useState<Chat[]>([
@@ -373,7 +375,7 @@ export default function ChatsPage() {
   return (
     <div className="flex h-[calc(100vh-120px)]">
       {/* Chat List Sidebar */}
-      <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className={`${showMobileChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col`}>
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Chats</h1>
@@ -393,7 +395,7 @@ export default function ChatsPage() {
           {filteredChats.map((chat) => (
             <div
               key={chat.id}
-              onClick={() => setSelectedChatId(chat.id)}
+              onClick={() => { setSelectedChatId(chat.id); setShowMobileChat(true); }}
               className={`p-4 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
                 selectedChatId === chat.id ? "bg-blue-50 dark:bg-blue-900/20 border-r-2 border-r-blue-500" : ""
               }`}
@@ -459,12 +461,19 @@ export default function ChatsPage() {
       </div>
 
       {/* Chat Content */}
-      <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
+      <div className={`${showMobileChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-gray-50 dark:bg-gray-900`}>
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3 sm:p-4">
               <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setShowMobileChat(false)}
+                  className="md:hidden mr-2 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0"
+                  aria-label="Back to chat list"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </button>
                 <div className="flex items-center space-x-3">
                   <div className="relative">
                     {selectedChat.type === "individual" ? (
@@ -497,13 +506,13 @@ export default function ChatsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1 sm:space-x-2">
                   {selectedChat.type === "individual" && (
                     <>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" className="hidden sm:inline-flex">
                         <Phone className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" className="hidden sm:inline-flex">
                         <Video className="w-4 h-4" />
                       </Button>
                     </>
@@ -527,7 +536,7 @@ export default function ChatsPage() {
 
                 return (
                   <div key={message.id} className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}>
-                    <div className={`flex items-end space-x-2 max-w-xs lg:max-w-md`}>
+                    <div className={`flex items-end space-x-2 max-w-[85%] sm:max-w-xs lg:max-w-md`}>
                       {!isCurrentUser && (
                         <Avatar className="w-8 h-8">
                           <AvatarImage src={sender?.imageURL || "/placeholder.svg"} />
@@ -576,12 +585,12 @@ export default function ChatsPage() {
             </div>
 
             {/* Message Input */}
-            <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-              <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="icon">
+            <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-2 sm:p-4">
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <Button variant="ghost" size="icon" className="hidden sm:inline-flex">
                   <Paperclip className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="hidden sm:inline-flex">
                   <ImageIcon className="w-4 h-4" />
                 </Button>
                 <div className="flex-1 relative">
@@ -596,7 +605,7 @@ export default function ChatsPage() {
                     <Smile className="w-4 h-4" />
                   </Button>
                 </div>
-                <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                <Button onClick={handleSendMessage} disabled={!newMessage.trim()} size="icon" className="sm:px-4 sm:w-auto">
                   <Send className="w-4 h-4" />
                 </Button>
               </div>

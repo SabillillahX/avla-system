@@ -25,6 +25,7 @@ import {
   User,
   Users,
   Zap,
+  ClipboardList,
 } from "lucide-react"
 
 import { useAuth } from "@/contexts/AuthContext"
@@ -56,6 +57,7 @@ import {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { people } from "@/lib/people"
 import { cn } from "@/lib/utils"
@@ -66,11 +68,13 @@ interface DashboardLayoutProps {
 
 const navItems = [
   { name: "My Video", icon: FileText, path: "/my-video" },
-  { name: "Courses", icon: CheckCircle, path: "/courses" },
-  { name: "My Course", icon: Users, path: "/my-course" },
+  { name: "Courses", icon: CheckCircle, path: "/courses", visibleFor: ["student", "admin"] },
+  { name: "My Course", icon: Users, path: "/my-course", visibleFor: ["student", "admin"] },
   { name: "Chats", icon: MessageSquare, path: "/chats" },
+  { name: "Group Chat", icon: Users, path: "/group-chat" },
   { name: "Documents", icon: FileText, path: "/documents" },
   { name: "Receipts", icon: Receipt, path: "/receipts" },
+  { name: "Class Management", icon: ClipboardList, path: "/classes", visibleFor: ["teacher", "admin"] },
 ]
 
 const notifications = [
@@ -139,9 +143,9 @@ function NotificationsPopover() {
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-80 border-blue-100 bg-white p-0 shadow-lg"
+        className="w-[calc(100vw-2rem)] sm:w-80 border-blue-100 bg-white p-0 shadow-lg"
         align="end"
-        side="right"
+        side="bottom"
       >
         <div className="space-y-3 p-4">
           <div className="flex items-center justify-between">
@@ -197,14 +201,25 @@ type SidebarUser = {
 
 function DashboardSidebar({
   currentUser,
+  userRoles,
   onLogout,
 }: {
   currentUser: SidebarUser
+  userRoles?: string[]
   onLogout: () => void
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const reduceMotion = useReducedMotion()
+  const { setOpenMobile, isMobile } = useSidebar()
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.visibleFor || !userRoles || userRoles.length === 0) {
+      return true
+    }
+
+    return item.visibleFor.some((role) => userRoles.includes(role))
+  })
 
   const NavWrapper = reduceMotion ? "div" : motion.div
 
@@ -243,7 +258,7 @@ function DashboardSidebar({
                 animate={reduceMotion ? undefined : "visible"}
                 className="flex flex-col gap-0.5"
               >
-                {navItems.map((item) => {
+                {visibleNavItems.map((item) => {
                   const isActive = pathname === item.path
                   const ItemWrapper = reduceMotion ? "div" : motion.div
 
@@ -255,7 +270,12 @@ function DashboardSidebar({
                         <SidebarMenuButton
                           isActive={isActive}
                           tooltip={item.name}
-                          onClick={() => router.push(item.path)}
+                          onClick={() => {
+                            router.push(item.path)
+                            if (isMobile) {
+                              setOpenMobile(false)
+                            }
+                          }}
                           className={cn(
                             "cursor-pointer transition-colors duration-200",
                             "hover:bg-blue-100/70 hover:text-primary",
@@ -294,11 +314,11 @@ function DashboardSidebar({
                     : "U"}
                 </AvatarFallback>
               </Avatar>
-              <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                <p className="truncate text-sm font-medium text-gray-900">
+              <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden group-data-[collapsible=icon]:hidden">
+                <p className="truncate text-sm font-medium text-gray-900 leading-none mb-1">
                   {currentUser.name}
                 </p>
-                <p className="truncate text-xs text-gray-500">
+                <p className="truncate text-xs text-gray-500 leading-none">
                   {currentUser.email}
                 </p>
               </div>
@@ -386,6 +406,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="flex min-h-svh w-full bg-[#EFF6FF]">
         <DashboardSidebar
           currentUser={currentUser}
+          userRoles={user?.roles}
           onLogout={() => logout()}
         />
 
@@ -408,9 +429,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0, y: 12, scale: 0.96 }}
             transition={{ duration: 0.28, ease: "easeOut" }}
-            className="fixed bottom-6 right-6 z-50"
+            className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50"
           >
-            <div className="w-[380px] max-w-[calc(100vw-2rem)] rounded-2xl border border-blue-100 bg-white/95 p-5 shadow-xl shadow-blue-900/10 backdrop-blur-xl">
+            <div className="w-[calc(100vw-2rem)] sm:w-[380px] max-w-[380px] rounded-2xl border border-blue-100 bg-white/95 p-4 sm:p-5 shadow-xl shadow-blue-900/10 backdrop-blur-xl">
               <p className="text-sm font-semibold text-gray-900">AI Quiz Upload</p>
 
               {(aiProcessState === "connecting" ||

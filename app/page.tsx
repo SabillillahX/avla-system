@@ -35,7 +35,7 @@ const bentoFeatures = [
       "Generate questions and evaluations automatically from video content using advanced AI analysis.",
     href: "#features",
     cta: "Explore AI tools",
-    className: "col-span-3 lg:col-span-2",
+    className: "col-span-1 sm:col-span-3 lg:col-span-2",
     background: (
       <div className="absolute inset-0 bg-gradient-to-br from-blue-50/90 via-white/50 to-sky-50/60" />
     ),
@@ -47,7 +47,7 @@ const bentoFeatures = [
       "Monitor engagement and performance metrics with comprehensive dashboards and reporting.",
     href: "#features",
     cta: "View analytics",
-    className: "col-span-3 lg:col-span-1",
+    className: "col-span-1 sm:col-span-3 lg:col-span-1",
     background: (
       <Marquee
         vertical
@@ -80,7 +80,7 @@ const bentoFeatures = [
       "Enterprise-grade security with end-to-end encryption and industry-standard compliance.",
     href: "#pricing",
     cta: "Security details",
-    className: "col-span-3 lg:col-span-1",
+    className: "col-span-1 sm:col-span-3 lg:col-span-1",
     background: (
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="flex h-32 w-32 items-center justify-center rounded-full border border-blue-100 bg-blue-50/80">
@@ -96,7 +96,7 @@ const bentoFeatures = [
       "Orchestrate assessments, approvals, and notifications with measurable, scalable IT service flows.",
     href: "/auth/register",
     cta: "Start free trial",
-    className: "col-span-3 lg:col-span-2",
+    className: "col-span-1 sm:col-span-3 lg:col-span-2",
     background: (
       <div className="absolute inset-0 overflow-hidden">
         <Marquee
@@ -142,14 +142,14 @@ export default function LandingPage() {
     <div className="min-h-screen overflow-x-hidden bg-[#EFF6FF] text-gray-900" suppressHydrationWarning>
       <HeroSection />
 
-      <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-20 px-6 py-16">
+      <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-12 sm:gap-20 px-4 sm:px-6 py-10 sm:py-16">
 
         <section id="features" className="scroll-mt-24">
           <div className="mb-10 text-center">
-            <h1 className="mt-4 text-4xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            <h1 className="mt-4 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
               Everything you need for video assessment
             </h1>
-            <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-gray-600">
+            <p className="mx-auto mt-3 max-w-2xl text-sm sm:text-base leading-relaxed text-gray-600">
               Effective learning process, standardized curriculum, and real-time dashboard —
               designed for effective learning process.
             </p>
@@ -196,13 +196,13 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <div className="w-full bg-slate-900 py-16 px-6">
+      <div className="w-full bg-slate-900 py-10 sm:py-16 px-4 sm:px-6">
         <div className="mx-auto max-w-6xl">
           <TestimonialsSection />
         </div>
       </div>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-6 py-16">
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 sm:gap-16 px-4 sm:px-6 py-10 sm:py-16">
         <FAQSection />
         <CTASection />
         <FooterSection />
