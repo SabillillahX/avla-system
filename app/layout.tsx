@@ -26,7 +26,7 @@ export default function RootLayout({
 }
 
 export const metadata = {
-    title: "Avla - AI Video Assessment Platform",
+    title: "Drafin- AI Video Assessment Platform",
     description: "Platform SaaS profesional untuk layanan teknologi informasi terkelola",
     generator: "v0.dev",
 }

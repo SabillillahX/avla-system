@@ -1342,6 +1342,7 @@ app.get("/notifications", (req: Request, res: Response) => {
         "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Credentials": "true",
         Vary: "Origin",
+        "X-Accel-Buffering": "no"
     });
 
     res.write(":\n\n");
