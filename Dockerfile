@@ -1,5 +1,6 @@
 FROM node:22-alpine AS deps
 
+RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@10 --activate
 
 WORKDIR /app
@@ -7,6 +8,8 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 
 RUN pnpm install --frozen-lockfile
+
+RUN pnpm add sharp
 
 FROM node:22-alpine AS builder
 
@@ -39,8 +42,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
-    
-RUN npm install sharp
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
