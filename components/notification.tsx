@@ -26,7 +26,7 @@ export function useNotification(): NotificationContextValue {
 
 const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL
 const MCP_MAX_CONNECT_ATTEMPTS = 4
-const SSE_HEARTBEAT_TIMEOUT_MS = 45_000
+const SSE_HEARTBEAT_TIMEOUT_MS = 180_000
 const STALE_PROCESS_TIMEOUT_MS = 60_000
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
@@ -39,12 +39,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     // Refs for timers & connection objects — safe to mutate without re-renders.
     const eventSourceRef = useRef<EventSource | null>(null)
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const heartbeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const isUnmountedRef = useRef(false)
-    const reconnectAttemptsRef = useRef(0)
     const activeJobVideoIdRef = useRef<string | null>(null)
     const aiProcessStateRef = useRef<AiProcessState>("idle")
 
@@ -75,15 +72,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }, STALE_PROCESS_TIMEOUT_MS)
     }, [scheduleAutoHide])
 
-    const resetHeartbeatTimer = useCallback(() => {
-        clearTimer(heartbeatTimerRef)
-        heartbeatTimerRef.current = setTimeout(() => {
-            console.warn("[Notifications] Heartbeat timeout — forcing reconnect.")
-            eventSourceRef.current?.close()
-            eventSourceRef.current = null
-            if (!isUnmountedRef.current) connectSse()
-        }, SSE_HEARTBEAT_TIMEOUT_MS)
-    }, [])
+
 
     const runMcpWithRetry = useCallback(async (params: {
         token: string
@@ -162,48 +151,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (!MCP_SERVER_URL) return
         if (isUnmountedRef.current || !user?.id) return
 
-        eventSourceRef.current?.close()
+        // Mencegah koneksi ganda jika sudah ada instance (sesuai saran yang benar)
+        if (eventSourceRef.current) return
 
+        console.log("[Notifications] Menginisialisasi koneksi global...")
         const eventSource = new EventSource(`${MCP_SERVER_URL}/notifications?userId=${user.id}`)
         eventSourceRef.current = eventSource
 
         eventSource.onopen = () => {
-            reconnectAttemptsRef.current = 0
-            clearTimer(reconnectTimerRef)
-            resetHeartbeatTimer()
             console.log("[Notifications] SSE connected.")
         }
 
-        eventSource.addEventListener("ping", () => {
-            resetHeartbeatTimer();
-        });
-
-        eventSource.onerror = () => {
-            if (isUnmountedRef.current) return
-
-            if (reconnectTimerRef.current) return
-
-            reconnectAttemptsRef.current += 1
-            const delayMs = Math.min(10_000, 1_000 * reconnectAttemptsRef.current)
-            console.warn(`[Notifications] SSE error — reconnect in ${delayMs}ms`)
-
-            reconnectTimerRef.current = setTimeout(() => {
-                reconnectTimerRef.current = null
-                connectSse()
-            }, delayMs)
-
-            if (
-                aiProcessStateRef.current === "connecting" ||
-                aiProcessStateRef.current === "generating"
-            ) {
-                setAiStatusMessage("Koneksi notifikasi terputus. Menyambung ulang...")
-            }
+        eventSource.onerror = (error) => {
+            console.error("[Notifications] SSE error/terputus. EventSource akan mencoba reconnect otomatis.", error)
         }
 
         eventSource.onmessage = async (event: MessageEvent) => {
-            // Any message (including heartbeat comments) resets the dead-connection timer.
-            resetHeartbeatTimer()
-
             if (!event.data || event.data.trim() === "{}" || event.data.trim() === "") return;
 
             let data: Record<string, unknown>
@@ -333,7 +296,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     break
             }
         }
-    }, [user?.id, armStaleProtection, resetHeartbeatTimer, runMcpWithRetry, scheduleAutoHide])
+    }, [user?.id, armStaleProtection, runMcpWithRetry, scheduleAutoHide])
 
     // ---------------------------------------------------------------------------
     // Lifecycle — connect once when user is available, disconnect on unmount.
@@ -350,11 +313,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             isUnmountedRef.current = true
             clearTimer(hideTimerRef)
             clearTimer(staleTimerRef)
-            clearTimer(reconnectTimerRef)
-            clearTimer(heartbeatTimerRef)
-            eventSourceRef.current?.close()
-            eventSourceRef.current = null
-            console.log("[Notifications] SSE connection closed (unmount).")
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close()
+                eventSourceRef.current = null
+                console.log("[Notifications] SSE connection closed (unmount).")
+            }
         }
     }, [user?.id, connectSse])
 
