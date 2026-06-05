@@ -8,55 +8,75 @@ export interface TranscriptContext {
     expiresAt: number;
 }
 
-// In-memory store (Key: videoId)
 const transcriptStore = new Map<string, TranscriptContext>();
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Helper to estimate tokens (1 token ~= 4 characters in English/Indonesian)
 function estimateTokens(text: string): number {
     return Math.ceil(text.length / 4);
 }
 
-// Add this signature update to handle background fetching
 export async function getOrLoadTranscriptContext(
-    videoId: string, 
-    token: string, // Needed to fetch from Laravel if segments aren't passed yet
+    videoId: string,
+    token: string,
     transcriptSegments?: TranscriptSegment[]
 ): Promise<TranscriptContext> {
+    // 1. Cek Cache Memory
     const existing = transcriptStore.get(videoId);
     if (existing && existing.expiresAt > Date.now()) {
-        return existing; 
+        return existing;
     }
 
     let segments = transcriptSegments;
 
-    // If no segments were passed, go fetch them from the Laravel backend
+    // 2. Jika tidak ada, fetch dari Laravel dengan Retry Logic (menangani 401 Race Condition)
     if (!segments) {
-        console.log(`[Cache-Preloader] Fetching transcript from backend for video ${videoId}...`);
-        const response = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        let lastError = null;
+        const maxRetries = 3;
 
-        if (!response.ok) {
-            throw new Error(`Failed to fetch transcript for preloading: HTTP ${response.status}`);
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                console.log(`[Cache-Preloader] Fetching video ${videoId} (Attempt ${i + 1})...`);
+                const response = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    },
+                });
+
+                // Jika 401, tunggu sebentar lalu retry (memberi waktu Laravel sinkronisasi token)
+                if (response.status === 401) {
+                    throw new Error("401");
+                }
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+
+                const body = await response.json();
+                segments = body.data ?? [];
+                break; // Berhasil, keluar dari loop
+            } catch (err: any) {
+                lastError = err;
+                if (err.message === "401" && i < maxRetries - 1) {
+                    await sleep(1500); // Tunggu 1.5 detik untuk retry
+                    continue;
+                }
+                throw err;
+            }
         }
-
-        const body = await response.json();
-        segments = body.data ?? [];
     }
 
     if (!segments || segments.length === 0) {
         throw new Error("Transcript segments are empty. Cannot cache.");
     }
 
+    // 3. Proses Transkrip
     const fullTranscript = segments.map(seg => seg.text).join(" ").trim();
     const tokenCount = estimateTokens(fullTranscript);
-    
-    // Gemini Context Caching API (>32k tokens)
+
+    // 4. Gemini Context Caching API
     if (tokenCount >= 32768) {
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${ENV.geminiApiKey}`;
@@ -64,9 +84,9 @@ export async function getOrLoadTranscriptContext(
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    model: "models/gemini-1.5-flash", 
+                    model: "models/gemini-1.5-flash",
                     contents: [{ parts: [{ text: fullTranscript }] }],
-                    ttl: "3600s", 
+                    ttl: "3600s",
                 }),
             });
 
@@ -78,23 +98,19 @@ export async function getOrLoadTranscriptContext(
                     expiresAt: Date.now() + 55 * 60 * 1000
                 };
                 transcriptStore.set(videoId, context);
-                console.log(`[Cache API] Preloaded & Cached large video context: ${videoId}`);
                 return context;
             }
         } catch (error) {
-            console.warn(`[Cache API] Background caching failed for ${videoId}, falling back to raw text.`);
+            console.warn(`[Cache API] Background caching failed, fallback to memory.`);
         }
     }
 
-    // In-memory fallback for shorter videos
+    // 5. In-memory fallback
     const context = {
         isCached: false,
         rawText: fullTranscript,
-        expiresAt: Date.now() + 60 * 60 * 1000 
+        expiresAt: Date.now() + 60 * 60 * 1000
     };
     transcriptStore.set(videoId, context);
-    console.log(`[Cache Memory] Preloaded short video into memory: ${videoId} (~${tokenCount} tokens)`);
     return context;
 }
-    
-
