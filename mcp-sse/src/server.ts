@@ -17,7 +17,7 @@ import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput, parseSemanticAsse
 import { TranscriptContext, getOrLoadTranscriptContext } from "./utils/cacheManager.js";
 
 const activeSSESessions = new Map<string, SSEServerTransport>();
-const notificationClientsByUserId = new Map<string, Response>();
+const notificationClientsByUserId = new Map<string, Set<Response>>();
 
 const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000;
 
@@ -53,15 +53,28 @@ function flushPendingNotifications(userId: string, client: Response): void {
 }
 
 function emitNotificationToUser(userId: string, payload: NotificationPayload): void {
-    const client = notificationClientsByUserId.get(userId);
+    const clients = notificationClientsByUserId.get(userId);
 
-    if (!client) {
+    if (!clients || clients.size === 0) {
         bufferNotificationForUser(userId, payload);
         console.log(`[Notifications] userId=${userId} offline — buffered event "${payload.event}"`);
         return;
     }
 
-    client.write(`data: ${JSON.stringify(payload)}\n\n`);
+    const deadClients = new Set<Response>();
+    clients.forEach(client => {
+        if (client.writableEnded || client.closed) {
+            deadClients.add(client);
+            return;
+        }
+        client.write(`data: ${JSON.stringify(payload)}\n\n`);
+    });
+
+    // Cleanup any detected dead clients
+    deadClients.forEach(client => clients.delete(client));
+    if (clients.size === 0) {
+        notificationClientsByUserId.delete(userId);
+    }
 }
 
 async function callGeminiApi(
@@ -1333,6 +1346,10 @@ app.get("/notifications", (req: Request, res: Response) => {
         return;
     }
 
+    // Disable Node.js timeouts for this long-lived connection
+    req.socket.setTimeout(0);
+    req.socket.setKeepAlive(true);
+
     const allowedOrigin = resolveAllowedOriginHeader(req.headers.origin);
 
     res.writeHead(200, {
@@ -1347,21 +1364,30 @@ app.get("/notifications", (req: Request, res: Response) => {
 
     res.write(":\n\n");
 
-    notificationClientsByUserId.set(userId, res);
-    console.log(`[Notifications] Client connected: userId = ${userId}`);
+    if (!notificationClientsByUserId.has(userId)) {
+        notificationClientsByUserId.set(userId, new Set());
+    }
+    notificationClientsByUserId.get(userId)!.add(res);
+    console.log(`[Notifications] Client connected: userId = ${userId} (Total clients: ${notificationClientsByUserId.get(userId)!.size})`);
 
     flushPendingNotifications(userId, res);
 
     const heartbeatInterval = setInterval(() => {
-        if (!res.writableEnded) {
+        if (!res.writableEnded && !res.closed) {
             res.write("event: ping\ndata: {}\n\n");
         }
     }, 15_000);
 
     req.on("close", () => {
         clearInterval(heartbeatInterval);
-        notificationClientsByUserId.delete(userId);
-        console.log(`[Notifications] Client disconnected: userId = ${userId}`);
+        const clients = notificationClientsByUserId.get(userId);
+        if (clients) {
+            clients.delete(res);
+            if (clients.size === 0) {
+                notificationClientsByUserId.delete(userId);
+            }
+        }
+        console.log(`[Notifications] Client disconnected: userId = ${userId} (Remaining: ${clients?.size || 0})`);
     });
 });
 
@@ -1426,6 +1452,10 @@ app.post("/webhook/video-status", express.json(), (req: Request, res: Response) 
 
 
 app.get("/sse", async (req: Request, res: Response) => {
+    // Disable Node.js timeouts for this long-lived connection
+    req.socket.setTimeout(0);
+    req.socket.setKeepAlive(true);
+
     const allowedOrigin = resolveAllowedOriginHeader(req.headers.origin);
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Credentials", "true");

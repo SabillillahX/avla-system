@@ -298,10 +298,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
     }, [user?.id, armStaleProtection, runMcpWithRetry, scheduleAutoHide])
 
-    // ---------------------------------------------------------------------------
-    // Lifecycle — connect once when user is available, disconnect on unmount.
-    // ---------------------------------------------------------------------------
-
     useEffect(() => {
         if (!MCP_SERVER_URL) return
         if (!user?.id) return
@@ -314,6 +310,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             clearTimer(hideTimerRef)
             clearTimer(staleTimerRef)
             if (eventSourceRef.current) {
+                // Tepat di sini! Tambahkan log warna merahnya
+                console.log("🚨 REACT MENGHANCURKAN KOMPONEN (UNMOUNT)! KONEKSI SSE DIPUTUS SECARA PAKSA OLEH FRONTEND!");
+
                 eventSourceRef.current.close()
                 eventSourceRef.current = null
                 console.log("[Notifications] SSE connection closed (unmount).")
