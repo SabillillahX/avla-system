@@ -1353,7 +1353,9 @@ app.get("/notifications", (req: Request, res: Response) => {
     flushPendingNotifications(userId, res);
 
     const heartbeatInterval = setInterval(() => {
-        res.write("event: ping\ndata: {}\n\n");
+        if (!res.writableEnded) {
+            res.write("event: ping\ndata: {}\n\n");
+        }
     }, 15_000);
 
     req.on("close", () => {
@@ -1428,6 +1430,9 @@ app.get("/sse", async (req: Request, res: Response) => {
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // Disable proxy buffering
 
     const transport = new SSEServerTransport("/messages", res);
     const mcpServer = createMcpServer();
@@ -1436,7 +1441,15 @@ app.get("/sse", async (req: Request, res: Response) => {
     activeSSESessions.set(transport.sessionId, transport);
     console.log(`[SSE] Session opened: ${transport.sessionId}`);
 
+    // Send keep-alive comments to prevent production proxy timeouts
+    const keepAliveInterval = setInterval(() => {
+        if (!res.writableEnded) {
+            res.write(":\n\n");
+        }
+    }, 15_000);
+
     req.on("close", () => {
+        clearInterval(keepAliveInterval);
         activeSSESessions.delete(transport.sessionId);
         console.log(`[SSE] Session closed: ${transport.sessionId}`);
     });
