@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile.caddy
     container_name: drafin-caddy
     restart: unless-stopped
-    env_file: .env.production
+    env_file: .env 
     environment:
       - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
     ports:
@@ -33,7 +33,7 @@ services:
         NEXT_PUBLIC_MCP_SERVER_URL: ${NEXT_PUBLIC_MCP_SERVER_URL}
     container_name: drafin-nextjs
     restart: unless-stopped
-    env_file: .env.production
+    env_file: .env 
     expose:
       - "3000"
     environment:
@@ -76,6 +76,7 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
+
 volumes:
   caddy_data:
   caddy_config:
