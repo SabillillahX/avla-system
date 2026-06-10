@@ -9,8 +9,6 @@ COPY package.json pnpm-lock.yaml ./
 
 RUN pnpm install --frozen-lockfile
 
-RUN pnpm add sharp
-
 FROM node:22-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@10 --activate
