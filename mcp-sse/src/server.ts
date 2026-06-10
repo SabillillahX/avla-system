@@ -1,3 +1,4 @@
+import { Groq } from 'groq-sdk';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express, { Request, Response } from "express";
@@ -16,9 +17,9 @@ import {
 import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
 import { TranscriptContext, getOrLoadTranscriptContext } from "./utils/cacheManager.js";
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const activeSSESessions = new Map<string, SSEServerTransport>();
 const notificationClientsByUserId = new Map<string, Set<Response>>();
-
 const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000;
 
 interface BufferedNotification {
@@ -70,38 +71,22 @@ function emitNotificationToUser(userId: string, payload: NotificationPayload): v
         client.write(`data: ${JSON.stringify(payload)}\n\n`);
     });
 
-    // Cleanup any detected dead clients
     deadClients.forEach(client => clients.delete(client));
     if (clients.size === 0) {
         notificationClientsByUserId.delete(userId);
     }
 }
 
-async function callGeminiApi(
+async function callGroqApi(
     prompt: string,
     expectJson: boolean = true,
     transcriptContext?: TranscriptContext
 ): Promise<string> {
-    const model = transcriptContext?.isCached ? "gemini-2.5-flash" : "gemini-2.0-flash-lite";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ENV.geminiApiKey}`;
+    const groq = new Groq({ apiKey: ENV.groqApiKey });
 
     let finalPrompt = prompt;
-    if (transcriptContext && !transcriptContext.isCached && transcriptContext.rawText) {
+    if (transcriptContext && transcriptContext.rawText) {
         finalPrompt += `\n\n## Full Video Transcript\n"""\n${transcriptContext.rawText}\n"""`;
-    }
-
-    const payload: any = {
-        contents: [{ parts: [{ text: finalPrompt }] }],
-    };
-
-    if (transcriptContext?.isCached && transcriptContext.cacheName) {
-        payload.cachedContent = transcriptContext.cacheName;
-    }
-
-    if (expectJson) {
-        payload.generationConfig = {
-            responseMimeType: "application/json",
-        };
     }
 
     const maxRetries = 3;
@@ -109,43 +94,34 @@ async function callGeminiApi(
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const response = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [
+                    {
+                        role: "user",
+                        content: finalPrompt
+                    }
+                ],
+                model: "llama-3.3-70b-versatile",
+                temperature: 0.2,
+                max_completion_tokens: 6000,
+                top_p: 1,
+                stream: false,
+                stop: null
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                return data.candidates?.[0]?.content?.parts?.[0]?.text ?? (expectJson ? "[]" : "");
-            }
+            return chatCompletion.choices[0]?.message?.content || (expectJson ? "[]" : "");
 
-            if (response.status === 429 || response.status >= 500) {
-                if (attempt === maxRetries) {
-                    throw new Error(`Gemini API terus menolak setelah ${maxRetries} percobaan (HTTP ${response.status}).`);
-                }
-
-                console.warn(`[Gemini] Server sibuk (HTTP ${response.status}). Menunggu ${delayMs / 1000} detik sebelum mencoba lagi... (Upaya ${attempt}/${maxRetries})`);
-
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-
-                delayMs *= 2;
-                continue;
-            }
-            const errorBody = await response.text().catch(() => "Unknown error");
-            throw new Error(`API Error HTTP ${response.status}: ${errorBody}`);
-
-        } catch (error) {
+        } catch (error: any) {
             if (attempt === maxRetries) {
                 throw error;
             }
-            console.warn(`[Gemini] Network/Fetch error: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delayMs / 1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
+            console.warn(`[Groq] Error: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delayMs / 1000}s...`);
+            await sleep(delayMs);
             delayMs *= 2;
         }
     }
 
-    throw new Error("Gagal memanggil API Gemini secara tidak terduga.");
+    throw new Error("Failed to call Groq API. Unexpected error.");
 }
 
 
@@ -169,7 +145,6 @@ function calculateTargetQuizCount(durationSeconds: number): number {
     return Math.min(10, Math.max(4, Math.ceil(minutes / 2)));
 }
 
-// Transcript
 function chunkTranscriptByCount(
     segments: TranscriptSegment[],
     targetCount: number
@@ -292,6 +267,7 @@ Distribute the 10 questions across the following levels: ${targetBloomLevels}
 - "semantic_keywords": An array of 5-10 essential terms that must be present in the student's response.
 
 ## Strict Output Format (JSON Only)
+Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
 [
   {
     "type": "short_answer",
@@ -302,8 +278,6 @@ Distribute the 10 questions across the following levels: ${targetBloomLevels}
     "semantic_keywords": ["keyword1", "keyword2"],
     "explanation": "Logic behind the correct concept."
   }
-]
-
 ]`;
 }
 
@@ -324,8 +298,7 @@ function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number): s
 - **C6 (Create):** Focus on producing new or original work based on the material.
 
 ### OUTPUT FORMAT (Strict JSON)
-Return ONLY a JSON array of objects. Do not include markdown formatting or explanations outside the JSON.
-
+Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
 [
   {
     "type": "short_answer",
@@ -336,8 +309,6 @@ Return ONLY a JSON array of objects. Do not include markdown formatting or expla
     "semantic_keywords": ["keyword1", "keyword2", "keyword3"],
     "explanation": "Pedagogical explanation of why this is the correct concept."
   }
-]
-
 ]`;
 }
 
@@ -355,7 +326,6 @@ function createMcpServer(): McpServer {
         version: "1.0.0",
     });
 
-    // Tool: getCurrentUser 
     server.tool(
         "getCurrentUser",
         "Get information about the currently logged-in user",
@@ -381,7 +351,6 @@ function createMcpServer(): McpServer {
         }
     );
 
-    // Tool: analyzeVideoAudioPaths 
     server.tool(
         "analyzeVideoAudioPaths",
         "Fetch user's video data and use Gemini to answer questions about their audio paths",
@@ -411,13 +380,12 @@ function createMcpServer(): McpServer {
             }));
 
             const fullPrompt = `Here is the user's video audio path data:\n${JSON.stringify(audioPathData, null, 2)}\n\nTask: ${prompt}\n\nAnalyze strictly based on the provided data.`;
-            const aiAnswer = await callGeminiApi(fullPrompt, false);
+            const aiAnswer = await callGroqApi(fullPrompt, false);
 
             return { content: [{ type: "text", text: aiAnswer }] };
         }
     );
 
-    // Tool: generateAdaptiveVideoQuizzes 
     server.tool(
         "generateAdaptiveVideoQuizzes",
         "Generate adaptive multiple-choice quizzes from video transcripts. Quiz count and intervals are automatically calculated from video duration. Minimum 3 quizzes for videos under 5 minutes, minimum 4 for videos over 5 minutes, maximum 10 for videos 10 minutes or longer.",
@@ -484,7 +452,6 @@ function createMcpServer(): McpServer {
             let targetQuizCount: number;
 
             if (intervalMinutes !== undefined && intervalMinutes > 0) {
-                // Manual override: convert interval to count, then clamp to rules
                 const rawCount = Math.ceil(durationSeconds / (intervalMinutes * 60));
                 targetQuizCount = Math.min(10, Math.max(3, rawCount));
                 console.log(
@@ -529,8 +496,6 @@ function createMcpServer(): McpServer {
             let failedChunkCount = 0;
             let lastErrorMessage = "Format kuis dari AI tidak valid.";
 
-            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
-
             for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
                 const chunk = transcriptChunks[chunkIndex];
                 if (!chunk.text) continue;
@@ -543,7 +508,8 @@ function createMcpServer(): McpServer {
                         durationMinutes
                     );
 
-                    const rawLlmOutput = await callGeminiApi(prompt, true, transcriptContext);
+                    // 👉 transcriptContext DIHAPUS agar tidak mengirim full transcript untuk setiap soal (Hemat TPM)
+                    const rawLlmOutput = await callGroqApi(prompt, true);
                     let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuiz) {
@@ -557,7 +523,7 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGeminiApi(repairPrompt, true);
+                        const repairedOutput = await callGroqApi(repairPrompt, true);
                         parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
                     }
 
@@ -594,6 +560,11 @@ function createMcpServer(): McpServer {
                         progress: progressPercent,
                         message: `Membuat soal ${processedChunks} dari ${totalChunks}...`,
                     });
+
+                    if (chunkIndex < transcriptChunks.length - 1) {
+                        console.log(`[Quiz] Menunggu 2 detik sebelum menembak soal berikutnya...`);
+                        await sleep(2000);
+                    }
                 }
             }
 
@@ -809,7 +780,7 @@ function createMcpServer(): McpServer {
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
                     const prompt = buildFullAssessmentPrompt(targetBloomLevels);
-                    const rawLlmOutput = await callGeminiApi(prompt, true, transcriptContext);
+                    const rawLlmOutput = await callGroqApi(prompt, true, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuestions || parsedQuestions.length === 0) {
@@ -828,7 +799,7 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGeminiApi(repairPrompt, true);
+                        const repairedOutput = await callGroqApi(repairPrompt, true);
                         parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
                     }
 
@@ -858,7 +829,7 @@ function createMcpServer(): McpServer {
                     });
 
                     if (attempt < maxAttempts - 1) {
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                        await sleep(1000);
                     }
                 }
             }
@@ -1036,7 +1007,7 @@ function createMcpServer(): McpServer {
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
                     const prompt = buildSemanticAssessmentPrompt(targetLevel, quantity);
-                    const rawLlmOutput = await callGeminiApi(prompt, true, transcriptContext);
+                    const rawLlmOutput = await callGroqApi(prompt, true, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuestions || parsedQuestions.length === 0) {
@@ -1055,7 +1026,7 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGeminiApi(repairPrompt, true);
+                        const repairedOutput = await callGroqApi(repairPrompt, true);
                         parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
                     }
 
@@ -1071,7 +1042,7 @@ function createMcpServer(): McpServer {
                     failedAttempts++;
                     lastErrorMessage = error instanceof Error ? error.message : "Unknown error";
                     if (attempt < maxAttempts - 1) {
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                        await sleep(1000);
                     }
                 }
             }
@@ -1159,7 +1130,6 @@ function createMcpServer(): McpServer {
                     message: "Memulai evaluasi jawaban...",
                 });
 
-                // Fetch transcript segments to build context for Gemini
                 const transcriptResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
@@ -1171,7 +1141,6 @@ function createMcpServer(): McpServer {
                 }
                 const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
 
-                // Fetch questions for the video
                 const qResponse = await fetch(`${ENV.backendUrl}/questions?video_id=${videoId}`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
@@ -1180,7 +1149,6 @@ function createMcpServer(): McpServer {
                 const qData = await qResponse.json();
                 const questions = qData.data || [];
 
-                // Fetch all user answers for this video
                 const ansResponse = await fetch(`${ENV.backendUrl}/question-answers?video_id=${videoId}&per_page=100`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
@@ -1218,7 +1186,6 @@ function createMcpServer(): McpServer {
                     return { content: [{ type: "text", text: "No valid questions matched to evaluate" }] };
                 }
 
-                // Evaluate using Gemini
                 const prompt = `You are a warm, supportive study advisor — not a cold grading machine. You speak Indonesian using "kamu" (never "Anda"). Your tone is like a trusted senior friend who genuinely cares about the student's growth.
 
 I have provided the Full Video Transcript. 
@@ -1252,17 +1219,16 @@ ${JSON.stringify(evaluationItems, null, 2)}
   }
 ]`;
 
-                const rawOutput = await callGeminiApi(prompt, true, transcriptContext);
+                const rawOutput = await callGroqApi(prompt, true, transcriptContext);
                 let parsedResults = [];
                 try {
                     const cleanedOutput = rawOutput.replace(/```json/g, '').replace(/```/g, '').trim();
                     parsedResults = JSON.parse(cleanedOutput);
                 } catch (e) {
-                    console.error("[Evaluate Tool] Failed to parse Gemini response:", rawOutput);
+                    console.error("[Evaluate Tool] Failed to parse AI response:", rawOutput);
                     throw new Error("Failed to parse evaluation response");
                 }
 
-                // Save Scores to Laravel backend concurrently via PUT (update existing answers)
                 const savePromises = parsedResults.map(async (result: any) => {
                     const studentAns = evaluationItems.find((a: any) => a.question_id === result.question_id);
                     if (!studentAns) return;
@@ -1313,7 +1279,6 @@ ${JSON.stringify(evaluationItems, null, 2)}
     return server;
 }
 
-// Express app setup
 const app = express();
 
 const corsOptions: cors.CorsOptions = {
@@ -1330,6 +1295,7 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
+
 app.options("/{*path}", cors(corsOptions));
 
 function resolveAllowedOriginHeader(requestOrigin: string | undefined): string {
@@ -1337,7 +1303,6 @@ function resolveAllowedOriginHeader(requestOrigin: string | undefined): string {
     return ALLOWED_ORIGINS[0] ?? "http://localhost:3000";
 }
 
-// Routes
 app.get("/notifications", (req: Request, res: Response) => {
     const userId = req.query.userId as string;
 
@@ -1346,7 +1311,6 @@ app.get("/notifications", (req: Request, res: Response) => {
         return;
     }
 
-    // Disable Node.js timeouts for this long-lived connection
     req.socket.setTimeout(0);
     req.socket.setKeepAlive(true);
 
@@ -1452,7 +1416,6 @@ app.post("/webhook/video-status", express.json(), (req: Request, res: Response) 
 
 
 app.get("/sse", async (req: Request, res: Response) => {
-    // Disable Node.js timeouts for this long-lived connection
     req.socket.setTimeout(0);
     req.socket.setKeepAlive(true);
 
@@ -1462,7 +1425,7 @@ app.get("/sse", async (req: Request, res: Response) => {
     res.setHeader("Vary", "Origin");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // Disable proxy buffering
+    res.setHeader("X-Accel-Buffering", "no");
 
     const transport = new SSEServerTransport("/messages", res);
     const mcpServer = createMcpServer();
@@ -1471,7 +1434,6 @@ app.get("/sse", async (req: Request, res: Response) => {
     activeSSESessions.set(transport.sessionId, transport);
     console.log(`[SSE] Session opened: ${transport.sessionId}`);
 
-    // Send keep-alive comments to prevent production proxy timeouts
     const keepAliveInterval = setInterval(() => {
         if (!res.writableEnded) {
             res.write(":\n\n");

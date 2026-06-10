@@ -2,18 +2,12 @@ import { TranscriptSegment } from "./interface.js";
 import { ENV } from "./helper.js";
 
 export interface TranscriptContext {
-    isCached: boolean;
-    cacheName?: string;
     rawText?: string;
     expiresAt: number;
 }
 
 const transcriptStore = new Map<string, TranscriptContext>();
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-}
 
 export async function getOrLoadTranscriptContext(
     videoId: string,
@@ -74,40 +68,9 @@ export async function getOrLoadTranscriptContext(
 
     // 3. Proses Transkrip
     const fullTranscript = segments.map(seg => seg.text).join(" ").trim();
-    const tokenCount = estimateTokens(fullTranscript);
 
-    // 4. Gemini Context Caching API
-    if (tokenCount >= 32768) {
-        try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${ENV.geminiApiKey}`;
-            const res = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: "models/gemini-1.5-flash",
-                    contents: [{ parts: [{ text: fullTranscript }] }],
-                    ttl: "3600s",
-                }),
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                const context = {
-                    isCached: true,
-                    cacheName: data.name,
-                    expiresAt: Date.now() + 55 * 60 * 1000
-                };
-                transcriptStore.set(videoId, context);
-                return context;
-            }
-        } catch (error) {
-            console.warn(`[Cache API] Background caching failed, fallback to memory.`);
-        }
-    }
-
-    // 5. In-memory fallback
+    // 4. In-memory fallback
     const context = {
-        isCached: false,
         rawText: fullTranscript,
         expiresAt: Date.now() + 60 * 60 * 1000
     };

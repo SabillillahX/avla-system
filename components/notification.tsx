@@ -37,7 +37,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const [aiStatusMessage, setAiStatusMessage] = useState("")
     const [aiProcessingVideoId, setAiProcessingVideoId] = useState<string | null>(null)
 
-    // Refs for timers & connection objects — safe to mutate without re-renders.
     const eventSourceRef = useRef<EventSource | null>(null)
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -67,7 +66,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         clearTimer(staleTimerRef)
         staleTimerRef.current = setTimeout(() => {
             setAiProcessState("error")
-            setAiStatusMessage("Proses AI terlalu lama tanpa update. Silakan coba lagi.")
+            setAiStatusMessage("AI Process took too long. Please try again.")
             scheduleAutoHide(4_000)
         }, STALE_PROCESS_TIMEOUT_MS)
     }, [scheduleAutoHide])
@@ -89,7 +88,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             let mcpClient: Client | null = null
             try {
                 setAiProcessState("connecting")
-                setAiStatusMessage(`Menghubungkan ke MCP (${attempt}/${MCP_MAX_CONNECT_ATTEMPTS})...`)
+                setAiStatusMessage(`Connecting to MCP (${attempt}/${MCP_MAX_CONNECT_ATTEMPTS})...`)
                 setAiProgress(Math.min(15, 5 + attempt * 2))
 
                 const transport = new SSEClientTransport(new URL(`${MCP_SERVER_URL}/sse`))
@@ -97,7 +96,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 await mcpClient.connect(transport)
 
                 setAiProcessState("generating")
-                setAiStatusMessage("Terhubung. AI sedang menyiapkan kuis...")
+                setAiStatusMessage("Connected. AI is generating quizzes...")
                 armStaleProtection()
 
                 const results = await Promise.allSettled([
@@ -123,7 +122,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                 const allFailed = results.every(r => r.status === 'rejected')
                 if (allFailed) {
-                    throw new Error("Semua task AI gagal dieksekusi (timeout/disconnect).")
+                    throw new Error("All AI tasks failed to execute (timeout/disconnect).")
                 }
 
                 return
@@ -134,7 +133,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                 if (attempt < MCP_MAX_CONNECT_ATTEMPTS) {
                     const retryDelayMs = Math.min(8_000, attempt * 2_000)
-                    setAiStatusMessage(`Koneksi MCP gagal. Mencoba ulang dalam ${retryDelayMs / 1_000}s...`)
+                    setAiStatusMessage(`MCP Connection failed. Retrying in ${retryDelayMs / 1_000}s...`)
                     await wait(retryDelayMs)
                 }
             } finally {
@@ -144,17 +143,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         throw lastError instanceof Error
             ? lastError
-            : new Error("Gagal terhubung ke MCP setelah beberapa percobaan.")
+            : new Error("Failed to connect to MCP after several attempts.")
     }, [armStaleProtection])
 
     const connectSse = useCallback(() => {
         if (!MCP_SERVER_URL) return
         if (isUnmountedRef.current || !user?.id) return
 
-        // Mencegah koneksi ganda jika sudah ada instance (sesuai saran yang benar)
         if (eventSourceRef.current) return
 
-        console.log("[Notifications] Menginisialisasi koneksi global...")
+        console.log("[Notifications] Initializing global connection...")
         const eventSource = new EventSource(`${MCP_SERVER_URL}/notifications?userId=${user.id}`)
         eventSourceRef.current = eventSource
 
@@ -163,7 +161,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
 
         eventSource.onerror = (error) => {
-            console.error("[Notifications] SSE error/terputus. EventSource akan mencoba reconnect otomatis.", error)
+            console.error("[Notifications] SSE error/disconnected. EventSource will try to reconnect automatically.", error)
         }
 
         eventSource.onmessage = async (event: MessageEvent) => {
@@ -185,7 +183,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     clearTimer(hideTimerRef)
                     setAiProcessState("generating")
                     setAiProgress((data.progress as number) ?? (data.assessment_progress as number) ?? 0)
-                    setAiStatusMessage((data.message as string) || "Memulai pembuatan...")
+                    setAiStatusMessage((data.message as string) || "AI is generating...")
                     if (data.video_id) setAiProcessingVideoId(String(data.video_id))
                     armStaleProtection()
                     break
@@ -199,7 +197,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     clearTimer(hideTimerRef)
                     setAiProcessState("generating")
                     setAiProgress((data.progress as number) ?? (data.assessment_progress as number) ?? 0)
-                    setAiStatusMessage((data.message as string) || "AI sedang memproses...")
+                    setAiStatusMessage((data.message as string) || "AI is processing...")
                     armStaleProtection()
                     break
                 }
@@ -209,9 +207,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     clearTimer(staleTimerRef)
                     setAiProcessState("success")
                     setAiProgress(100)
-                    setAiStatusMessage((data.message as string) || "Selesai!")
+                    setAiStatusMessage((data.message as string) || "Done!")
 
-                    // Notify the video player to reload quizzes/assessments
                     if (data.video_id) {
                         window.dispatchEvent(
                             new CustomEvent("aiContentReady", {
@@ -228,7 +225,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 case "assessment_generation_failed": {
                     clearTimer(staleTimerRef)
                     setAiProcessState("error")
-                    setAiStatusMessage((data.message as string) || "Gagal membuat konten.")
+                    setAiStatusMessage((data.message as string) || "Failed to generate content.")
                     scheduleAutoHide(4_000)
                     break
                 }
@@ -236,7 +233,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 case "transcription_ready": {
                     const incomingVideoId = String(data.video_id)
 
-                    // Deduplicate — ignore if we are already handling this video.
                     if (activeJobVideoIdRef.current === incomingVideoId) {
                         console.log(`[Notifications] Duplicate transcription_ready for video ${incomingVideoId} — ignored.`)
                         break
@@ -249,7 +245,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     clearTimer(hideTimerRef)
                     setAiProcessState("connecting")
                     setAiProgress(5)
-                    setAiStatusMessage("Transkrip selesai. Menghubungkan ke AI...")
+                    setAiStatusMessage("Transcription complete. Connecting to AI...")
                     armStaleProtection()
 
                     window.dispatchEvent(new CustomEvent("videoListRefresh"))
@@ -258,7 +254,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     if (!token) {
                         clearTimer(staleTimerRef)
                         setAiProcessState("error")
-                        setAiStatusMessage("Token login tidak ditemukan.")
+                        setAiStatusMessage("Login token not found.")
                         scheduleAutoHide(3_000)
                         activeJobVideoIdRef.current = null
                         break
@@ -269,7 +265,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     } catch (error) {
                         clearTimer(staleTimerRef)
                         setAiProcessState("error")
-                        setAiStatusMessage("Gagal terhubung ke MCP setelah beberapa percobaan.")
+                        setAiStatusMessage("Failed to connect to MCP after several attempts.")
                         console.error("[MCP] Final error:", error)
                         scheduleAutoHide(3_000)
                     } finally {
@@ -283,7 +279,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     const newStatus = String(data.status ?? "")
                     console.log(`[Notifications] Video status changed: videoId=${videoId}, status=${newStatus}`)
 
-                    // Dispatch a granular event so the video list can update in-place
                     window.dispatchEvent(
                         new CustomEvent("videoStatusChanged", {
                             detail: { videoId, status: newStatus },
@@ -310,9 +305,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             clearTimer(hideTimerRef)
             clearTimer(staleTimerRef)
             if (eventSourceRef.current) {
-                // Tepat di sini! Tambahkan log warna merahnya
-                console.log("🚨 REACT MENGHANCURKAN KOMPONEN (UNMOUNT)! KONEKSI SSE DIPUTUS SECARA PAKSA OLEH FRONTEND!");
-
                 eventSourceRef.current.close()
                 eventSourceRef.current = null
                 console.log("[Notifications] SSE connection closed (unmount).")

@@ -5,13 +5,13 @@ import { ParsedQuiz, AssessmentQuestion, SemanticAssessmentQuestion, UnknownReco
 dotenv.config();
 
 export const ENV = {
-    geminiApiKey: process.env.GEMINI_API ?? "",
+    groqApiKey: process.env.GROQ_API_KEY ?? "",
     backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL ?? "",
     allowedOrigins: process.env.ALLOWED_ORIGINS ?? "",
     port: Number(process.env.PORT ?? 8081),
 } as const;
 
-export const REQUIRED_ENV_KEYS = ["geminiApiKey", "backendUrl"] as const;
+export const REQUIRED_ENV_KEYS = ["groqApiKey", "backendUrl"] as const;
 
 for (const key of REQUIRED_ENV_KEYS) {
     if (!ENV[key]) {
