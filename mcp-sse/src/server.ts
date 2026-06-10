@@ -353,10 +353,10 @@ function createMcpServer(): McpServer {
 
     server.tool(
         "analyzeVideoAudioPaths",
-        "Fetch user's video data and use Gemini to answer questions about their audio paths",
+        "Fetch user's video data and use LLM to answer questions about their audio paths",
         {
             token: z.string().describe("Bearer token of the currently logged-in user"),
-            prompt: z.string().describe("Question or instruction for Gemini about the audio path data"),
+            prompt: z.string().describe("Question or instruction for LLM about the audio path data"),
         },
         async ({ token, prompt }) => {
             const response = await fetch(`${ENV.backendUrl}/videos`, {
