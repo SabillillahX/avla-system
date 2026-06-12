@@ -35,7 +35,7 @@ const mapClassRow = (course: CourseClass): ClassRow => {
       "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
     description: course.description || course.short_description || "No description yet.",
     status: (course.status as ClassRow["status"]) || "draft",
-    students: course.students?.length || 0,
+    students: course.students_count || course.students?.length || 0,
     updatedAt: formatDateLabel(course.updated_at),
     raw: course,
   }

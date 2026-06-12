@@ -36,6 +36,8 @@ export interface CourseClass {
   has_certificate: boolean | null;
   what_you_will_learn: string[] | null;
   requirements: string[] | null;
+  students?: unknown[] | null;
+  students_count?: number | null;
   created_at: string;
   updated_at: string;
 }
