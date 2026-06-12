@@ -6,7 +6,6 @@ const BASE_URL = useMockAuth ? '/api' : process.env.NEXT_PUBLIC_BACKEND_URL;
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
   withCredentials: false,

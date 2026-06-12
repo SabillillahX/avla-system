@@ -62,12 +62,17 @@ export const classesApi = {
     return response.data;
   },
 
-  create: async (payload: Record<string, unknown>) => {
+  create: async (payload: Record<string, unknown> | FormData) => {
     const response = await api.post<ApiResponse<CourseClass>>('/classes', payload);
     return response.data;
   },
 
-  update: async (id: string, payload: Record<string, unknown>) => {
+  update: async (id: string, payload: Record<string, unknown> | FormData) => {
+    if (payload instanceof FormData) {
+      payload.append('_method', 'PUT');
+      const response = await api.post<ApiResponse<CourseClass>>(`/classes/${id}`, payload);
+      return response.data;
+    }
     const response = await api.put<ApiResponse<CourseClass>>(`/classes/${id}`, payload);
     return response.data;
   },

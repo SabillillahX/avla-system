@@ -70,3 +70,27 @@ export const normalizeLevel = (value: string | null | undefined): string | null 
 
   return null;
 };
+
+export const extractCourseArray = (value: unknown): CourseClass[] => {
+  if (Array.isArray(value)) {
+    return value as CourseClass[]
+  }
+
+  if (value && typeof value === "object" && "data" in value && Array.isArray((value as { data?: unknown }).data)) {
+    return (value as { data: CourseClass[] }).data
+  }
+
+  return []
+};
+
+export const getImageUrl = (path: string | null | undefined): string | null => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  
+  const baseUrl = process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost:8000/storage';
+  if (path.startsWith('/storage/')) {
+    return path.replace('/storage', baseUrl);
+  }
+  
+  return `${baseUrl}/${path}`;
+};

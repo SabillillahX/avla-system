@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
 import { type CourseClass } from "@/lib/api/classes"
 import { Search, PlayCircle } from "lucide-react"
+import { getImageUrl } from "@/lib/class-utils"
 
 interface CourseProgress {
   progress: number
@@ -196,7 +197,7 @@ export default function MyCoursePage() {
                 <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
                   <img
                     src={
-                      course.thumbnail_url ||
+                      getImageUrl(course.thumbnail_url) ||
                       "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop"
                     }
                     alt={course.name}

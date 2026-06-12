@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
 import { classesApi, type CourseClass } from "@/lib/api/classes"
-import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice } from "@/lib/class-utils"
+import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
 import { Star } from "lucide-react"
 
 const extractCourseArray = (value: unknown): CourseClass[] => {
@@ -154,7 +154,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
                   <img
                     src={
-                      course.thumbnail_url ||
+                      getImageUrl(course.thumbnail_url) ||
                       "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop"
                     }
                     alt={course.name}

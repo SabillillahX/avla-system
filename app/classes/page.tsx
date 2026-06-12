@@ -8,15 +8,16 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { classesApi, type CourseClass } from "@/lib/api/classes"
-import { formatDateLabel, formatPrice, normalizeLevel, parsePrice } from "@/lib/class-utils"
+import { formatDateLabel, formatPrice, normalizeLevel, parsePrice, extractCourseArray, getImageUrl } from "@/lib/class-utils"
 import { Plus, Search } from "lucide-react"
+import Image from "next/image"
 
 type ClassRow = {
   id: string
   title: string
   category: string
   price: string
-  level: string
+
   imageUrl: string
   description: string
   status: "published" | "draft" | "archived"
@@ -31,9 +32,9 @@ const mapClassRow = (course: CourseClass): ClassRow => {
     title: course.name,
     category: course.category?.name || "General",
     price: formatPrice(course.price),
-    level: course.level || "Beginner",
+
     imageUrl:
-      course.thumbnail_url ||
+      getImageUrl(course.thumbnail_url) ||
       "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
     description: course.description || course.short_description || "No description yet.",
     status: (course.status as ClassRow["status"]) || "draft",
@@ -49,7 +50,7 @@ export default function ClassManagementPage() {
 
   const loadClasses = async () => {
     const response = await classesApi.list()
-    const rows = response.data.data.map(mapClassRow)
+    const rows = extractCourseArray(response?.data).map(mapClassRow)
     setClasses(rows)
   }
 
@@ -83,7 +84,7 @@ export default function ClassManagementPage() {
       short_description: current.raw.short_description,
       thumbnail_url: current.raw.thumbnail_url,
       price: parsePrice(current.price) ?? 0,
-      level: normalizeLevel(current.level),
+
       is_free: current.raw.is_free,
       language: current.raw.language,
       has_certificate: current.raw.has_certificate,
@@ -133,7 +134,7 @@ export default function ClassManagementPage() {
                   className="flex flex-col md:flex-row gap-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
                 >
                   <div className="w-full md:w-40 h-24 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
-                    <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                    <Image src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
                   </div>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -155,8 +156,7 @@ export default function ClassManagementPage() {
                     </p>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                       <span>{item.category}</span>
-                      <span>•</span>
-                      <span>{item.level}</span>
+
                       <span>•</span>
                       <span>{item.price}</span>
                       <span>•</span>

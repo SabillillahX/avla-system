@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
 import { type CourseClass } from "@/lib/api/classes"
-import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice } from "@/lib/class-utils"
+import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
 import { ChevronRight, Star } from "lucide-react"
 
 const formatCount = (value: number) => value.toLocaleString("en-US")
@@ -140,7 +140,7 @@ export default function CoursesPage() {
     originalPrice: getCourseOriginalPrice(course),
     badges: (course.badges && course.badges.length > 0) ? course.badges : [course.is_free ? "Free" : ""].filter(Boolean),
     imageUrl:
-      course.thumbnail_url ||
+      getImageUrl(course.thumbnail_url) ||
       "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
     category: course.category?.name || "General",
     lastUpdated: formatDateLabel(course.updated_at),
