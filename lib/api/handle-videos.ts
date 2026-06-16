@@ -38,6 +38,8 @@ export const videosApi = {
 
     if (payload.description) formData.append("description", payload.description);
     if (payload.category_id) formData.append("category_id", payload.category_id);
+    if (payload.class_id) formData.append("class_id", payload.class_id);
+    if (payload.section_id) formData.append("section_id", payload.section_id);
     if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
 
     if (payload.source_type === "file" && payload.video_file) {
@@ -63,6 +65,8 @@ export const videosApi = {
     if (payload.title !== undefined) formData.append("title", payload.title);
     if (payload.description !== undefined) formData.append("description", payload.description);
     if (payload.category_id !== undefined) formData.append("category_id", payload.category_id);
+    if (payload.class_id !== undefined) formData.append("class_id", payload.class_id);
+    if (payload.section_id !== undefined) formData.append("section_id", payload.section_id);
     if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
 
     const response = await api.post<ApiResponse<Video>>(

@@ -157,7 +157,7 @@ export default function CoursesPage() {
 
   return (
     <ProtectedRoute>
-      <div className="p-4 sm:p-6 space-y-6 sm:space-y-10">
+      <div className="p-6 sm:p-8 space-y-6 sm:space-y-10">
         <section>
           <div className="mb-4 sm:mb-6">
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">{todayLabel}</p>
@@ -199,7 +199,7 @@ export default function CoursesPage() {
           </div>
           {isClassesLoading ? (
             <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-              <CardContent className="p-6 text-sm text-gray-500 dark:text-gray-400">
+              <CardContent className="p-8 text-base text-gray-500 dark:text-gray-400">
                 Loading courses...
               </CardContent>
             </Card>

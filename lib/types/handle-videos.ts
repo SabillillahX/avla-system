@@ -54,6 +54,8 @@ export interface UploadVideoPayload {
   title: string;
   description?: string;
   category_id?: string;
+  class_id?: string;
+  section_id?: string;
   thumbnail_file?: File;
   source_type: VideoSourceType;
   video_file?: File;
@@ -64,5 +66,7 @@ export interface UpdateVideoPayload {
   title?: string;
   description?: string;
   category_id?: string;
+  class_id?: string;
+  section_id?: string;
   thumbnail_file?: File;
 }

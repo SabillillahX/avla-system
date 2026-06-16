@@ -91,7 +91,7 @@ export default function ClassManagementPage() {
 
   return (
     <ProtectedRoute requireRole={["admin", "teacher"]}>
-      <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+      <div className="max-w-6xl mx-auto p-6 sm:p-8 lg:p-10 space-y-6 sm:space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Class Management</h1>
@@ -108,7 +108,7 @@ export default function ClassManagementPage() {
         </div>
 
         <Card className="shadow-sm border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50">
-          <CardContent className="p-4 sm:p-6 space-y-6">
+          <CardContent className="p-6 sm:p-8 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 pb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your Classes</h2>
               <div className="relative w-full sm:w-72">
@@ -126,7 +126,7 @@ export default function ClassManagementPage() {
               {filteredClasses.map((item) => (
                 <div
                   key={item.id}
-                  className="group flex flex-col lg:flex-row gap-5 rounded-xl border border-gray-100 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 p-4 sm:p-5 transition-all duration-200 hover:shadow-md"
+                  className="group flex flex-col lg:flex-row gap-5 rounded-xl border border-gray-100 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 p-6 sm:p-7 transition-all duration-200 hover:shadow-md"
                 >
                   <div className="w-full lg:w-56 h-36 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
                     {/* Reverted to standard img to prevent Next.js errors about missing width/height properties when using unoptimized remote images without fill */}

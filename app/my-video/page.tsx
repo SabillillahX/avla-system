@@ -454,7 +454,7 @@ export default function MyVideoPage() {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-blue-100 bg-white p-3 sm:p-5 shadow-sm transition-colors hover:border-blue-200 dark:bg-gray-800 dark:border-gray-700"
+      className="rounded-xl border border-blue-100 bg-white p-5 sm:p-7 shadow-sm transition-colors hover:border-blue-200 dark:bg-gray-800 dark:border-gray-700"
     >
       <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
         <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 ${accent}`}>
@@ -532,7 +532,7 @@ export default function MyVideoPage() {
             }`}
           onClick={() => handleVideoClick(video)}
         >
-          <div className="p-3 sm:p-4 flex flex-row items-start sm:items-center gap-3 sm:gap-5">
+          <div className="p-5 sm:p-6 flex flex-row items-start sm:items-center gap-4 sm:gap-6">
             {/* Thumbnail with processing overlay */}
             <div className="relative w-24 h-16 sm:w-44 sm:h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
               {video.thumbnail_path ? (
@@ -718,7 +718,7 @@ export default function MyVideoPage() {
   )
 
   return (
-    <div className="p-3 sm:p-6 w-full max-w-[100vw] overflow-hidden">
+    <div className="p-6 sm:p-8 w-full max-w-[100vw] overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
@@ -1186,8 +1186,8 @@ export default function MyVideoPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
             className={viewMode === "grid"
-              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-              : "flex flex-col gap-3"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+              : "flex flex-col gap-5"
             }
           >
             {uploadingVideoData && renderVideoCard("uploading", uploadingVideoData, uploadProgress)}

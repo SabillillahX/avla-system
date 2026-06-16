@@ -21,7 +21,7 @@ import {
   Loader2,
   LogOut,
   MessageSquare,
-  Receipt,
+
   Settings,
   User,
   Users,
@@ -71,10 +71,9 @@ const navItems = [
   { name: "My Video", icon: FileText, path: "/my-video" },
   { name: "Courses", icon: CheckCircle, path: "/courses", visibleFor: ["student", "admin"] },
   { name: "My Course", icon: Users, path: "/my-course", visibleFor: ["student", "admin"] },
-  { name: "Chats", icon: MessageSquare, path: "/chats" },
   { name: "Group Chat", icon: Users, path: "/group-chat" },
   { name: "Documents", icon: FileText, path: "/documents" },
-  { name: "Receipts", icon: Receipt, path: "/receipts" },
+
   { name: "Class Management", icon: ClipboardList, path: "/classes", visibleFor: ["teacher", "admin"] },
 ]
 
@@ -229,24 +228,39 @@ function DashboardSidebar({
       collapsible="icon"
       className="border-blue-100/80 bg-sidebar"
     >
-      <SidebarHeader className="border-b border-blue-100/80 p-3">
-        <div className="flex flex-col gap-3 group-data-[collapsible=icon]:items-center">
+      <SidebarHeader className="border-b border-blue-100/80 p-4 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center justify-between group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-4 group-data-[collapsible=icon]:py-2">
           <Link
             href="/"
-            className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-blue-100/60 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            className="flex items-center gap-2.5 rounded-lg px-1 transition-colors duration-200 hover:bg-blue-100/60 group-data-[collapsible=icon]:justify-center"
           >
-            <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 dark:hidden" />
-            <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-16 w-auto object-contain group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:md:h-8 group-data-[collapsible=icon]:w-8 hidden dark:block" />
+            <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-12 w-auto object-contain group-data-[collapsible=icon]:hidden dark:hidden" />
+            <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-12 w-auto object-contain group-data-[collapsible=icon]:hidden hidden dark:block" />
+            
+            {/* Logo when collapsed */}
+            <div className="hidden group-data-[collapsible=icon]:flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-transparent">
+              <Image 
+                src="/icon-logo.png" 
+                alt="Avla Icon" 
+                width={48} 
+                height={48} 
+                quality={75}
+                className="w-full h-full object-contain drop-shadow-sm" 
+              />
+            </div>
           </Link>
 
-          <div className="flex items-center justify-between gap-1 px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:px-0">
-            <NotificationsPopover />
-            <ThemeToggle />
+          <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-4">
+            <SidebarTrigger className="w-10 h-10 shrink-0 text-gray-500 hover:bg-blue-100 hover:text-blue-700 transition-colors" />
+            <div className="group-data-[collapsible=icon]:hidden flex gap-1">
+              <NotificationsPopover />
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-3">
+      <SidebarContent className="px-4 py-5 group-data-[collapsible=icon]:px-2">
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-gray-500">
             Menu
@@ -278,14 +292,14 @@ function DashboardSidebar({
                             }
                           }}
                           className={cn(
-                            "cursor-pointer transition-colors duration-200",
+                            "cursor-pointer transition-colors duration-200 py-3 text-base",
                             "hover:bg-blue-100/70 hover:text-primary",
                             "data-[active=true]:bg-blue-100 data-[active=true]:font-medium data-[active=true]:text-primary",
-                            "group-data-[collapsible=icon]:justify-center"
+                            "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!w-14 group-data-[collapsible=icon]:!h-14 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:mx-auto"
                           )}
                         >
-                          <item.icon className="text-current" />
-                          <span>{item.name}</span>
+                          <item.icon className="text-current shrink-0 group-data-[collapsible=icon]:!w-7 group-data-[collapsible=icon]:!h-7" />
+                          <span className="group-data-[collapsible=icon]:hidden">{item.name}</span>
                         </SidebarMenuButton>
                       </ItemWrapper>
                     </SidebarMenuItem>
@@ -378,7 +392,7 @@ function DashboardSidebar({
         </Popover>
       </SidebarFooter>
 
-      <SidebarRail />
+
     </Sidebar>
   )
 }
@@ -432,46 +446,43 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             transition={{ duration: 0.28, ease: "easeOut" }}
             className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50"
           >
-            <div className="w-[calc(100vw-2rem)] sm:w-[380px] max-w-[380px] rounded-2xl border border-blue-100 bg-white/95 p-4 sm:p-5 shadow-xl shadow-blue-900/10 backdrop-blur-xl">
-              <p className="text-sm font-semibold text-gray-900">AI Quiz Upload</p>
+            <div className="w-[calc(100vw-2rem)] sm:w-[460px] max-w-[460px] rounded-2xl border border-blue-100 bg-white/95 p-6 sm:p-8 shadow-xl shadow-blue-900/10 backdrop-blur-xl">
+              <p className="text-base sm:text-lg font-semibold text-gray-900">AI Quiz Upload</p>
 
               {(aiProcessState === "connecting" ||
                 aiProcessState === "generating") && (
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-5 space-y-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-primary">
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                      <div className="flex items-center gap-3 text-base text-primary">
+                        <Loader2 className="h-5 w-5 animate-spin" />
                         <span>{aiStatusMessage || "Memproses..."}</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-800">
+                      <span className="text-base font-semibold text-gray-800">
                         {Math.max(0, Math.min(100, aiProgress))}%
                       </span>
                     </div>
                     <Progress
                       value={Math.max(0, Math.min(100, aiProgress))}
-                      className="h-2"
+                      className="h-3 sm:h-4"
                     />
                   </div>
                 )}
 
               {aiProcessState === "success" && (
-                <div className="mt-4 flex items-center gap-2 text-green-700">
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span className="text-sm font-semibold">
+                <div className="mt-5 flex items-center gap-3 text-green-700">
+                  <CheckCircle2 className="h-6 w-6" />
+                  <span className="text-base font-semibold">
                     {aiStatusMessage || "Berhasil"}
                   </span>
                 </div>
               )}
 
               {aiProcessState === "error" && (
-                <div className="mt-4 space-y-1">
-                  <div className="flex items-center gap-2 text-red-700">
-                    <AlertCircle className="h-5 w-5" />
-                    <span className="text-sm font-semibold">Gagal upload</span>
-                  </div>
-                  <p className="text-xs text-red-600/90">
-                    {aiStatusMessage || "Terjadi kesalahan."}
-                  </p>
+                <div className="mt-5 flex items-center gap-3 text-red-600">
+                  <AlertCircle className="h-6 w-6" />
+                  <span className="text-base font-semibold line-clamp-2">
+                    {aiStatusMessage || "Terjadi kesalahan"}
+                  </span>
                 </div>
               )}
             </div>

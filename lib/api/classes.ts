@@ -14,6 +14,17 @@ export interface ClassCategory {
   slug: string;
 }
 
+export interface CourseSection {
+  id: string;
+  class_id: string;
+  title: string;
+  order: number;
+  is_published: boolean;
+  videos?: any[];
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface CourseClass {
   id: string;
   name: string;
@@ -36,6 +47,7 @@ export interface CourseClass {
   has_certificate: boolean | null;
   what_you_will_learn: string[] | null;
   requirements: string[] | null;
+  sections?: CourseSection[] | null;
   students?: unknown[] | null;
   students_count?: number | null;
   created_at: string;
@@ -91,6 +103,26 @@ export const classesApi = {
 
   enrolled: async () => {
     const response = await api.get<ApiResponse<PaginatedResponse<CourseClass>>>('/classes/enrolled');
+    return response.data;
+  },
+
+  createSection: async (classId: string, payload: { title: string; order?: number; is_published?: boolean }) => {
+    const response = await api.post<ApiResponse<any>>(`/classes/${classId}/sections`, payload);
+    return response.data;
+  },
+
+  updateSection: async (classId: string, sectionId: string, payload: { title: string; order?: number; is_published?: boolean }) => {
+    const response = await api.put<ApiResponse<any>>(`/classes/${classId}/sections/${sectionId}`, payload);
+    return response.data;
+  },
+
+  deleteSection: async (classId: string, sectionId: string) => {
+    const response = await api.delete<ApiResponse<null>>(`/classes/${classId}/sections/${sectionId}`);
+    return response.data;
+  },
+
+  updateSectionOrder: async (classId: string, order: string[]) => {
+    const response = await api.post<ApiResponse<null>>(`/classes/${classId}/sections/order`, { order });
     return response.data;
   },
 };

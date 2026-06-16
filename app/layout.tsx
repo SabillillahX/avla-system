@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/contexts/AuthContext"
 import { NotificationProvider } from "@/components/notification"
 import { Toaster } from "@/components/ui/sonner"
+import { icons } from "lucide-react"
 
 export default function RootLayout({
     children,
@@ -28,7 +29,7 @@ export default function RootLayout({
 }
 
 export const metadata = {
-    title: "Drafin- AI Video Assessment Platform",
+    title: "Drafin - Turn Video into Knowledge",
     description: "Platform SaaS profesional untuk layanan teknologi informasi terkelola",
     generator: "v0.dev",
 }

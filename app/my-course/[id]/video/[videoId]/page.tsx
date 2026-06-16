@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { videosApi } from "@/lib/api/handle-videos"
 import { assessmentApi } from "@/lib/api/assessment"
+import api from "@/lib/api/axios"
 import { Video as VideoType } from "@/lib/types/handle-videos"
 import { getStorageUrl } from "@/lib/utils/storage-url"
 import { Button } from "@/components/ui/button"
@@ -20,7 +21,7 @@ import {
   BookOpen
 } from "lucide-react"
 
-export default function VideoPreviewPage({ params }: { params: { id: string } }) {
+export default function VideoPreviewPage({ params }: { params: { id: string, videoId: string } }) {
   const router = useRouter()
   const { token } = useAuth()
   const { aiProcessState, aiProcessingVideoId, aiProgress, aiStatusMessage } = useNotification()
@@ -33,8 +34,8 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
     const fetchVideo = async () => {
       try {
         const [videoData, questionsResponse] = await Promise.all([
-          videosApi.getVideoById(params.id),
-          assessmentApi.getQuestions(params.id).catch(() => ({ data: [] }))
+          api.get(`/classes/${params.id}/videos/${params.videoId}`).then(res => res.data.data),
+          assessmentApi.getQuestions(params.videoId).catch(() => ({ data: [] }))
         ])
         setVideo(videoData)
 
@@ -48,7 +49,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
       }
     }
     fetchVideo()
-  }, [params.id])
+  }, [params.videoId])
 
 
   if (isLoading) {
@@ -89,7 +90,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
       </Button>
 
       {/* AI Processing Banner */}
-      {aiProcessingVideoId === params.id && (aiProcessState === "connecting" || aiProcessState === "generating") && (
+      {aiProcessingVideoId === params.videoId && (aiProcessState === "connecting" || aiProcessState === "generating") && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-5 py-3">
           <div className="relative shrink-0">
             <Sparkles className="w-5 h-5 text-amber-500" />
@@ -167,7 +168,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
         <Button
           size="lg"
           variant="outline"
-          onClick={() => router.push(`/my-video/${params.id}/results`)}
+          onClick={() => router.push(`/my-course/${params.id}/video/${params.videoId}/results`)}
           className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <BookOpen className="w-5 h-5" />
@@ -175,7 +176,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string } })
         </Button>
         <Button
           size="lg"
-          onClick={() => router.push(`/my-video/${params.id}/assessment`)}
+          onClick={() => router.push(`/my-course/${params.id}/video/${params.videoId}/assessment`)}
           disabled={isAssessmentSubmitted}
           className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${isAssessmentSubmitted
             ? "bg-gray-100 text-gray-900 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800"
