@@ -50,6 +50,24 @@ export interface QuizListResponse {
   total: number;
 }
 
+export interface AssessmentQuestion {
+  uuid: string;
+  video_id: string;
+  type: string;
+  question: string;
+  options: string[] | null;
+  accepted_answers: string | string[];
+  explanation: string | null;
+  bloom_level: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssessmentListResponse {
+  message: string;
+  data: AssessmentQuestion[];
+}
+
 export interface UploadVideoPayload {
   title: string;
   description?: string;
@@ -60,6 +78,7 @@ export interface UploadVideoPayload {
   source_type: VideoSourceType;
   video_file?: File;
   video_url?: string;
+  generate_ai_quiz?: boolean;
 }
 
 export interface UpdateVideoPayload {

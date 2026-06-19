@@ -28,6 +28,11 @@ export const videosApi = {
     return response.data.data;
   },
 
+  getVideoAssessments: async (videoId: string): Promise<any[]> => {
+    const response = await api.get(`/questions`, { params: { video_id: videoId } });
+    return response.data.data;
+  },
+
   uploadVideo: async (
     payload: UploadVideoPayload,
     onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
@@ -41,6 +46,9 @@ export const videosApi = {
     if (payload.class_id) formData.append("class_id", payload.class_id);
     if (payload.section_id) formData.append("section_id", payload.section_id);
     if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
+    if (payload.generate_ai_quiz !== undefined) {
+      formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
+    }
 
     if (payload.source_type === "file" && payload.video_file) {
       formData.append("video_file", payload.video_file);

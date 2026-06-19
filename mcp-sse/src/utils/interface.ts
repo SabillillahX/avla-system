@@ -48,6 +48,7 @@ export interface NotificationPayload {
     assessment_progress?: number;
     assessment_status?: string;
     assessment_saved_count?: number;
+    skip_ai?: boolean;
 }
 
 export type UnknownRecord = Record<string, unknown>;

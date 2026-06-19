@@ -190,7 +190,8 @@ function buildQuizGenerationPrompt(
     transcriptText: string,
     chunkIndex: number = 0,
     totalChunks: number = 1,
-    durationMinutes: number = 3
+    durationMinutes: number = 3,
+    includeAnswers: boolean = true
 ): string {
     const positionPercent = Math.round(((chunkIndex + 1) / totalChunks) * 100);
     const isEarlyChunk = chunkIndex < Math.ceil(totalChunks * 0.33);
@@ -230,11 +231,11 @@ Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing
 {
   "question": "A clear, conceptual question ending with a question mark?",
   "options": ["Plausible wrong answer", "Correct answer text", "Plausible wrong answer", "Plausible wrong answer"],
-  "correct_answer": "Correct answer text",
-  "explanation": "The correct answer is [X] because [evidence from transcript]. A common mistake is choosing [distractor] because [why it seems right], but [why it is actually wrong]."
+  "correct_answer": "${includeAnswers ? "Correct answer text" : ""}",
+  "explanation": "${includeAnswers ? "The correct answer is [X] because [evidence from transcript]. A common mistake is choosing [distractor] because [why it seems right], but [why it is actually wrong]." : ""}"
 }
 
-CRITICAL: The value of "correct_answer" must be an exact character-for-character copy of one of the strings in the "options" array.
+CRITICAL: ${includeAnswers ? "The value of \"correct_answer\" must be an exact character-for-character copy of one of the strings in the \"options\" array." : "You MUST leave \"correct_answer\" and \"explanation\" as empty strings because the teacher requested to add answers manually."}
 
 ## Task
 The full video transcript is provided to you. I want you to write ONE multiple-choice question specifically focusing on the concepts discussed in THIS specific excerpt from the video:
@@ -246,7 +247,7 @@ ${transcriptText}
 Ensure the question makes sense in the broader context of the whole video.`;
 }
 
-function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3"): string {
+function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3", includeAnswers: boolean = true): string {
     return `You are an expert in Adaptive Learning Systems and Instructional Design.
 I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
 
@@ -263,8 +264,8 @@ Distribute the 10 questions across the following levels: ${targetBloomLevels}
 
 ## Formatting Rules
 - "bloom_level": String (e.g., "C3 - Applying").
-- "reference_answer": A comprehensive ideal answer used as a baseline for semantic comparison.
-- "semantic_keywords": An array of 5-10 essential terms that must be present in the student's response.
+- "reference_answer": ${includeAnswers ? "A comprehensive ideal answer used as a baseline for semantic comparison." : "MUST BE AN EMPTY STRING."}
+- "semantic_keywords": ${includeAnswers ? "An array of 5-10 essential terms that must be present in the student's response." : "MUST BE AN EMPTY ARRAY []."}
 
 ## Strict Output Format (JSON Only)
 Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
@@ -274,9 +275,9 @@ Return ONLY a valid JSON array. Do not include markdown formatting or explanatio
     "bloom_level": "C2",
     "difficulty_level": 2,
     "question": "Text of the question?",
-    "reference_answer": "The ideal complete answer for semantic matching...",
-    "semantic_keywords": ["keyword1", "keyword2"],
-    "explanation": "Logic behind the correct concept."
+    "reference_answer": "${includeAnswers ? "The ideal complete answer for semantic matching..." : ""}",
+    "semantic_keywords": ${includeAnswers ? "[\"keyword1\", \"keyword2\"]" : "[]"},
+    "explanation": "${includeAnswers ? "Logic behind the correct concept." : ""}"
   }
 ]`;
 }
@@ -399,8 +400,9 @@ function createMcpServer(): McpServer {
                 .describe(
                     "Optional: override the auto-calculated quiz interval (in minutes). When omitted, interval is determined dynamically from video duration."
                 ),
+            includeAnswers: z.boolean().optional().default(true).describe("If true, AI generates the answers and feedback. If false, leaves them blank."),
         },
-        async ({ token, userId, videoId, intervalMinutes }) => {
+        async ({ token, userId, videoId, intervalMinutes, includeAnswers }) => {
             const userIdStr = String(userId);
 
             emitNotificationToUser(userIdStr, {
@@ -505,7 +507,8 @@ function createMcpServer(): McpServer {
                         chunk.text,
                         chunkIndex,
                         totalChunks,
-                        durationMinutes
+                        durationMinutes,
+                        includeAnswers
                     );
 
                     // 👉 transcriptContext DIHAPUS agar tidak mengirim full transcript untuk setiap soal (Hemat TPM)
@@ -666,8 +669,9 @@ function createMcpServer(): McpServer {
                 .describe(
                     "If true (default), attempt parallel generation with quiz. If false, wait for quiz to complete first."
                 ),
+            includeAnswers: z.boolean().optional().default(true).describe("If true, AI generates the answers and feedback. If false, leaves them blank."),
         },
-        async ({ token, userId, videoId, parallelWithQuiz = true }) => {
+        async ({ token, userId, videoId, parallelWithQuiz = true, includeAnswers = true }) => {
             const userIdStr = String(userId);
 
             emitNotificationToUser(userIdStr, {
@@ -779,7 +783,7 @@ function createMcpServer(): McpServer {
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    const prompt = buildFullAssessmentPrompt(targetBloomLevels);
+                    const prompt = buildFullAssessmentPrompt(targetBloomLevels, includeAnswers);
                     const rawLlmOutput = await callGroqApi(prompt, true, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
@@ -1356,7 +1360,7 @@ app.get("/notifications", (req: Request, res: Response) => {
 });
 
 app.post("/webhook/transcription-done", express.json(), async (req: Request, res: Response) => {
-    const { video_id, user_id, status, token } = req.body ?? {};
+    const { video_id, user_id, status, token, skip_ai } = req.body ?? {};
 
     if (!video_id || !user_id || !status) {
         res.status(400).json({ error: "Missing required fields: video_id, user_id, status" });
@@ -1373,6 +1377,7 @@ app.post("/webhook/transcription-done", express.json(), async (req: Request, res
         emitNotificationToUser(String(user_id), {
             event: "transcription_ready",
             video_id,
+            skip_ai: skip_ai === true,
         });
 
         console.log(`[Webhook] transcription_ready sent for videoId = ${video_id}`);

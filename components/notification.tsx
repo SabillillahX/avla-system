@@ -77,6 +77,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         token: string
         videoId: string | number
         userId: string | number
+        includeAnswers: boolean
     }) => {
         if (!MCP_SERVER_URL) {
             throw new Error("MCP server URL is not configured")
@@ -107,6 +108,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             userId: params.userId,
                             videoId: params.videoId,
                             intervalMinutes: 3,
+                            includeAnswers: params.includeAnswers,
                         },
                     }, undefined, { timeout: 120_000 }),
                     mcpClient.callTool({
@@ -116,6 +118,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             userId: params.userId,
                             videoId: params.videoId,
                             parallelWithQuiz: true,
+                            includeAnswers: params.includeAnswers,
                         },
                     }, undefined, { timeout: 180_000 })
                 ])
@@ -238,9 +241,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                         break
                     }
 
+                    const includeAnswers = data.skip_ai !== true;
+
                     activeJobVideoIdRef.current = incomingVideoId
                     setAiProcessingVideoId(incomingVideoId)
-                    console.log(`[Notifications] Transcription ready: videoId=${incomingVideoId}`)
+                    console.log(`[Notifications] Transcription ready: videoId=${incomingVideoId}, includeAnswers=${includeAnswers}`)
 
                     clearTimer(hideTimerRef)
                     setAiProcessState("connecting")
@@ -261,7 +266,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     }
 
                     try {
-                        await runMcpWithRetry({ token, userId: user.id, videoId: incomingVideoId })
+                        await runMcpWithRetry({ token, userId: user.id, videoId: incomingVideoId, includeAnswers })
                     } catch (error) {
                         clearTimer(staleTimerRef)
                         setAiProcessState("error")

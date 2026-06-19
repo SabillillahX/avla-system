@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload } from "lucide-react"
+import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion } from "lucide-react"
 
 const statusConfig: Record<VideoStatus, { label: string; color: string; icon: React.ElementType }> = {
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", icon: CheckCircle2 },
@@ -85,6 +85,7 @@ export default function CreateClassPage() {
   const [sourceType, setSourceType] = useState<"file" | "url">("file")
   const [videoUrlInput, setVideoUrlInput] = useState("")
   const [videoFileInput, setVideoFileInput] = useState<File | null>(null)
+  const [generateAiQuiz, setGenerateAiQuiz] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
@@ -242,6 +243,7 @@ export default function CreateClassPage() {
         source_type: sourceType,
         video_file: sourceType === "file" ? videoFileInput ?? undefined : undefined,
         video_url: sourceType === "url" ? videoUrl : undefined,
+        generate_ai_quiz: generateAiQuiz,
       }, (e) => {
         if (e.total) {
           setUploadProgress(Math.round((e.loaded * 100) / e.total))
@@ -267,6 +269,7 @@ export default function CreateClassPage() {
     setSourceType("file")
     setVideoUrlInput("")
     setVideoFileInput(null)
+    setGenerateAiQuiz(true)
     setUploadError(null)
     if (videoInputRef.current) videoInputRef.current.value = ""
     if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
@@ -752,6 +755,11 @@ export default function CreateClassPage() {
                                           <DropdownMenuItem onClick={() => openEditModal(video)}>
                                             <Edit className="w-4 h-4 mr-2" /> Edit Video
                                           </DropdownMenuItem>
+                                          {video.status === "completed" && (
+                                            <DropdownMenuItem onClick={() => router.push(`/videos/${video.id}/ai-results`)}>
+                                              <FileQuestion className="w-4 h-4 mr-2" /> View AI Results & Assessments
+                                            </DropdownMenuItem>
+                                          )}
                                           <DropdownMenuItem onClick={() => openDeleteModal(video)} className="text-red-600">
                                             <Trash2 className="w-4 h-4 mr-2" /> Delete Video
                                           </DropdownMenuItem>
@@ -913,7 +921,17 @@ export default function CreateClassPage() {
         {/* Form Actions */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-800">
           <Button variant="outline" onClick={resetForm}>Discard Changes</Button>
-          <Button onClick={handleSubmit} size="lg" className="px-8">{isEditMode ? "Save Details" : "Create Class"}</Button>
+          <Button 
+            onClick={handleSubmit} 
+            size="lg" 
+            className="px-8"
+            disabled={aiProcessState === "connecting" || aiProcessState === "generating"}
+          >
+            {(aiProcessState === "connecting" || aiProcessState === "generating") 
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Waiting for AI...</> 
+              : (isEditMode ? "Save Details" : "Create Class")
+            }
+          </Button>
         </div>
 
         {/* Video Management Modals */}
@@ -1103,6 +1121,15 @@ export default function CreateClassPage() {
                   {uploadError}
                 </p>
               )}
+
+              {/* Generate AI Switch */}
+              <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium text-gray-900 dark:text-white">Generate AI Answers & Automated Feedback</Label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">If disabled, AI will generate questions but leave answers blank.</p>
+                </div>
+                <Switch checked={generateAiQuiz} onCheckedChange={setGenerateAiQuiz} />
+              </div>
 
               {/* Actions */}
               <div className="flex justify-end gap-2">
