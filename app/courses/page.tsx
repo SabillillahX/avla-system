@@ -4,11 +4,12 @@ import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
 import { type CourseClass } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
-import { ChevronRight, Star } from "lucide-react"
+import { ChevronRight, Search, Star } from "lucide-react"
 
 const formatCount = (value: number) => value.toLocaleString("en-US")
 const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000/api"
@@ -30,6 +31,7 @@ export default function CoursesPage() {
   const [joinedIds, setJoinedIds] = useState<string[]>([])
   const [classes, setClasses] = useState<CourseClass[]>([])
   const [isClassesLoading, setIsClassesLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -99,21 +101,28 @@ export default function CoursesPage() {
     loadEnrolled()
   }, [isLoading, user?.roles])
 
-  const trendingCourses = useMemo(() => {
-    return (classes ?? []).filter((item) => item.status === "published").slice(0, 6)
-  }, [classes])
-
-  const topDevelopmentCourses = useMemo(() => {
-    const development = (classes ?? []).filter((item) =>
-      item.status === "published" &&
-      (item.category?.name || "").toLowerCase().includes("development")
-    )
-    return development.length > 0 ? development.slice(0, 6) : (classes ?? []).filter((item) => item.status === "published").slice(0, 6)
-  }, [classes])
+  const query = searchQuery.trim().toLowerCase()
 
   const filteredCourses = useMemo(() => {
-    return (classes ?? []).filter((item) => item.status === "published")
-  }, [classes])
+    const published = (classes ?? []).filter((item) => item.status === "published")
+    if (!query) return published
+    return published.filter((item) =>
+      item.name.toLowerCase().includes(query) ||
+      (item.category?.name || "").toLowerCase().includes(query) ||
+      (item.short_description || item.description || "").toLowerCase().includes(query)
+    )
+  }, [classes, query])
+
+  const trendingCourses = useMemo(() => {
+    return filteredCourses.slice(0, 6)
+  }, [filteredCourses])
+
+  const topDevelopmentCourses = useMemo(() => {
+    const development = filteredCourses.filter((item) =>
+      (item.category?.name || "").toLowerCase().includes("development")
+    )
+    return development.length > 0 ? development.slice(0, 6) : filteredCourses.slice(0, 6)
+  }, [filteredCourses])
 
   const courseStats = useMemo(() => {
     const courseCount = filteredCourses.length
@@ -163,21 +172,14 @@ export default function CoursesPage() {
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">{todayLabel}</p>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">Good Evening! {greetingName}, ready to learn?</h2>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
-              >
-                Share
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
-              >
-                Browse Courses
-              </Button>
+            <div className="relative w-full max-w-md mb-4 sm:mb-6">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <Input
+                placeholder="Search courses by title, category, or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus-visible:ring-blue-500"
+              />
             </div>
           </div>
 

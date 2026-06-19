@@ -25,6 +25,12 @@ export interface CourseSection {
   updated_at?: string;
 }
 
+export interface PrerequisiteCourse {
+  id: string;
+  name: string;
+  thumbnail_url: string | null;
+}
+
 export interface CourseClass {
   id: string;
   name: string;
@@ -47,6 +53,7 @@ export interface CourseClass {
   has_certificate: boolean | null;
   what_you_will_learn: string[] | null;
   requirements: string[] | null;
+  prerequisites?: PrerequisiteCourse[] | null;
   sections?: CourseSection[] | null;
   students?: unknown[] | null;
   students_count?: number | null;

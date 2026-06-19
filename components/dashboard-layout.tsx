@@ -74,7 +74,7 @@ const navItems = [
   { name: "Group Chat", icon: Users, path: "/group-chat" },
   { name: "Documents", icon: FileText, path: "/documents" },
 
-  { name: "Class Management", icon: ClipboardList, path: "/classes", visibleFor: ["teacher", "admin"] },
+  { name: "Course Management", icon: ClipboardList, path: "/course-management", visibleFor: ["teacher", "admin"] },
 ]
 
 const notifications = [
@@ -236,16 +236,16 @@ function DashboardSidebar({
           >
             <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-12 w-auto object-contain group-data-[collapsible=icon]:hidden dark:hidden" />
             <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-12 w-auto object-contain group-data-[collapsible=icon]:hidden hidden dark:block" />
-            
+
             {/* Logo when collapsed */}
             <div className="hidden group-data-[collapsible=icon]:flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-transparent">
-              <Image 
-                src="/icon-logo.png" 
-                alt="Avla Icon" 
-                width={48} 
-                height={48} 
+              <Image
+                src="/icon-logo.png"
+                alt="Avla Icon"
+                width={48}
+                height={48}
                 quality={75}
-                className="w-full h-full object-contain drop-shadow-sm" 
+                className="w-full h-full object-contain drop-shadow-sm"
               />
             </div>
           </Link>
@@ -366,6 +366,7 @@ function DashboardSidebar({
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-gray-700 hover:bg-blue-50 hover:text-primary"
+                  onClick={() => router.push("/profile")}
                 >
                   <User className="mr-2 h-4 w-4" />
                   Profile Settings
@@ -408,7 +409,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ? {
       name: user.name,
       email: user.email,
-      imageURL: user.imageURL,
+      imageURL: user.avatar_url ?? user.imageURL,
     }
     : {
       name: fallbackPerson.name,

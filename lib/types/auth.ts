@@ -6,6 +6,7 @@ export interface User {
   roles: string[];
   permissions?: string[];
   imageURL?: string;
+  avatar_url?: string | null;
 }
 
 export interface LoginCredentials {

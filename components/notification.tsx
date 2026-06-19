@@ -27,7 +27,7 @@ export function useNotification(): NotificationContextValue {
 const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL
 const MCP_MAX_CONNECT_ATTEMPTS = 4
 const SSE_HEARTBEAT_TIMEOUT_MS = 180_000
-const STALE_PROCESS_TIMEOUT_MS = 60_000
+const STALE_PROCESS_TIMEOUT_MS = 300_000
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
     const { user } = useAuth()
@@ -71,8 +71,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }, STALE_PROCESS_TIMEOUT_MS)
     }, [scheduleAutoHide])
 
-
-
     const runMcpWithRetry = useCallback(async (params: {
         token: string
         videoId: string | number
@@ -89,7 +87,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             let mcpClient: Client | null = null
             try {
                 setAiProcessState("connecting")
-                setAiStatusMessage(`Connecting to MCP (${attempt}/${MCP_MAX_CONNECT_ATTEMPTS})...`)
+                setAiStatusMessage(`Menghubungkan ke AI (${attempt}/${MCP_MAX_CONNECT_ATTEMPTS})...`)
                 setAiProgress(Math.min(15, 5 + attempt * 2))
 
                 const transport = new SSEClientTransport(new URL(`${MCP_SERVER_URL}/sse`))
@@ -97,9 +95,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 await mcpClient.connect(transport)
 
                 setAiProcessState("generating")
-                setAiStatusMessage("Connected. AI is generating quizzes...")
+                setAiStatusMessage("AI sedang membuat kuis dan assessment...")
                 armStaleProtection()
 
+                // Send BOTH tool calls simultaneously on the same connection.
+                // The SSE transport drops ~60s after the first response arrives,
+                // so we must dispatch both requests before either completes.
                 const results = await Promise.allSettled([
                     mcpClient.callTool({
                         name: "generateAdaptiveVideoQuizzes",
@@ -110,7 +111,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             intervalMinutes: 3,
                             includeAnswers: params.includeAnswers,
                         },
-                    }, undefined, { timeout: 120_000 }),
+                    }, undefined, { timeout: 600_000 }),
                     mcpClient.callTool({
                         name: "generateFullAssessment",
                         arguments: {
@@ -120,7 +121,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             parallelWithQuiz: true,
                             includeAnswers: params.includeAnswers,
                         },
-                    }, undefined, { timeout: 180_000 })
+                    }, undefined, { timeout: 600_000 })
                 ])
 
                 const allFailed = results.every(r => r.status === 'rejected')
@@ -136,7 +137,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                 if (attempt < MCP_MAX_CONNECT_ATTEMPTS) {
                     const retryDelayMs = Math.min(8_000, attempt * 2_000)
-                    setAiStatusMessage(`MCP Connection failed. Retrying in ${retryDelayMs / 1_000}s...`)
+                    setAiStatusMessage(`Koneksi AI gagal. Mencoba ulang dalam ${retryDelayMs / 1_000}s...`)
                     await wait(retryDelayMs)
                 }
             } finally {

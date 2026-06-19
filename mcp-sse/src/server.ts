@@ -1,4 +1,4 @@
-import { Groq } from 'groq-sdk';
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express, { Request, Response } from "express";
@@ -21,6 +21,10 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const activeSSESessions = new Map<string, SSEServerTransport>();
 const notificationClientsByUserId = new Map<string, Set<Response>>();
 const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000;
+
+const inflightQuizJobs = new Map<string, number>();
+const inflightAssessmentJobs = new Map<string, number>();
+const INFLIGHT_JOB_TTL_MS = 10 * 60 * 1000;
 
 interface BufferedNotification {
     payload: NotificationPayload;
@@ -77,13 +81,11 @@ function emitNotificationToUser(userId: string, payload: NotificationPayload): v
     }
 }
 
-async function callGroqApi(
+async function callOpenRouterApi(
     prompt: string,
-    expectJson: boolean = true,
+    expectedSchema?: object,
     transcriptContext?: TranscriptContext
 ): Promise<string> {
-    const groq = new Groq({ apiKey: ENV.groqApiKey });
-
     let finalPrompt = prompt;
     if (transcriptContext && transcriptContext.rawText) {
         finalPrompt += `\n\n## Full Video Transcript\n"""\n${transcriptContext.rawText}\n"""`;
@@ -92,39 +94,104 @@ async function callGroqApi(
     const maxRetries = 3;
     let delayMs = 2000;
 
+    const requestBody: any = {
+        model: ENV.openRouterModel,
+        messages: [
+            {
+                role: "user",
+                content: finalPrompt
+            }
+        ],
+        temperature: 0.1,
+        top_p: 1,
+    };
+
+    if (expectedSchema) {
+        requestBody.response_format = {
+            type: "json_schema",
+            json_schema: {
+                name: "json_response",
+                strict: true,
+                schema: expectedSchema
+            }
+        };
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const chatCompletion = await groq.chat.completions.create({
-                messages: [
-                    {
-                        role: "user",
-                        content: finalPrompt
-                    }
-                ],
-                model: "llama-3.3-70b-versatile",
-                temperature: 0.2,
-                max_completion_tokens: 6000,
-                top_p: 1,
-                stream: false,
-                stop: null
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${ENV.openRouterApiKey}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": ENV.backendUrl,
+                    "X-Title": "AVLA AI"
+                },
+                body: JSON.stringify(requestBody)
             });
 
-            return chatCompletion.choices[0]?.message?.content || (expectJson ? "[]" : "");
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errText}`);
+            }
+
+            const data = await response.json();
+            return data.choices?.[0]?.message?.content || (expectedSchema ? "{}" : "");
 
         } catch (error: any) {
             if (attempt === maxRetries) {
                 throw error;
             }
-            console.warn(`[Groq] Error: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delayMs / 1000}s...`);
+            console.warn(`[OpenRouter] Error: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delayMs / 1000}s...`);
             await sleep(delayMs);
             delayMs *= 2;
         }
     }
 
-    throw new Error("Failed to call Groq API. Unexpected error.");
+    throw new Error("Failed to call OpenRouter API. Unexpected error.");
 }
 
+const quizSchema = {
+    type: "object",
+    properties: {
+        question: { type: "string" },
+        options: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 4,
+            maxItems: 4
+        },
+        correct_answer: { type: "string" },
+        explanation: { type: "string" }
+    },
+    required: ["question", "options", "correct_answer", "explanation"],
+    additionalProperties: false
+};
 
+const fullAssessmentSchema = {
+    type: "object",
+    properties: {
+        items: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    type: { type: "string", enum: ["multiple_choice", "short_answer", "essay"] },
+                    bloom_level: { type: "string" },
+                    difficulty_level: { type: "integer" },
+                    question: { type: "string" },
+                    reference_answer: { type: "string" },
+                    semantic_keywords: { type: "array", items: { type: "string" } },
+                    explanation: { type: "string" }
+                },
+                required: ["type", "bloom_level", "difficulty_level", "question", "reference_answer", "semantic_keywords", "explanation"],
+                additionalProperties: false
+            }
+        }
+    },
+    required: ["items"],
+    additionalProperties: false
+};
 
 function getVideoDurationSeconds(segments: TranscriptSegment[]): number {
     if (segments.length === 0) return 0;
@@ -224,7 +291,7 @@ Your task is to write exactly 1 (one) multiple-choice question for an adaptive p
 4. **No A/B/C/D or numbering inside option text.** The option strings themselves must be clean.
 5. **Randomize correct answer position.** Do NOT always put the correct answer at the first index. Randomly place it in the second, third, or fourth position as well.
 6. **Adaptive explanation.** The explanation must: (a) clearly state why the correct answer is right using evidence from the transcript, and (b) address the most tempting wrong answer and explain why it fails.
-7. **Language matching.** Detect the language of the transcript and write the entire question, all options, and the explanation in that SAME language.
+7. **STRICTLY INDONESIAN.** You MUST write the entire question, all options, and the explanation in the Indonesian language (Bahasa Indonesia), regardless of the transcript's original language.
 
 ## Strict Output Format
 Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing text:
@@ -261,6 +328,7 @@ Distribute the 10 questions across the following levels: ${targetBloomLevels}
 1. **short_answer**: Requires a concise explanation (1-3 sentences).
 2. **essay**: Requires deep reasoning and connection between concepts.
 3. Every question MUST be evaluatable via Semantic Similarity. This means you must provide a "reference_answer" that is rich in keywords and core concepts.
+4. **STRICTLY INDONESIAN.** All questions, reference answers, explanations, and semantic keywords MUST be written in the Indonesian language (Bahasa Indonesia).
 
 ## Formatting Rules
 - "bloom_level": String (e.g., "C3 - Applying").
@@ -297,6 +365,9 @@ function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number): s
 - **C4 (Analyze):** Focus on drawing connections among ideas; breaking info into parts.
 - **C5 (Evaluate):** Focus on justifying a stand or decision; critiquing.
 - **C6 (Create):** Focus on producing new or original work based on the material.
+
+### STRICTLY INDONESIAN
+All questions, reference answers, explanations, and semantic keywords MUST be written in the Indonesian language (Bahasa Indonesia).
 
 ### OUTPUT FORMAT (Strict JSON)
 Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
@@ -380,10 +451,113 @@ function createMcpServer(): McpServer {
                 audio_path: video.mp3_audio_path ?? null,
             }));
 
-            const fullPrompt = `Here is the user's video audio path data:\n${JSON.stringify(audioPathData, null, 2)}\n\nTask: ${prompt}\n\nAnalyze strictly based on the provided data.`;
-            const aiAnswer = await callGroqApi(fullPrompt, false);
+            const fullPrompt = `Here is the user's video audio path data:\n${JSON.stringify(audioPathData, null, 2)}\n\nTask: ${prompt}\n\nAnalyze strictly based on the provided data. You MUST answer in Indonesian (Bahasa Indonesia).`;
+            const aiAnswer = await callOpenRouterApi(fullPrompt, undefined);
 
             return { content: [{ type: "text", text: aiAnswer }] };
+        }
+    );
+
+    server.tool(
+        "generateChapterLearningObjectives",
+        "Generate overall learning objectives for a specific chapter/section by analyzing all its video summaries.",
+        {
+            token: z.string().describe("Bearer token of the currently logged-in user"),
+            sectionId: z.string().describe("ID of the target section/chapter"),
+        },
+        async ({ token, sectionId }) => {
+            try {
+                const response = await fetch(`${ENV.backendUrl}/videos?section_id=${sectionId}`, {
+                    method: "GET",
+                    headers: buildAuthHeaders(token),
+                });
+
+                if (!response.ok) {
+                    return {
+                        content: [{ type: "text", text: `Gagal mengambil data video untuk chapter ini: HTTP ${response.status}` }],
+                    };
+                }
+
+                const jsonBody = await response.json();
+                const videoList = jsonBody.data?.data ?? jsonBody.data ?? [];
+
+                if (videoList.length === 0) {
+                    return {
+                        content: [{ type: "text", text: "Tidak ada video di dalam chapter ini, tidak bisa membuat Learning Objectives." }],
+                    };
+                }
+
+                let combinedContext = "";
+                let videoCount = 0;
+
+                for (const video of videoList) {
+                    if (video.summary) {
+                        try {
+                            let parsedSummary: any = video.summary;
+                            
+                            // Keep parsing if it's a string (handles double-stringified JSON)
+                            while (typeof parsedSummary === 'string') {
+                                try {
+                                    parsedSummary = JSON.parse(parsedSummary);
+                                } catch (e) {
+                                    break; // Not a valid JSON string, stop parsing
+                                }
+                            }
+
+                            if (parsedSummary && typeof parsedSummary === 'object' && parsedSummary.summary) {
+                                combinedContext += `\n- Video: ${video.title}\n  Ringkasan: ${parsedSummary.summary}\n`;
+                                videoCount++;
+                            } else if (typeof parsedSummary === 'string' && parsedSummary.trim() !== '') {
+                                // Fallback: if summary is just a plain string (not JSON)
+                                combinedContext += `\n- Video: ${video.title}\n  Ringkasan: ${parsedSummary}\n`;
+                                videoCount++;
+                            }
+                        } catch (e) {
+                            console.warn(`[Chapter LO] Gagal membaca summary untuk video ${video.id}`);
+                        }
+                    }
+                }
+
+                if (!combinedContext) {
+                    return {
+                        content: [{ type: "text", text: "Video di chapter ini belum memiliki summary. Pastikan transkrip dan summary video sudah di-generate." }],
+                    };
+                }
+
+                const prompt = `You are an expert curriculum designer. Based on the summaries of ${videoCount} videos within a single chapter, generate up to 4 overarching Chapter-Level Learning Objectives.
+
+Requirements:
+1. Synthesize the individual video concepts into broad, cohesive chapter objectives.
+2. The number of learning objectives MUST NOT exceed 4.
+3. Align each objective with Bloom's Taxonomy, using clear and measurable action verbs.
+4. The generated learning objectives MUST be written entirely in Indonesian (e.g., "Siswa mampu menganalisis...", "Mampu menerapkan...").
+
+### Videos in this Chapter:
+${combinedContext}
+`;
+                const loSchema = {
+                    type: "object",
+                    properties: {
+                        learning_objectives: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Daftar learning objectives (maksimal 4)",
+                        }
+                    },
+                    required: ["learning_objectives"]
+                };
+
+                const llmResponse = await callOpenRouterApi(prompt, loSchema);
+
+                return {
+                    content: [{ type: "text", text: llmResponse }],
+                };
+
+            } catch (error: any) {
+                return {
+                    content: [{ type: "text", text: `Error generating chapter learning objectives: ${error.message || String(error)}` }],
+                };
+            }
         }
     );
 
@@ -404,119 +578,132 @@ function createMcpServer(): McpServer {
         },
         async ({ token, userId, videoId, intervalMinutes, includeAnswers }) => {
             const userIdStr = String(userId);
+            const videoIdStr = String(videoId);
 
-            emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_started",
-                video_id: videoId,
-                message: "Memulai pembuatan kuis adaptif...",
-                progress: 0,
-            });
-
-            const transcriptResponse = await fetch(
-                `${ENV.backendUrl}/videos/${videoId}/transcript`,
-                { method: "GET", headers: buildAuthHeaders(token) }
-            );
-
-            if (!transcriptResponse.ok) {
-                const errorText = await transcriptResponse.text();
-                emitNotificationToUser(userIdStr, {
-                    event: "quiz_generation_failed",
-                    video_id: videoId,
-                    message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
-                });
+            // Deduplication guard: skip if already generating quizzes for this video
+            const existingQuizJob = inflightQuizJobs.get(videoIdStr);
+            if (existingQuizJob && (Date.now() - existingQuizJob) < INFLIGHT_JOB_TTL_MS) {
+                console.log(`[Quiz] Skipping duplicate request for videoId=${videoIdStr} (already in-flight)`);
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
-                        },
-                    ],
+                    content: [{ type: "text", text: `Quiz generation already in progress for video ${videoIdStr}.` }],
                 };
             }
+            inflightQuizJobs.set(videoIdStr, Date.now());
 
-            const transcriptBody = await transcriptResponse.json();
-            const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
-
-            if (transcriptSegments.length === 0) {
+            try {
                 emitNotificationToUser(userIdStr, {
-                    event: "quiz_generation_failed",
+                    event: "quiz_generation_started",
                     video_id: videoId,
-                    message: "Transkrip video kosong, kuis tidak bisa dibuat.",
+                    message: "Memulai pembuatan kuis adaptif...",
+                    progress: 0,
                 });
-                return {
-                    content: [{ type: "text", text: "No transcript segments found." }],
-                };
-            }
 
-            const durationSeconds = getVideoDurationSeconds(transcriptSegments);
-            const durationMinutes = durationSeconds / 60;
-
-            let targetQuizCount: number;
-
-            if (intervalMinutes !== undefined && intervalMinutes > 0) {
-                const rawCount = Math.ceil(durationSeconds / (intervalMinutes * 60));
-                targetQuizCount = Math.min(10, Math.max(3, rawCount));
-                console.log(
-                    `[Quiz] Manual interval override: ${intervalMinutes}min → clamped to ${targetQuizCount} quizzes`
+                const transcriptResponse = await fetch(
+                    `${ENV.backendUrl}/videos/${videoId}/transcript`,
+                    { method: "GET", headers: buildAuthHeaders(token) }
                 );
-            } else {
-                targetQuizCount = calculateTargetQuizCount(durationSeconds);
-            }
 
-            console.log(
-                `[Quiz] videoId=${videoId} | duration=${durationMinutes.toFixed(1)}min | targetQuizzes=${targetQuizCount}`
-            );
+                if (!transcriptResponse.ok) {
+                    const errorText = await transcriptResponse.text();
+                    emitNotificationToUser(userIdStr, {
+                        event: "quiz_generation_failed",
+                        video_id: videoId,
+                        message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
+                            },
+                        ],
+                    };
+                }
 
-            emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_analyzing",
-                video_id: videoId,
-                message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — akan membuat ${targetQuizCount} soal kuis...`,
-                progress: 3,
-                quiz_count: targetQuizCount,
-                duration_minutes: Math.round(durationMinutes * 10) / 10,
-            });
+                const transcriptBody = await transcriptResponse.json();
+                const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
 
-            const transcriptChunks = chunkTranscriptByCount(
-                transcriptSegments,
-                targetQuizCount
-            );
+                if (transcriptSegments.length === 0) {
+                    emitNotificationToUser(userIdStr, {
+                        event: "quiz_generation_failed",
+                        video_id: videoId,
+                        message: "Transkrip video kosong, kuis tidak bisa dibuat.",
+                    });
+                    return {
+                        content: [{ type: "text", text: "No transcript segments found." }],
+                    };
+                }
 
-            if (transcriptChunks.length === 0) {
-                emitNotificationToUser(userIdStr, {
-                    event: "quiz_generation_failed",
-                    video_id: videoId,
-                    message: "Gagal membagi transkrip menjadi potongan.",
-                });
-                return {
-                    content: [{ type: "text", text: "Failed to chunk transcript." }],
-                };
-            }
+                const durationSeconds = getVideoDurationSeconds(transcriptSegments);
+                const durationMinutes = durationSeconds / 60;
 
-            const totalChunks = transcriptChunks.length;
+                let targetQuizCount: number;
 
-            const generatedQuizzes: (ParsedQuiz & { trigger_time: number })[] = [];
-            let failedChunkCount = 0;
-            let lastErrorMessage = "Format kuis dari AI tidak valid.";
-
-            for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
-                const chunk = transcriptChunks[chunkIndex];
-                if (!chunk.text) continue;
-
-                try {
-                    const prompt = buildQuizGenerationPrompt(
-                        chunk.text,
-                        chunkIndex,
-                        totalChunks,
-                        durationMinutes,
-                        includeAnswers
+                if (intervalMinutes !== undefined && intervalMinutes > 0) {
+                    const rawCount = Math.ceil(durationSeconds / (intervalMinutes * 60));
+                    targetQuizCount = Math.min(10, Math.max(3, rawCount));
+                    console.log(
+                        `[Quiz] Manual interval override: ${intervalMinutes}min → clamped to ${targetQuizCount} quizzes`
                     );
+                } else {
+                    targetQuizCount = calculateTargetQuizCount(durationSeconds);
+                }
 
-                    // 👉 transcriptContext DIHAPUS agar tidak mengirim full transcript untuk setiap soal (Hemat TPM)
-                    const rawLlmOutput = await callGroqApi(prompt, true);
-                    let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
+                console.log(
+                    `[Quiz] videoId=${videoId} | duration=${durationMinutes.toFixed(1)}min | targetQuizzes=${targetQuizCount}`
+                );
 
-                    if (!parsedQuiz) {
-                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY valid JSON — no markdown, no preamble:
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_analyzing",
+                    video_id: videoId,
+                    message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — akan membuat ${targetQuizCount} soal kuis...`,
+                    progress: 3,
+                    quiz_count: targetQuizCount,
+                    duration_minutes: Math.round(durationMinutes * 10) / 10,
+                });
+
+                const transcriptChunks = chunkTranscriptByCount(
+                    transcriptSegments,
+                    targetQuizCount
+                );
+
+                if (transcriptChunks.length === 0) {
+                    emitNotificationToUser(userIdStr, {
+                        event: "quiz_generation_failed",
+                        video_id: videoId,
+                        message: "Gagal membagi transkrip menjadi potongan.",
+                    });
+                    return {
+                        content: [{ type: "text", text: "Failed to chunk transcript." }],
+                    };
+                }
+
+                const totalChunks = transcriptChunks.length;
+
+                const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+                const generatedQuizzes: (ParsedQuiz & { trigger_time: number })[] = [];
+                let failedChunkCount = 0;
+                let lastErrorMessage = "Format kuis dari AI tidak valid.";
+
+                for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
+                    const chunk = transcriptChunks[chunkIndex];
+                    if (!chunk.text) continue;
+
+                    try {
+                        const prompt = buildQuizGenerationPrompt(
+                            chunk.text,
+                            chunkIndex,
+                            totalChunks,
+                            durationMinutes,
+                            includeAnswers
+                        );
+
+                        // Menggunakan transcriptContext agar OpenRouter/Gemini bisa memanfaatkan Context Caching
+                        const rawLlmOutput = await callOpenRouterApi(prompt, quizSchema, transcriptContext);
+                        let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
+
+                        if (!parsedQuiz) {
+                            const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY valid JSON — no markdown, no preamble:
                         {
                         "question": "string",
                         "options": ["string", "string", "string", "string"],
@@ -526,132 +713,135 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGroqApi(repairPrompt, true);
-                        parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
-                    }
+                            const repairedOutput = await callOpenRouterApi(repairPrompt, quizSchema);
+                            parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
+                        }
 
-                    if (!parsedQuiz) {
-                        throw new Error(
-                            "Unable to extract a valid quiz format from LLM output after repair attempt."
+                        if (!parsedQuiz) {
+                            throw new Error(
+                                "Unable to extract a valid quiz format from LLM output after repair attempt."
+                            );
+                        }
+
+                        generatedQuizzes.push({ ...parsedQuiz, trigger_time: chunk.trigger_time });
+
+                    } catch (error) {
+                        failedChunkCount++;
+                        lastErrorMessage =
+                            error instanceof Error
+                                ? error.message
+                                : "Unknown error during quiz generation.";
+                        console.error(
+                            `[Quiz] Chunk ${chunkIndex + 1}/${totalChunks} failed: ${lastErrorMessage}`
                         );
+
+                    } finally {
+                        const processedChunks = chunkIndex + 1;
+                        const progressPercent = Math.min(
+                            95,
+                            Math.round((processedChunks / totalChunks) * 100)
+                        );
+
+                        emitNotificationToUser(userIdStr, {
+                            event: "quiz_generation_progress",
+                            video_id: videoId,
+                            processed_chunks: processedChunks,
+                            total_chunks: totalChunks,
+                            progress: progressPercent,
+                            message: `Membuat soal ${processedChunks} dari ${totalChunks}...`,
+                        });
+
+                        if (chunkIndex < transcriptChunks.length - 1) {
+                            console.log(`[Quiz] Menunggu 2 detik sebelum menembak soal berikutnya...`);
+                            await sleep(2000);
+                        }
                     }
+                }
 
-                    generatedQuizzes.push({ ...parsedQuiz, trigger_time: chunk.trigger_time });
-
-                } catch (error) {
-                    failedChunkCount++;
-                    lastErrorMessage =
-                        error instanceof Error
-                            ? error.message
-                            : "Unknown error during quiz generation.";
-                    console.error(
-                        `[Quiz] Chunk ${chunkIndex + 1}/${totalChunks} failed: ${lastErrorMessage}`
-                    );
-
-                } finally {
-                    const processedChunks = chunkIndex + 1;
-                    const progressPercent = Math.min(
-                        95,
-                        Math.round((processedChunks / totalChunks) * 100)
-                    );
-
+                if (generatedQuizzes.length === 0) {
                     emitNotificationToUser(userIdStr, {
-                        event: "quiz_generation_progress",
+                        event: "quiz_generation_failed",
                         video_id: videoId,
-                        processed_chunks: processedChunks,
-                        total_chunks: totalChunks,
-                        progress: progressPercent,
-                        message: `Membuat soal ${processedChunks} dari ${totalChunks}...`,
+                        message: `Gagal membuat kuis: ${lastErrorMessage} (0/${totalChunks} chunk berhasil)`,
                     });
-
-                    if (chunkIndex < transcriptChunks.length - 1) {
-                        console.log(`[Quiz] Menunggu 2 detik sebelum menembak soal berikutnya...`);
-                        await sleep(2000);
-                    }
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Quiz generation failed. Detail: ${lastErrorMessage}`,
+                            },
+                        ],
+                    };
                 }
-            }
 
-            if (generatedQuizzes.length === 0) {
                 emitNotificationToUser(userIdStr, {
-                    event: "quiz_generation_failed",
+                    event: "quiz_generation_saving",
                     video_id: videoId,
-                    message: `Gagal membuat kuis: ${lastErrorMessage} (0/${totalChunks} chunk berhasil)`,
+                    progress: 97,
+                    message: "Menyimpan kuis ke server...",
                 });
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Quiz generation failed. Detail: ${lastErrorMessage}`,
-                        },
-                    ],
-                };
-            }
 
-            emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_saving",
-                video_id: videoId,
-                progress: 97,
-                message: "Menyimpan kuis ke server...",
-            });
-
-            const saveResponse = await fetch(
-                `${ENV.backendUrl}/videos/${videoId}/quizzes`,
-                {
-                    method: "POST",
-                    headers: buildAuthHeaders(token),
-                    body: JSON.stringify({ quizzes: generatedQuizzes }),
-                }
-            );
-
-            if (!saveResponse.ok) {
-                const saveErrorText = await saveResponse.text();
-                emitNotificationToUser(userIdStr, {
-                    event: "quiz_generation_failed",
-                    video_id: videoId,
-                    message: `Gagal menyimpan kuis: ${saveResponse.status}`,
-                });
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to save quizzes: ${saveResponse.status} - ${saveErrorText}`,
-                        },
-                    ],
-                };
-            }
-
-            const saveResult = await saveResponse.json();
-            const savedQuizCount = saveResult.saved_count ?? generatedQuizzes.length;
-            const skippedCount = totalChunks - generatedQuizzes.length;
-
-            emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_completed",
-                video_id: videoId,
-                progress: 100,
-                saved_count: savedQuizCount,
-                message: `${savedQuizCount} kuis berhasil dibuat dan disimpan.`,
-            });
-
-            const triggerSummary = generatedQuizzes
-                .map((q) => `${q.trigger_time}s`)
-                .join(", ");
-
-            return {
-                content: [
+                const saveResponse = await fetch(
+                    `${ENV.backendUrl}/videos/${videoId}/quizzes`,
                     {
-                        type: "text",
-                        text: [
-                            `Done! Generated ${savedQuizCount} quizzes from a ${durationMinutes.toFixed(1)}-minute video.`,
-                            skippedCount > 0
-                                ? `(${skippedCount} chunk(s) skipped due to LLM errors)`
-                                : "",
-                            `Quiz trigger times: [${triggerSummary}]`,
-                        ]
-                            .filter(Boolean)
-                            .join(" "),
-                    },
-                ],
-            };
+                        method: "POST",
+                        headers: buildAuthHeaders(token),
+                        body: JSON.stringify({ quizzes: generatedQuizzes }),
+                    }
+                );
+
+                if (!saveResponse.ok) {
+                    const saveErrorText = await saveResponse.text();
+                    emitNotificationToUser(userIdStr, {
+                        event: "quiz_generation_failed",
+                        video_id: videoId,
+                        message: `Gagal menyimpan kuis: ${saveResponse.status}`,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to save quizzes: ${saveResponse.status} - ${saveErrorText}`,
+                            },
+                        ],
+                    };
+                }
+
+                const saveResult = await saveResponse.json();
+                const savedQuizCount = saveResult.saved_count ?? generatedQuizzes.length;
+                const skippedCount = totalChunks - generatedQuizzes.length;
+
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_completed",
+                    video_id: videoId,
+                    progress: 100,
+                    saved_count: savedQuizCount,
+                    message: `${savedQuizCount} kuis berhasil dibuat dan disimpan.`,
+                });
+
+                const triggerSummary = generatedQuizzes
+                    .map((q) => `${q.trigger_time}s`)
+                    .join(", ");
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: [
+                                `Done! Generated ${savedQuizCount} quizzes from a ${durationMinutes.toFixed(1)}-minute video.`,
+                                skippedCount > 0
+                                    ? `(${skippedCount} chunk(s) skipped due to LLM errors)`
+                                    : "",
+                                `Quiz trigger times: [${triggerSummary}]`,
+                            ]
+                                .filter(Boolean)
+                                .join(" "),
+                        },
+                    ],
+                };
+            } finally {
+                inflightQuizJobs.delete(videoIdStr);
+            }
         }
     );
 
@@ -673,122 +863,132 @@ function createMcpServer(): McpServer {
         },
         async ({ token, userId, videoId, parallelWithQuiz = true, includeAnswers = true }) => {
             const userIdStr = String(userId);
+            const videoIdStr = String(videoId);
 
-            emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_started",
-                video_id: videoId,
-                message: "Starting to create assessment...",
-                assessment_progress: 0,
-                assessment_status: "starting",
-            });
-
-            const transcriptResponse = await fetch(
-                `${ENV.backendUrl}/videos/${videoId}/transcript`,
-                { method: "GET", headers: buildAuthHeaders(token) }
-            );
-
-            if (!transcriptResponse.ok) {
-                const errorText = await transcriptResponse.text();
-                emitNotificationToUser(userIdStr, {
-                    event: "assessment_generation_failed",
-                    video_id: videoId,
-                    message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
-                });
+            const existingAssessmentJob = inflightAssessmentJobs.get(videoIdStr);
+            if (existingAssessmentJob && (Date.now() - existingAssessmentJob) < INFLIGHT_JOB_TTL_MS) {
+                console.log(`[Assessment] Skipping duplicate request for videoId=${videoIdStr} (already in-flight)`);
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
-                        },
-                    ],
+                    content: [{ type: "text", text: `Assessment generation already in progress for video ${videoIdStr}.` }],
                 };
             }
+            inflightAssessmentJobs.set(videoIdStr, Date.now());
 
-            const transcriptBody = await transcriptResponse.json();
-            const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
-
-            if (transcriptSegments.length === 0) {
-                emitNotificationToUser(userIdStr, {
-                    event: "assessment_generation_failed",
-                    video_id: videoId,
-                    message: "No transcript segments found, cannot create assessment.",
-                });
-                return {
-                    content: [{ type: "text", text: "No transcript segments found." }],
-                };
-            }
-
-            // Construct full transcript from segments
-            const fullTranscript = transcriptSegments
-                .map((seg) => seg.text)
-                .join(" ")
-                .trim();
-
-            if (!fullTranscript) {
-                emitNotificationToUser(userIdStr, {
-                    event: "assessment_generation_failed",
-                    video_id: videoId,
-                    message: "Transcript is empty, cannot create assessment.",
-                });
-                return {
-                    content: [{ type: "text", text: "Transcript is empty." }],
-                };
-            }
-
-            const durationSeconds = getVideoDurationSeconds(transcriptSegments);
-            const durationMinutes = durationSeconds / 60;
-
-            emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_analyzing",
-                video_id: videoId,
-                message: `Video duration: ${durationMinutes.toFixed(1)} minutes — creating 10 assessment questions...`,
-                assessment_progress: 5,
-                assessment_status: "analyzing",
-            });
-
-            let targetBloomLevels = "C1, C2, and C3"; // Default assessment
             try {
-                const qaResponse = await fetch(`${ENV.backendUrl}/question-answers?per_page=100`, {
-                    method: "GET",
-                    headers: buildAuthHeaders(token),
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_started",
+                    video_id: videoId,
+                    message: "Starting to create assessment...",
+                    assessment_progress: 0,
+                    assessment_status: "starting",
                 });
-                if (qaResponse.ok) {
-                    const qaBody = await qaResponse.json();
-                    const answers = qaBody.data || [];
-                    if (answers.length > 0) {
-                        const newestVideoId = answers[0].question?.video_id;
-                        if (newestVideoId) {
-                            const videoAnswers = answers.filter((a: any) => a.question?.video_id === newestVideoId);
-                            const correctCount = videoAnswers.filter((a: any) => a.is_correct === true).length;
 
-                            if (correctCount > 6) {
-                                targetBloomLevels = "C4 and C5";
-                                console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Upgrading to C4-C5.`);
-                            } else {
-                                console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Maintaining C1-C3.`);
+                const transcriptResponse = await fetch(
+                    `${ENV.backendUrl}/videos/${videoId}/transcript`,
+                    { method: "GET", headers: buildAuthHeaders(token) }
+                );
+
+                if (!transcriptResponse.ok) {
+                    const errorText = await transcriptResponse.text();
+                    emitNotificationToUser(userIdStr, {
+                        event: "assessment_generation_failed",
+                        video_id: videoId,
+                        message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
+                            },
+                        ],
+                    };
+                }
+
+                const transcriptBody = await transcriptResponse.json();
+                const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
+
+                if (transcriptSegments.length === 0) {
+                    emitNotificationToUser(userIdStr, {
+                        event: "assessment_generation_failed",
+                        video_id: videoId,
+                        message: "No transcript segments found, cannot create assessment.",
+                    });
+                    return {
+                        content: [{ type: "text", text: "No transcript segments found." }],
+                    };
+                }
+
+                const fullTranscript = transcriptSegments
+                    .map((seg) => seg.text)
+                    .join(" ")
+                    .trim();
+
+                if (!fullTranscript) {
+                    emitNotificationToUser(userIdStr, {
+                        event: "assessment_generation_failed",
+                        video_id: videoId,
+                        message: "Transcript is empty, cannot create assessment.",
+                    });
+                    return {
+                        content: [{ type: "text", text: "Transcript is empty." }],
+                    };
+                }
+
+                const durationSeconds = getVideoDurationSeconds(transcriptSegments);
+                const durationMinutes = durationSeconds / 60;
+
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_analyzing",
+                    video_id: videoId,
+                    message: `Video duration: ${durationMinutes.toFixed(1)} minutes — creating 10 assessment questions...`,
+                    assessment_progress: 5,
+                    assessment_status: "analyzing",
+                });
+
+                let targetBloomLevels = "C1, C2, and C3"; // Default assessment
+                try {
+                    const qaResponse = await fetch(`${ENV.backendUrl}/question-answers?per_page=100`, {
+                        method: "GET",
+                        headers: buildAuthHeaders(token),
+                    });
+                    if (qaResponse.ok) {
+                        const qaBody = await qaResponse.json();
+                        const answers = qaBody.data || [];
+                        if (answers.length > 0) {
+                            const newestVideoId = answers[0].question?.video_id;
+                            if (newestVideoId) {
+                                const videoAnswers = answers.filter((a: any) => a.question?.video_id === newestVideoId);
+                                const correctCount = videoAnswers.filter((a: any) => a.is_correct === true).length;
+
+                                if (correctCount > 6) {
+                                    targetBloomLevels = "C4 and C5";
+                                    console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Upgrading to C4-C5.`);
+                                } else {
+                                    console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Maintaining C1-C3.`);
+                                }
                             }
                         }
                     }
+                } catch (err) {
+                    console.error("[Assessment] Error fetching previous question answers:", err);
                 }
-            } catch (err) {
-                console.error("[Assessment] Error fetching previous question answers:", err);
-            }
 
-            let generatedQuestions: SemanticAssessmentQuestion[] = [];
-            let failedAttempts = 0;
-            const maxAttempts = 3;
-            let lastErrorMessage = "Assessment format from AI is invalid.";
+                let generatedQuestions: SemanticAssessmentQuestion[] = [];
+                let failedAttempts = 0;
+                const maxAttempts = 3;
+                let lastErrorMessage = "Assessment format from AI is invalid.";
 
-            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+                const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
 
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                try {
-                    const prompt = buildFullAssessmentPrompt(targetBloomLevels, includeAnswers);
-                    const rawLlmOutput = await callGroqApi(prompt, true, transcriptContext);
-                    let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    try {
+                        const prompt = buildFullAssessmentPrompt(targetBloomLevels, includeAnswers);
+                        const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
+                        let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
-                    if (!parsedQuestions || parsedQuestions.length === 0) {
-                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly 10 objects — no markdown, no preamble:
+                        if (!parsedQuestions || parsedQuestions.length === 0) {
+                            const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly 10 objects — no markdown, no preamble:
                         [
                           {
                             "type": "short_answer",
@@ -803,144 +1003,147 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGroqApi(repairPrompt, true);
-                        parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
-                    }
+                            const repairedOutput = await callOpenRouterApi(repairPrompt, fullAssessmentSchema);
+                            parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
+                        }
 
-                    if (parsedQuestions && parsedQuestions.length === 10) {
-                        generatedQuestions = parsedQuestions.slice(0, 10);
-                        break;
-                    } else {
-                        throw new Error(
-                            `Generated only ${parsedQuestions?.length ?? 0} valid questions, need exactly 10.`
+                        if (parsedQuestions && parsedQuestions.length === 10) {
+                            generatedQuestions = parsedQuestions.slice(0, 10);
+                            break;
+                        } else {
+                            throw new Error(
+                                `Generated only ${parsedQuestions?.length ?? 0} valid questions, need exactly 10.`
+                            );
+                        }
+                    } catch (error) {
+                        failedAttempts++;
+                        lastErrorMessage =
+                            error instanceof Error
+                                ? error.message
+                                : "Unknown error during assessment generation.";
+                        console.error(
+                            `[Assessment] Attempt ${attempt + 1}/${maxAttempts} failed: ${lastErrorMessage}`
                         );
-                    }
-                } catch (error) {
-                    failedAttempts++;
-                    lastErrorMessage =
-                        error instanceof Error
-                            ? error.message
-                            : "Unknown error during assessment generation.";
-                    console.error(
-                        `[Assessment] Attempt ${attempt + 1}/${maxAttempts} failed: ${lastErrorMessage}`
-                    );
 
+                        emitNotificationToUser(userIdStr, {
+                            event: "assessment_generation_progress",
+                            video_id: videoId,
+                            assessment_progress: 20 + attempt * 25,
+                            message: `Upaya ${attempt + 1} gagal, mencoba lagi...`,
+                        });
+
+                        if (attempt < maxAttempts - 1) {
+                            await sleep(1000);
+                        }
+                    }
+                }
+
+                if (generatedQuestions.length < 10) {
                     emitNotificationToUser(userIdStr, {
-                        event: "assessment_generation_progress",
+                        event: "assessment_generation_failed",
                         video_id: videoId,
-                        assessment_progress: 20 + attempt * 25,
-                        message: `Upaya ${attempt + 1} gagal, mencoba lagi...`,
+                        message: `Failed to create assessment: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} attempts failed)`,
                     });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Assessment generation failed. Detail: ${lastErrorMessage}`,
+                            },
+                        ],
+                    };
+                }
 
-                    if (attempt < maxAttempts - 1) {
-                        await sleep(1000);
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_saving",
+                    video_id: videoId,
+                    assessment_progress: 95,
+                    message: "Saving assessment to server...",
+                });
+
+                let savedAssessmentCount = 0;
+                const assessmentEndpoint = `${ENV.backendUrl}/questions`;
+
+                const toAssessmentPayload = (question: SemanticAssessmentQuestion) => ({
+                    video_id: String(videoId),
+                    type: question.type,
+                    question: question.question,
+                    options: question.semantic_keywords,
+                    accepted_answers: [question.reference_answer],
+                    explanation: question.explanation,
+                    bloom_level: question.bloom_level,
+                });
+
+                for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
+                    const question = generatedQuestions[qIndex];
+                    try {
+                        const saveResponse = await fetch(assessmentEndpoint, {
+                            method: "POST",
+                            headers: buildAuthHeaders(token),
+                            body: JSON.stringify(toAssessmentPayload(question)),
+                        });
+
+                        if (saveResponse.ok) {
+                            savedAssessmentCount++;
+                            console.log(`[Assessment] Saved question ${qIndex + 1}/${generatedQuestions.length}`);
+                        } else {
+                            const errorText = await saveResponse
+                                .text()
+                                .catch(() => "Unknown backend error");
+                            console.warn(
+                                `[Assessment] Failed to save question ${qIndex + 1}: HTTP ${saveResponse.status} | Response: ${errorText}`
+                            );
+                        }
+                    } catch (error) {
+                        console.error(`[Assessment] Error saving question ${qIndex + 1}:`, error);
                     }
                 }
-            }
 
-            if (generatedQuestions.length < 10) {
+                if (savedAssessmentCount === 0) {
+                    emitNotificationToUser(userIdStr, {
+                        event: "assessment_generation_failed",
+                        video_id: videoId,
+                        message: `Failed to save assessment: No questions were saved successfully.`,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to save assessment: No questions were saved successfully.`,
+                            },
+                        ],
+                    };
+                }
+
                 emitNotificationToUser(userIdStr, {
-                    event: "assessment_generation_failed",
+                    event: "assessment_generation_completed",
                     video_id: videoId,
-                    message: `Failed to create assessment: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} attempts failed)`,
+                    assessment_progress: 100,
+                    assessment_saved_count: savedAssessmentCount,
+                    message: `${savedAssessmentCount} assessment questions successfully created and saved.`,
                 });
+
+                const questionSummary = generatedQuestions
+                    .slice(0, savedAssessmentCount)
+                    .map((q) => `${q.type}(L${q.difficulty_level})`)
+                    .join(", ");
+
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Assessment generation failed. Detail: ${lastErrorMessage}`,
+                            text: [
+                                `Done! Generated and saved ${savedAssessmentCount} assessment questions.`,
+                                `Question types: ${questionSummary}`,
+                            ]
+                                .filter(Boolean)
+                                .join(" | "),
                         },
                     ],
                 };
+            } finally {
+                inflightAssessmentJobs.delete(videoIdStr);
             }
-
-            emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_saving",
-                video_id: videoId,
-                assessment_progress: 95,
-                message: "Saving assessment to server...",
-            });
-
-            let savedAssessmentCount = 0;
-            const assessmentEndpoint = `${ENV.backendUrl}/questions`;
-
-            const toAssessmentPayload = (question: SemanticAssessmentQuestion) => ({
-                video_id: String(videoId),
-                type: question.type,
-                question: question.question,
-                options: question.semantic_keywords,
-                accepted_answers: [question.reference_answer],
-                explanation: question.explanation,
-                bloom_level: question.bloom_level,
-            });
-
-            for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
-                const question = generatedQuestions[qIndex];
-                try {
-                    const saveResponse = await fetch(assessmentEndpoint, {
-                        method: "POST",
-                        headers: buildAuthHeaders(token),
-                        body: JSON.stringify(toAssessmentPayload(question)),
-                    });
-
-                    if (saveResponse.ok) {
-                        savedAssessmentCount++;
-                        console.log(`[Assessment] Saved question ${qIndex + 1}/${generatedQuestions.length}`);
-                    } else {
-                        const errorText = await saveResponse
-                            .text()
-                            .catch(() => "Unknown backend error");
-                        console.warn(
-                            `[Assessment] Failed to save question ${qIndex + 1}: HTTP ${saveResponse.status} | Response: ${errorText}`
-                        );
-                    }
-                } catch (error) {
-                    console.error(`[Assessment] Error saving question ${qIndex + 1}:`, error);
-                }
-            }
-
-            if (savedAssessmentCount === 0) {
-                emitNotificationToUser(userIdStr, {
-                    event: "assessment_generation_failed",
-                    video_id: videoId,
-                    message: `Failed to save assessment: No questions were saved successfully.`,
-                });
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to save assessment: No questions were saved successfully.`,
-                        },
-                    ],
-                };
-            }
-
-            emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_completed",
-                video_id: videoId,
-                assessment_progress: 100,
-                assessment_saved_count: savedAssessmentCount,
-                message: `${savedAssessmentCount} assessment questions successfully created and saved.`,
-            });
-
-            const questionSummary = generatedQuestions
-                .slice(0, savedAssessmentCount)
-                .map((q) => `${q.type}(L${q.difficulty_level})`)
-                .join(", ");
-
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: [
-                            `Done! Generated and saved ${savedAssessmentCount} assessment questions.`,
-                            `Question types: ${questionSummary}`,
-                        ]
-                            .filter(Boolean)
-                            .join(" | "),
-                    },
-                ],
-            };
         }
     );
 
@@ -1011,7 +1214,7 @@ function createMcpServer(): McpServer {
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
                     const prompt = buildSemanticAssessmentPrompt(targetLevel, quantity);
-                    const rawLlmOutput = await callGroqApi(prompt, true, transcriptContext);
+                    const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
                     if (!parsedQuestions || parsedQuestions.length === 0) {
@@ -1030,7 +1233,7 @@ function createMcpServer(): McpServer {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                        const repairedOutput = await callGroqApi(repairPrompt, true);
+                        const repairedOutput = await callOpenRouterApi(repairPrompt, fullAssessmentSchema);
                         parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
                     }
 
@@ -1205,7 +1408,7 @@ Evaluate each student answer against the reference answer using semantic similar
 - **Irrelevant answers:** Be honest but kind. Example: "Jawaban kamu belum nyambung dengan pertanyaannya. Coba baca ulang materinya pelan-pelan, fokus ke bagian tentang X."
 
 ## Rules
-- Always write in Indonesian, casual but respectful
+- STRICTLY INDONESIAN: All feedback MUST be written in the Indonesian language (Bahasa Indonesia). Do NOT write anything in English. Keep it casual but respectful.
 - Never be patronizing or overly dramatic
 - Keep it practical — if suggesting a study method, make it specific (e.g. "coba buat mind map", "highlight kata kunci", "ulangi bagian video menit ke-X")
 - Match the depth of feedback to the question type (short_answer = brief feedback, essay = slightly more detailed)
@@ -1223,11 +1426,34 @@ ${JSON.stringify(evaluationItems, null, 2)}
   }
 ]`;
 
-                const rawOutput = await callGroqApi(prompt, true, transcriptContext);
+                const evaluationSchema = {
+                    type: "object",
+                    properties: {
+                        items: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    question_id: { type: "string" },
+                                    score: { type: "number" },
+                                    decision: { type: "string", enum: ["correct", "partial", "wrong"] },
+                                    feedback: { type: "string" }
+                                },
+                                required: ["question_id", "score", "decision", "feedback"],
+                                additionalProperties: false
+                            }
+                        }
+                    },
+                    required: ["items"],
+                    additionalProperties: false
+                };
+
+                const rawOutput = await callOpenRouterApi(prompt, evaluationSchema, transcriptContext);
                 let parsedResults = [];
                 try {
                     const cleanedOutput = rawOutput.replace(/```json/g, '').replace(/```/g, '').trim();
-                    parsedResults = JSON.parse(cleanedOutput);
+                    const parsedData = JSON.parse(cleanedOutput);
+                    parsedResults = parsedData.items || parsedData;
                 } catch (e) {
                     console.error("[Evaluate Tool] Failed to parse AI response:", rawOutput);
                     throw new Error("Failed to parse evaluation response");

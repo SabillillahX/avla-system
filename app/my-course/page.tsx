@@ -76,23 +76,21 @@ export default function MyCoursePage() {
       let completedVideos = 0
       let lastLessonStr = "Not started yet"
 
-      // Compute progress based on quizzes and assessments
       if (course.sections && Array.isArray(course.sections)) {
         course.sections.forEach((section: any) => {
           if (section.videos && Array.isArray(section.videos)) {
             totalVideos += section.videos.length
             section.videos.forEach((video: any) => {
-              // Indicators of percentage should be based on is the quiz and assessment done or not.
-              const isDone = video.is_quiz_done === true || video.is_assessment_done === true || video.status === 'completed'
+              // A video is done only when ALL its quizzes AND assessments are answered
+              const isDone = video.is_completed === true
               if (isDone) {
                 completedVideos++
-                lastLessonStr = video.title // Update last lesson to the latest completed one
+                lastLessonStr = video.title
               }
             })
           }
         })
-        
-        // If not started, grab the first video title
+
         if (completedVideos === 0 && course.sections[0]?.videos?.[0]) {
           lastLessonStr = "Up next: " + course.sections[0].videos[0].title
         }

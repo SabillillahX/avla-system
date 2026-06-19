@@ -1,6 +1,7 @@
 import api from "./axios";
 import {
   ApiResponse,
+  AssessmentQuestion,
   PaginatedVideos,
   Quiz,
   QuizListResponse,
@@ -9,6 +10,28 @@ import {
   Video,
 } from "../types/handle-videos";
 import { AxiosProgressEvent } from "axios";
+
+export interface UpdateAssessmentPayload {
+  video_id: string;
+  type: string;
+  question: string;
+  options?: string[] | null;
+  accepted_answers?: string[];
+  explanation?: string | null;
+  bloom_level?: string | null;
+}
+
+export interface CreateAssessmentPayload extends UpdateAssessmentPayload {}
+
+export interface UpdateQuizzesPayload {
+  quizzes: Array<{
+    trigger_time: number;
+    question: string;
+    options: string[];
+    correct_answer: string;
+    explanation?: string | null;
+  }>;
+}
 
 export const videosApi = {
   getVideos: async (page = 1): Promise<PaginatedVideos> => {
@@ -37,30 +60,82 @@ export const videosApi = {
     payload: UploadVideoPayload,
     onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
   ): Promise<Video> => {
-    const formData = new FormData();
-    formData.append("title", payload.title);
-    formData.append("source_type", payload.source_type);
+    if (payload.source_type === "url" || !payload.video_file) {
+      const formData = new FormData();
+      formData.append("title", payload.title);
+      formData.append("source_type", payload.source_type);
 
-    if (payload.description) formData.append("description", payload.description);
-    if (payload.category_id) formData.append("category_id", payload.category_id);
-    if (payload.class_id) formData.append("class_id", payload.class_id);
-    if (payload.section_id) formData.append("section_id", payload.section_id);
-    if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
-    if (payload.generate_ai_quiz !== undefined) {
-      formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
+      if (payload.description) formData.append("description", payload.description);
+      if (payload.category_id) formData.append("category_id", payload.category_id);
+      if (payload.course_id) formData.append("course_id", payload.course_id);
+      if (payload.section_id) formData.append("section_id", payload.section_id);
+      if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
+      if (payload.generate_ai_quiz !== undefined) {
+        formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
+      }
+      if (payload.source_type === "url" && payload.video_url) {
+        formData.append("video_url", payload.video_url);
+      }
+
+      const response = await api.post<ApiResponse<Video>>("/videos", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress,
+      });
+      return response.data.data;
     }
 
-    if (payload.source_type === "file" && payload.video_file) {
-      formData.append("video_file", payload.video_file);
-    } else if (payload.source_type === "url" && payload.video_url) {
-      formData.append("video_url", payload.video_url);
+    // Chunking logic for file upload to prevent payload too large errors
+    const file = payload.video_file;
+    const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+    const totalChunks = Math.ceil(file.size / chunkSize);
+    const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    let lastResponse;
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
+      const isFinalChunk = i === totalChunks - 1;
+
+      const formData = new FormData();
+      formData.append("is_chunk", "1");
+      formData.append("upload_id", uploadId);
+      formData.append("chunk_index", i.toString());
+      formData.append("total_chunks", totalChunks.toString());
+      formData.append("video_file", chunk, file.name);
+
+      if (isFinalChunk) {
+        formData.append("title", payload.title);
+        formData.append("source_type", payload.source_type);
+        if (payload.description) formData.append("description", payload.description);
+        if (payload.category_id) formData.append("category_id", payload.category_id);
+        if (payload.course_id) formData.append("course_id", payload.course_id);
+        if (payload.section_id) formData.append("section_id", payload.section_id);
+        if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
+        if (payload.generate_ai_quiz !== undefined) {
+          formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
+        }
+        formData.append("file_name", file.name);
+      }
+
+      lastResponse = await api.post<ApiResponse<Video> | { message: string, progress: number }>("/videos", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (onUploadProgress && progressEvent.total) {
+            const chunkLoaded = progressEvent.loaded;
+            const previousChunksLoaded = i * chunkSize;
+            const totalLoaded = previousChunksLoaded + chunkLoaded;
+
+            const fakeEvent = {
+              loaded: totalLoaded,
+              total: file.size,
+              bytes: progressEvent.bytes,
+            } as AxiosProgressEvent;
+            onUploadProgress(fakeEvent);
+          }
+        }
+      });
     }
 
-    const response = await api.post<ApiResponse<Video>>("/videos", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      onUploadProgress,
-    });
-    return response.data.data;
+    return (lastResponse?.data as ApiResponse<Video>).data;
   },
 
   updateVideo: async (
@@ -73,7 +148,7 @@ export const videosApi = {
     if (payload.title !== undefined) formData.append("title", payload.title);
     if (payload.description !== undefined) formData.append("description", payload.description);
     if (payload.category_id !== undefined) formData.append("category_id", payload.category_id);
-    if (payload.class_id !== undefined) formData.append("class_id", payload.class_id);
+    if (payload.course_id !== undefined) formData.append("course_id", payload.course_id);
     if (payload.section_id !== undefined) formData.append("section_id", payload.section_id);
     if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
 
@@ -87,5 +162,23 @@ export const videosApi = {
 
   deleteVideo: async (videoId: string): Promise<void> => {
     await api.delete(`/videos/${videoId}`);
+  },
+
+  updateAssessment: async (uuid: string, payload: UpdateAssessmentPayload): Promise<AssessmentQuestion> => {
+    const response = await api.put<ApiResponse<AssessmentQuestion>>(`/questions/${uuid}`, payload);
+    return response.data.data;
+  },
+
+  createAssessment: async (payload: CreateAssessmentPayload): Promise<AssessmentQuestion> => {
+    const response = await api.post<ApiResponse<AssessmentQuestion>>(`/questions`, payload);
+    return response.data.data;
+  },
+
+  deleteAssessment: async (uuid: string): Promise<void> => {
+    await api.delete(`/questions/${uuid}`);
+  },
+
+  updateQuizzes: async (videoId: string, payload: UpdateQuizzesPayload): Promise<void> => {
+    await api.post(`/videos/${videoId}/quizzes`, payload);
   },
 };

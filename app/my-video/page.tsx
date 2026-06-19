@@ -346,9 +346,10 @@ export default function MyVideoPage() {
         }
       })
       fetchVideos()
-    } catch (err: unknown) {
+    } catch (err: any) {
       const msg =
-        err instanceof Error ? err.message : "Upload failed. Please try again."
+        err?.response?.data?.message ||
+        (err instanceof Error ? err.message : "Upload failed. Please try again.")
       setUploadError(msg)
       setIsUploadOpen(true)
     } finally {
@@ -389,8 +390,8 @@ export default function MyVideoPage() {
       })
       setIsEditModalVisible(false)
       fetchVideos()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Edit failed. Please try again."
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Edit failed. Please try again.")
       setEditError(msg)
     } finally {
       setIsEditing(false)
@@ -413,8 +414,8 @@ export default function MyVideoPage() {
       await videosApi.deleteVideo(videoToDelete.id)
       setIsDeleteModalVisible(false)
       fetchVideos()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Delete failed. Please try again."
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Delete failed. Please try again.")
       setDeleteError(msg)
     } finally {
       setIsDeleting(false)
@@ -424,7 +425,7 @@ export default function MyVideoPage() {
   const filteredList = useMemo(
     () =>
       videos.filter((v) => {
-        const matchSearch = v.title.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchSearch = v.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
         const matchStatus = selectedStatus === "all" || v.status === selectedStatus
         return matchSearch && matchStatus
       }),

@@ -6,12 +6,14 @@ dotenv.config();
 
 export const ENV = {
     groqApiKey: process.env.GROQ_API_KEY ?? "",
+    openRouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+    openRouterModel: process.env.OPENROUTER_MODEL ?? "google/gemini-3.1-flash-lite",
     backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL ?? "",
     allowedOrigins: process.env.ALLOWED_ORIGINS ?? "",
     port: Number(process.env.PORT ?? 8081),
 } as const;
 
-export const REQUIRED_ENV_KEYS = ["groqApiKey", "backendUrl"] as const;
+export const REQUIRED_ENV_KEYS = ["openRouterApiKey", "backendUrl"] as const;
 
 for (const key of REQUIRED_ENV_KEYS) {
     if (!ENV[key]) {
@@ -147,8 +149,12 @@ export function coerceQuizFromObject(rawObject: unknown): ParsedQuiz | null {
 
         if (normalizedOptions.length !== 4) continue;
 
-        const correctAnswer = resolveCorrectAnswer(rawCorrectAnswer, normalizedOptions);
-        if (!correctAnswer) continue;
+        const correctAnswer = rawCorrectAnswer === ""
+            ? ""
+            : resolveCorrectAnswer(rawCorrectAnswer, normalizedOptions);
+        // null means the AI returned something unresolvable (genuine parse failure)
+        // empty string is intentional — teacher chose to fill answers manually
+        if (correctAnswer === null || correctAnswer === undefined) continue;
 
         return {
             question: normalizeWhitespace(rawQuestion),
@@ -285,20 +291,17 @@ export function parseAssessmentFromLlmOutput(rawOutput: string): AssessmentQuest
     for (const candidate of candidates) {
         try {
             const parsed = JSON.parse(candidate);
-            if (Array.isArray(parsed)) {
-                for (const item of parsed) {
-                    const coerced = coerceAssessmentQuestionFromObject(item);
-                    if (coerced) {
-                        questions.push(coerced);
-                    }
-                }
-                if (questions.length > 0) return questions;
-            } else {
-                const coerced = coerceAssessmentQuestionFromObject(parsed);
+            const itemsArray = Array.isArray(parsed) 
+                ? parsed 
+                : (Array.isArray(parsed.items) ? parsed.items : (Array.isArray(parsed.questions) ? parsed.questions : [parsed]));
+                
+            for (const item of itemsArray) {
+                const coerced = coerceAssessmentQuestionFromObject(item);
                 if (coerced) {
                     questions.push(coerced);
                 }
             }
+            if (questions.length > 0) return questions;
         } catch {
             // continue to next candidate
         }
@@ -323,21 +326,25 @@ export function coerceSemanticQuestionFromObject(rawObject: unknown): SemanticAs
     if (!bloomLevel || typeof bloomLevel !== "string" || !bloomLevel.trim()) return null;
     if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 5) return null;
     if (!question || typeof question !== "string" || !question.trim()) return null;
-    if (!referenceAnswer || typeof referenceAnswer !== "string" || !referenceAnswer.trim()) return null;
-    if (!Array.isArray(semanticKeywords) || semanticKeywords.length === 0) return null;
 
-    const normalizedKeywords = semanticKeywords
-        .filter((kw): kw is string => typeof kw === "string" && !!kw.trim())
-        .map(normalizeWhitespace);
+    // reference_answer and semantic_keywords may be intentionally empty when
+    // the teacher chose to fill answers manually (includeAnswers=false)
+    const normalizedReference = typeof referenceAnswer === "string"
+        ? normalizeWhitespace(referenceAnswer)
+        : "";
 
-    if (normalizedKeywords.length === 0) return null;
+    const normalizedKeywords = Array.isArray(semanticKeywords)
+        ? semanticKeywords
+            .filter((kw): kw is string => typeof kw === "string" && !!kw.trim())
+            .map(normalizeWhitespace)
+        : [];
 
     return {
         type: type as "short_answer" | "essay",
         bloom_level: normalizeWhitespace(bloomLevel),
         difficulty_level: difficulty,
         question: normalizeWhitespace(question),
-        reference_answer: normalizeWhitespace(referenceAnswer),
+        reference_answer: normalizedReference,
         semantic_keywords: normalizedKeywords,
         explanation: typeof explanation === "string" ? normalizeWhitespace(explanation) : "",
     };
@@ -354,20 +361,17 @@ export function parseSemanticAssessmentFromLlmOutput(rawOutput: string): Semanti
     for (const candidate of candidates) {
         try {
             const parsed = JSON.parse(candidate);
-            if (Array.isArray(parsed)) {
-                for (const item of parsed) {
-                    const coerced = coerceSemanticQuestionFromObject(item);
-                    if (coerced) {
-                        questions.push(coerced);
-                    }
-                }
-                if (questions.length > 0) return questions;
-            } else {
-                const coerced = coerceSemanticQuestionFromObject(parsed);
+            const itemsArray = Array.isArray(parsed) 
+                ? parsed 
+                : (Array.isArray(parsed.items) ? parsed.items : (Array.isArray(parsed.questions) ? parsed.questions : [parsed]));
+                
+            for (const item of itemsArray) {
+                const coerced = coerceSemanticQuestionFromObject(item);
                 if (coerced) {
                     questions.push(coerced);
                 }
             }
+            if (questions.length > 0) return questions;
         } catch {
             // continue to next candidate
         }

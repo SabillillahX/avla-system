@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { classesApi, type CourseSection } from "@/lib/api/classes"
+import { classesApi, type CourseSection, type CourseClass, type PrerequisiteCourse } from "@/lib/api/classes"
 import { categoriesApi, type CategoryItem } from "@/lib/api/categories"
 import { formatPrice, parsePrice, getImageUrl } from "@/lib/class-utils"
 import { ArrowLeft, Plus, Trash2, UploadCloud, Play } from "lucide-react"
@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 
 import { videosApi } from "@/lib/api/handle-videos"
 import { Video as VideoType, VideoStatus } from "@/lib/types/handle-videos"
@@ -24,7 +26,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion } from "lucide-react"
+import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 const statusConfig: Record<VideoStatus, { label: string; color: string; icon: React.ElementType }> = {
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", icon: CheckCircle2 },
@@ -77,6 +80,11 @@ export default function CreateClassPage() {
   const [editingSectionTitle, setEditingSectionTitle] = useState("")
   // Video Management States
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
+  const [isGeneratingLO, setIsGeneratingLO] = useState(false)
+  const [selectedPrerequisites, setSelectedPrerequisites] = useState<PrerequisiteCourse[]>([])
+  const [allCourses, setAllCourses] = useState<CourseClass[]>([])
+  const [prerequisiteSearch, setPrerequisiteSearch] = useState("")
+  const [isPrereqOpen, setIsPrereqOpen] = useState(false)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [titleInput, setTitleInput] = useState("")
   const [descriptionInput, setDescriptionInput] = useState("")
@@ -85,7 +93,6 @@ export default function CreateClassPage() {
   const [sourceType, setSourceType] = useState<"file" | "url">("file")
   const [videoUrlInput, setVideoUrlInput] = useState("")
   const [videoFileInput, setVideoFileInput] = useState<File | null>(null)
-  const [generateAiQuiz, setGenerateAiQuiz] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
@@ -108,6 +115,24 @@ export default function CreateClassPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const { aiProcessState, aiProcessingVideoId } = useNotification()
+
+  // Block save/navigation while AI is running or has failed for any video in this class
+  const isAiActive = aiProcessState === "connecting" || aiProcessState === "generating"
+  const hasFailedVideos = courseSections.some((s) =>
+    (s.videos || []).some((v: any) => v.status === "failed")
+  )
+  const isBlocked = isAiActive || hasFailedVideos
+
+  // Warn on browser back/close while AI is running
+  useEffect(() => {
+    if (!isAiActive) return
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [isAiActive])
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -237,13 +262,12 @@ export default function CreateClassPage() {
         title,
         description,
         category_id: categoryInput || formState.category,
-        class_id: editId,
+        course_id: editId,
         section_id: activeSectionId,
         thumbnail_file: thumbnailFileInput,
         source_type: sourceType,
         video_file: sourceType === "file" ? videoFileInput ?? undefined : undefined,
         video_url: sourceType === "url" ? videoUrl : undefined,
-        generate_ai_quiz: generateAiQuiz,
       }, (e) => {
         if (e.total) {
           setUploadProgress(Math.round((e.loaded * 100) / e.total))
@@ -254,7 +278,8 @@ export default function CreateClassPage() {
       refreshSections()
       toast.success("Video uploaded successfully")
     } catch (err: any) {
-      setUploadError(err.message || "Upload failed")
+      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Upload failed")
+      setUploadError(msg)
     } finally {
       setIsUploading(false)
       setUploadProgress(null)
@@ -269,7 +294,6 @@ export default function CreateClassPage() {
     setSourceType("file")
     setVideoUrlInput("")
     setVideoFileInput(null)
-    setGenerateAiQuiz(true)
     setUploadError(null)
     if (videoInputRef.current) videoInputRef.current.value = ""
     if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
@@ -293,7 +317,8 @@ export default function CreateClassPage() {
       refreshSections()
       toast.success("Video updated")
     } catch (err: any) {
-      setEditError(err.message || "Edit failed")
+      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Edit failed")
+      setEditError(msg)
     } finally {
       setIsEditing(false)
     }
@@ -309,7 +334,8 @@ export default function CreateClassPage() {
       refreshSections()
       toast.success("Video deleted")
     } catch (err: any) {
-      setDeleteError(err.message || "Delete failed")
+      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Delete failed")
+      setDeleteError(msg)
     } finally {
       setIsDeleting(false)
     }
@@ -343,6 +369,16 @@ export default function CreateClassPage() {
       }
     }
     loadCategories()
+    const loadAllCourses = async () => {
+      try {
+        const res = await classesApi.list({ per_page: 100 })
+        const courseList = Array.isArray(res.data) ? res.data : (res.data?.data || [])
+        setAllCourses(courseList)
+      } catch (err) {
+        console.error("Failed to load courses for prerequisites", err)
+      }
+    }
+    loadAllCourses()
   }, [])
 
   useEffect(() => {
@@ -375,6 +411,9 @@ export default function CreateClassPage() {
         }
         if (classItem.sections) {
           setCourseSections(classItem.sections)
+        }
+        if (classItem.prerequisites?.length) {
+          setSelectedPrerequisites(classItem.prerequisites)
         }
       } catch (err) {
         console.error("Failed to load class", err)
@@ -502,6 +541,10 @@ export default function CreateClassPage() {
       formData.append("thumbnail", thumbnailFile)
     }
 
+    selectedPrerequisites.forEach((prereq, index) => {
+      formData.append(`prerequisites[${index}]`, prereq.id)
+    })
+
     try {
       if (isEditMode && editId) {
         await classesApi.update(editId, formData)
@@ -512,7 +555,7 @@ export default function CreateClassPage() {
         toast.success("Success", { description: "Class created successfully!" })
       }
       resetForm()
-      router.push("/classes")
+      router.push("/course-management")
     } catch (error: any) {
       if (error.response?.data?.errors) {
         const errorMessages = Object.values(error.response.data.errors).flat().join("\n")
@@ -525,15 +568,86 @@ export default function CreateClassPage() {
     }
   }
 
+  const generateLOs = async (sectionId: string) => {
+    const toastId = "generate-lo-toast";
+    try {
+      setIsGeneratingLO(true)
+      toast.loading("Menghubungkan ke AI untuk membuat Learning Objectives...", { id: toastId })
+      
+      const token = localStorage.getItem("auth_token") || ""
+      const mcpUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL
+      if (!mcpUrl) throw new Error("MCP server URL not configured")
+
+      const transport = new SSEClientTransport(new URL(`${mcpUrl}/sse`))
+      const mcpClient = new Client({ name: "nextjs-client", version: "1.0.0" }, { capabilities: {} })
+      await mcpClient.connect(transport)
+
+      toast.loading("Menganalisis summary video di chapter terpilih...", { id: toastId })
+
+      const result = await mcpClient.callTool({
+        name: "generateChapterLearningObjectives",
+        arguments: { token, sectionId },
+      })
+
+      const textResult = (result as any).content[0].text
+      
+      // Attempt to clean markdown backticks if any
+      const cleanedText = textResult.replace(/^```json\s*/i, "").replace(/```$/i, "").trim()
+      
+      let parsed: any;
+      try {
+        parsed = JSON.parse(cleanedText)
+      } catch (parseError) {
+        // If it's not JSON, it might be an error string from the tool (e.g. no videos found)
+        console.error("Failed to parse tool response as JSON:", textResult)
+        toast.error(textResult.slice(0, 100) + (textResult.length > 100 ? "..." : ""), { id: toastId })
+        mcpClient.close()
+        setIsGeneratingLO(false)
+        return
+      }
+
+      if (parsed.learning_objectives && Array.isArray(parsed.learning_objectives)) {
+        setFormState((prev) => ({
+          ...prev,
+          what_you_will_learn: [
+            ...prev.what_you_will_learn.filter((x) => x.trim() !== ""),
+            ...parsed.learning_objectives,
+          ],
+        }))
+        toast.success("Learning Objectives berhasil dibuat!", { id: toastId })
+      } else {
+        toast.error("Gagal mengekstrak learning objectives dari respons AI.", { id: toastId })
+      }
+      mcpClient.close()
+    } catch (error: any) {
+      console.error(error)
+      toast.error(error.message || "Gagal membuat Learning Objectives.", { id: toastId })
+    } finally {
+      setIsGeneratingLO(false)
+    }
+  }
+
   return (
     <ProtectedRoute requireRole={["admin", "teacher"]}>
       <div className="max-w-7xl 2xl:max-w-[1600px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
         <div className="flex items-center gap-4 border-b border-gray-200 dark:border-gray-800 pb-6">
-          <Link href="/classes">
-            <Button variant="outline" size="icon" className="rounded-full shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800">
+          {isAiActive ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-sm opacity-40 cursor-not-allowed"
+              disabled
+              title="Please wait for AI to finish before leaving"
+            >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-          </Link>
+          ) : (
+            <Link href="/course-management">
+              <Button variant="outline" size="icon" className="rounded-full shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
               {isEditMode ? "Edit Class Details" : "Create New Class"}
@@ -545,6 +659,30 @@ export default function CreateClassPage() {
             </p>
           </div>
         </div>
+
+        {/* AI / failed-video blocking banner */}
+        {isBlocked && (
+          <div className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-sm ${isAiActive
+              ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300"
+              : "bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300"
+            }`}>
+            {isAiActive ? (
+              <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin" />
+            ) : (
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+            )}
+            <div>
+              <p className="font-semibold">
+                {isAiActive ? "AI is still processing" : "Video processing failed"}
+              </p>
+              <p className="mt-0.5 text-xs opacity-80">
+                {isAiActive
+                  ? "Saving changes and leaving this page are disabled until the AI finishes generating quizzes and assessments. Please wait."
+                  : "One or more videos have a failed status. Please delete the failed video and re-upload it before saving changes."}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           <div className="lg:col-span-2 xl:col-span-3 space-y-6">
@@ -629,6 +767,22 @@ export default function CreateClassPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-semibold">What will students learn?</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={isGeneratingLO || courseSections.length === 0}>
+                          {isGeneratingLO ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
+                          Generate Learning Objective
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">Select Chapter</div>
+                        {courseSections.map((section) => (
+                          <DropdownMenuItem key={section.id} onClick={() => generateLOs(section.id)}>
+                            {section.title}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {formState.what_you_will_learn.map((item, index) => (
                     <div key={`learn-${index}`} className="flex items-center gap-2">
@@ -668,6 +822,102 @@ export default function CreateClassPage() {
                     <Plus className="h-4 w-4" /> Add Requirement
                   </Button>
                 </div>
+
+                {/* Course Prerequisites */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-base font-semibold">Course Prerequisites</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">Select existing courses that students should complete first.</p>
+                    </div>
+                  </div>
+
+                  {selectedPrerequisites.length > 0 && (
+                    <div className="space-y-2">
+                      {selectedPrerequisites.map((prereq) => (
+                        <div key={prereq.id} className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2.5 group transition-all hover:border-blue-300 dark:hover:border-blue-700">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-md bg-blue-100 dark:bg-blue-900/40 shrink-0">
+                            <Link2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <span className="flex-1 text-sm font-medium truncate">{prereq.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600"
+                            onClick={() => setSelectedPrerequisites((prev) => prev.filter((p) => p.id !== prereq.id))}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <Popover open={isPrereqOpen} onOpenChange={setIsPrereqOpen}>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" className="mt-1 text-sm gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                        <Search className="h-4 w-4" />
+                        Add Prerequisite Course
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="start">
+                      <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+                        <Input
+                          placeholder="Search courses..."
+                          value={prerequisiteSearch}
+                          onChange={(e) => setPrerequisiteSearch(e.target.value)}
+                          className="h-8 text-sm"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="max-h-56 overflow-y-auto p-1">
+                        {allCourses
+                          .filter((course) => {
+                            if (editId && course.id === editId) return false
+                            if (selectedPrerequisites.some((p) => p.id === course.id)) return false
+                            if (prerequisiteSearch.trim()) {
+                              return course.name.toLowerCase().includes(prerequisiteSearch.toLowerCase())
+                            }
+                            return true
+                          })
+                          .map((course) => (
+                            <button
+                              key={course.id}
+                              className="flex items-center gap-2.5 w-full rounded-md px-2.5 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              onClick={() => {
+                                setSelectedPrerequisites((prev) => [
+                                  ...prev,
+                                  { id: course.id, name: course.name, thumbnail_url: course.thumbnail_url },
+                                ])
+                                setPrerequisiteSearch("")
+                                setIsPrereqOpen(false)
+                              }}
+                            >
+                              <div className="flex items-center justify-center w-7 h-7 rounded bg-gray-200 dark:bg-gray-700 shrink-0">
+                                <Link2 className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{course.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {course.teacher?.name || "Unknown teacher"}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        {allCourses.filter((course) => {
+                          if (editId && course.id === editId) return false
+                          if (selectedPrerequisites.some((p) => p.id === course.id)) return false
+                          if (prerequisiteSearch.trim()) {
+                            return course.name.toLowerCase().includes(prerequisiteSearch.toLowerCase())
+                          }
+                          return true
+                        }).length === 0 && (
+                          <p className="py-4 text-center text-sm text-muted-foreground">No courses available</p>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardContent>
             </Card>
 
@@ -705,7 +955,7 @@ export default function CreateClassPage() {
                                   <Button size="sm" variant="ghost" onClick={() => setEditingSectionId(null)} className="h-8">Cancel</Button>
                                 </div>
                               ) : (
-                                <h4 
+                                <h4
                                   className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 group cursor-pointer hover:text-blue-600 transition-colors"
                                   onClick={() => { setEditingSectionId(section.id); setEditingSectionTitle(section.title); }}
                                 >
@@ -920,16 +1170,18 @@ export default function CreateClassPage() {
 
         {/* Form Actions */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-800">
-          <Button variant="outline" onClick={resetForm}>Discard Changes</Button>
-          <Button 
-            onClick={handleSubmit} 
-            size="lg" 
+          <Button variant="outline" onClick={resetForm} disabled={isAiActive}>Discard Changes</Button>
+          <Button
+            onClick={handleSubmit}
+            size="lg"
             className="px-8"
-            disabled={aiProcessState === "connecting" || aiProcessState === "generating"}
+            disabled={isBlocked}
           >
-            {(aiProcessState === "connecting" || aiProcessState === "generating") 
-              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Waiting for AI...</> 
-              : (isEditMode ? "Save Details" : "Create Class")
+            {isAiActive
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Waiting for AI...</>
+              : hasFailedVideos
+                ? <><ShieldAlert className="w-4 h-4 mr-2" /> Fix Failed Videos First</>
+                : (isEditMode ? "Save Changes" : "Create Class")
             }
           </Button>
         </div>
@@ -1121,15 +1373,6 @@ export default function CreateClassPage() {
                   {uploadError}
                 </p>
               )}
-
-              {/* Generate AI Switch */}
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium text-gray-900 dark:text-white">Generate AI Answers & Automated Feedback</Label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">If disabled, AI will generate questions but leave answers blank.</p>
-                </div>
-                <Switch checked={generateAiQuiz} onCheckedChange={setGenerateAiQuiz} />
-              </div>
 
               {/* Actions */}
               <div className="flex justify-end gap-2">

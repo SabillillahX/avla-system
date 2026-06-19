@@ -99,7 +99,7 @@ export default function ClassManagementPage() {
               Create new classes and manage your educational content.
             </p>
           </div>
-          <Link href="/classes/create">
+          <Link href="/course-management/create">
             <Button className="gap-2 shadow-sm w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white border-transparent">
               <Plus className="h-4 w-4" />
               Create Class
@@ -179,7 +179,7 @@ export default function ClassManagementPage() {
                   </div>
 
                   <div className="flex flex-row lg:flex-col justify-center gap-2 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-4 lg:pt-0 lg:pl-5 min-w-[140px]">
-                    <Link href={`/classes/create?edit=${item.id}`} className="w-full">
+                    <Link href={`/course-management/create?edit=${item.id}`} className="w-full">
                       <Button variant="outline" size="sm" className="w-full justify-start gap-2 shadow-sm border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                         <Edit2 className="w-3.5 h-3.5" /> Edit Details
                       </Button>
@@ -215,7 +215,7 @@ export default function ClassManagementPage() {
                     {searchQuery ? "We couldn't find any classes matching your search. Try a different term." : "You haven't created any classes yet. Start building your curriculum today."}
                   </p>
                   {!searchQuery && (
-                    <Link href="/classes/create">
+                    <Link href="/course-management/create">
                       <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
                         <Plus className="w-4 h-4 mr-2" /> Create Your First Class
                       </Button>
