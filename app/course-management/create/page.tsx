@@ -28,6 +28,7 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FormState } from "@/lib/types/course-management"
 
 const statusConfig: Record<VideoStatus, { label: string; color: string; icon: React.ElementType }> = {
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", icon: CheckCircle2 },
@@ -36,19 +37,7 @@ const statusConfig: Record<VideoStatus, { label: string; color: string; icon: Re
   failed: { label: "Failed", color: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", icon: AlertCircle },
 }
 
-interface FormState {
-  title: string
-  category: string
-  price: string
-  discount_price: string
-  is_free: boolean
-  short_description: string
-  description: string
-  language: string
-  has_certificate: boolean
-  what_you_will_learn: string[]
-  requirements: string[]
-}
+
 
 const emptyForm: FormState = {
   title: "",

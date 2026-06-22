@@ -10,19 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { classesApi, type CourseClass } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, extractCourseArray, getImageUrl } from "@/lib/class-utils"
 import { Plus, Search, Edit2, Eye, EyeOff, Trash2, Clock, Users, BookOpen } from "lucide-react"
-
-type ClassRow = {
-  id: string
-  title: string
-  category: string
-  price: string
-  imageUrl: string
-  description: string
-  status: "published" | "draft" | "archived"
-  students: number
-  updatedAt: string
-  raw: CourseClass
-}
+import { ClassRow } from "@/lib/types/course-management"
 
 const mapClassRow = (course: CourseClass): ClassRow => {
   return {
@@ -130,10 +118,10 @@ export default function ClassManagementPage() {
                 >
                   <div className="w-full lg:w-56 h-36 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
                     {/* Reverted to standard img to prevent Next.js errors about missing width/height properties when using unoptimized remote images without fill */}
-                    <img 
-                      src={item.imageUrl} 
-                      alt={item.title} 
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                    <img
+                      src={item.imageUrl}
+                      alt={item.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="absolute top-2 right-2">
                       <Badge
@@ -148,7 +136,7 @@ export default function ClassManagementPage() {
                       </Badge>
                     </div>
                   </div>
-                  
+
                   <div className="flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-1.5">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
@@ -184,18 +172,18 @@ export default function ClassManagementPage() {
                         <Edit2 className="w-3.5 h-3.5" /> Edit Details
                       </Button>
                     </Link>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => togglePublish(item.id)}
                       className="w-full justify-start gap-2 shadow-sm border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       {item.status === "published" ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       {item.status === "published" ? "Unpublish" : "Publish"}
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(item.id)}
                       className="w-full justify-start gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >

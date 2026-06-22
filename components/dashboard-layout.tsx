@@ -22,11 +22,12 @@ import {
   LogOut,
   MessageSquare,
 
-  Settings,
   User,
   Users,
   Zap,
   ClipboardList,
+  ShoppingCart,
+  Settings,
 } from "lucide-react"
 
 import { useAuth } from "@/contexts/AuthContext"
@@ -71,6 +72,7 @@ const navItems = [
   { name: "My Video", icon: FileText, path: "/my-video" },
   { name: "Courses", icon: CheckCircle, path: "/courses", visibleFor: ["student", "admin"] },
   { name: "My Course", icon: Users, path: "/my-course", visibleFor: ["student", "admin"] },
+  { name: "Order History", icon: ShoppingCart, path: "/orders", visibleFor: ["student", "admin"] },
   { name: "Group Chat", icon: Users, path: "/group-chat" },
   { name: "Documents", icon: FileText, path: "/documents" },
 

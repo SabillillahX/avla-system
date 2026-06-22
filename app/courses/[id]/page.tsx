@@ -12,9 +12,11 @@ import { classesApi, type CourseClass, type CourseSection } from "@/lib/api/clas
 import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
 import {
   Star, ArrowLeft, Users, BookOpen, Globe, Award, ChevronDown,
-  ChevronUp, PlayCircle, CheckCircle, Loader2, Lock, Clock,
+  ChevronUp, PlayCircle, CheckCircle, Loader2, Lock, Clock, X, Receipt, ShieldCheck
 } from "lucide-react"
+import { CheckoutModal } from "@/components/CheckoutModal"
 import { cn } from "@/lib/utils"
+import Script from "next/script"
 
 const extractCourseArray = (value: unknown): CourseClass[] => {
   if (Array.isArray(value)) return value as CourseClass[]
@@ -116,6 +118,9 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [joined, setJoined] = useState(false)
   const [isCheckingEnrollment, setIsCheckingEnrollment] = useState(true)
   const [isJoining, setIsJoining] = useState(false)
+  const [invoice, setInvoice] = useState<any>(null)
+  const [showInvoice, setShowInvoice] = useState(false)
+  const [isCanceling, setIsCanceling] = useState(false)
 
   const canEnroll = user?.roles?.includes("student")
   const isEnrolled = joined
@@ -164,10 +169,80 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     if (!course || joined || !canEnroll) return
     setIsJoining(true)
     try {
-      await classesApi.enroll(course.id)
-      setJoined(true)
+      if (course.is_free) {
+        await classesApi.enroll(course.id)
+        setJoined(true)
+      } else {
+        const token = localStorage.getItem("auth_token")
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/transactions/checkout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ course_id: course.id }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Failed to generate invoice");
+        
+        if (data.invoice_details) {
+          setInvoice(data.invoice_details);
+          setShowInvoice(true);
+        }
+      }
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message || "Failed to initiate checkout")
     } finally {
       setIsJoining(false)
+    }
+  }
+
+  const handlePayNow = () => {
+    if (!invoice || !invoice.snap_token) return;
+    
+    // @ts-ignore
+    window.snap.pay(invoice.snap_token, {
+      onSuccess: function () {
+        setJoined(true);
+        setShowInvoice(false);
+      },
+      onPending: function () {
+        setShowInvoice(false);
+      },
+      onError: function () {
+        setShowInvoice(false);
+      },
+      onClose: function () {
+        // User closed snap popup
+      }
+    });
+  }
+
+  const handleCancelOrder = async () => {
+    if (!invoice) return;
+    setIsCanceling(true)
+    try {
+        const token = localStorage.getItem("auth_token")
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/transactions/${invoice.transaction_id}/cancel`, {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            }
+        });
+        if (response.ok) {
+            setShowInvoice(false);
+            setInvoice(null);
+        } else {
+            const data = await response.json();
+            alert(data.message || "Failed to cancel order");
+        }
+    } catch (err: any) {
+        alert(err.message || "Failed to cancel order");
+    } finally {
+        setIsCanceling(false)
     }
   }
 
@@ -200,6 +275,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   return (
     <ProtectedRoute>
+      <Script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY} strategy="lazyOnload" />
       <div className="min-h-screen bg-[#EFF6FF] dark:bg-gray-950">
 
         {/* Top nav bar */}
@@ -462,6 +538,17 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             </aside>
           </div>
         </div>
+        {/* Invoice Modal */}
+        {showInvoice && invoice && (
+          <CheckoutModal 
+            invoice={invoice}
+            onClose={() => setShowInvoice(false)}
+            onPay={handlePayNow}
+            onPayLater={() => setShowInvoice(false)}
+            onCancel={handleCancelOrder}
+            isCanceling={isCanceling}
+          />
+        )}
       </div>
     </ProtectedRoute>
   )
