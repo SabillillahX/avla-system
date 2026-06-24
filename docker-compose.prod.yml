@@ -71,6 +71,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8081
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
     deploy:
       resources:
         limits:

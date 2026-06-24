@@ -22,6 +22,43 @@ for (const key of REQUIRED_ENV_KEYS) {
     }
 }
 
+/**
+ * fetch() that survives redirects without losing the Authorization header.
+ *
+ * Node's global fetch (undici) strips sensitive headers — including
+ * Authorization — when a redirect crosses origins. In production an
+ * http→https (or trailing-slash) redirect counts as cross-origin, so the
+ * backend would receive the request with no bearer token and reply 401.
+ *
+ * We follow redirects manually and re-attach the original headers on each
+ * hop so the token always reaches Laravel.
+ */
+export async function fetchWithAuth(
+    url: string,
+    init: RequestInit = {},
+    maxRedirects = 5
+): Promise<Response> {
+    let currentUrl = url;
+
+    for (let hop = 0; hop <= maxRedirects; hop++) {
+        const response = await fetch(currentUrl, { ...init, redirect: "manual" });
+
+        const isRedirect = response.status >= 300 && response.status < 400;
+        const location = response.headers.get("location");
+
+        if (!isRedirect || !location) {
+            return response;
+        }
+
+        // Resolve relative redirect targets against the current URL.
+        currentUrl = new URL(location, currentUrl).toString();
+        console.warn(`[fetchWithAuth] Following redirect (${response.status}) to ${currentUrl} — re-attaching auth header.`);
+    }
+
+    throw new Error(`Too many redirects while requesting ${url}`);
+}
+
+
 export const ALLOWED_ORIGINS: string[] = Array.from(
     new Set([
         ...ENV.allowedOrigins

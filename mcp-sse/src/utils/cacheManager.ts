@@ -1,5 +1,5 @@
 import { TranscriptSegment } from "./interface.js";
-import { ENV } from "./helper.js";
+import { ENV, fetchWithAuth } from "./helper.js";
 
 export interface TranscriptContext {
     rawText?: string;
@@ -30,17 +30,25 @@ export async function getOrLoadTranscriptContext(
         for (let i = 0; i < maxRetries; i++) {
             try {
                 console.log(`[Cache-Preloader] Fetching video ${videoId} (Attempt ${i + 1})...`);
-                const response = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
+                const cleanToken = token.replace(/^["']|["']$/g, '').trim();
+
+                const url = `${ENV.backendUrl.replace(/\/+$/, '')}/videos/${videoId}/transcript`;
+
+                // fetchWithAuth follows redirects manually so the Authorization
+                // header is preserved across an http→https / trailing-slash hop.
+                const response = await fetchWithAuth(url, {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
                         "Accept": "application/json",
-                        "Authorization": `Bearer ${token}`,
+                        "Authorization": `Bearer ${cleanToken}`,
                     },
                 });
 
                 // Jika 401, tunggu sebentar lalu retry (memberi waktu Laravel sinkronisasi token)
                 if (response.status === 401) {
+                    const errBody = await response.text();
+                    console.error(`[Cache-Preloader] 401 Unauthorized from backend. Body:`, errBody, `Token used:`, cleanToken);
                     throw new Error("401");
                 }
 

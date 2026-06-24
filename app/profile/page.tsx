@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { TeacherApplicationCard } from "@/components/profile/TeacherApplicationCard"
 import {
   ArrowLeft, User, Mail, Lock, Eye, EyeOff,
   ShieldCheck, Loader2, CheckCircle2, AlertCircle, Camera, X,
@@ -233,6 +234,9 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Become a teacher */}
+        <TeacherApplicationCard isTeacher={(user?.roles ?? []).includes("teacher")} />
 
         {/* Edit profile */}
         <Card className="shadow-sm border-gray-200 dark:border-gray-800">

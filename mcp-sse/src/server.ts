@@ -4,7 +4,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { z } from "zod";
-import { ENV, ALLOWED_ORIGINS } from "./utils/helper.js";
+import { ENV, ALLOWED_ORIGINS, fetchWithAuth } from "./utils/helper.js";
 import {
     NotificationPayload,
     ParsedQuiz,
@@ -385,10 +385,11 @@ Return ONLY a valid JSON array. Do not include markdown formatting or explanatio
 }
 
 function buildAuthHeaders(token: string): Record<string, string> {
+    const cleanToken = token.replace(/^["']|["']$/g, '').trim();
     return {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${cleanToken}`,
     };
 }
 
@@ -405,7 +406,7 @@ function createMcpServer(): McpServer {
             token: z.string().describe("Bearer token of the currently logged-in user"),
         },
         async ({ token }) => {
-            const response = await fetch(`${ENV.backendUrl}/me`, {
+            const response = await fetchWithAuth(`${ENV.backendUrl}/me`, {
                 method: "GET",
                 headers: buildAuthHeaders(token),
             });
@@ -431,7 +432,7 @@ function createMcpServer(): McpServer {
             prompt: z.string().describe("Question or instruction for LLM about the audio path data"),
         },
         async ({ token, prompt }) => {
-            const response = await fetch(`${ENV.backendUrl}/videos`, {
+            const response = await fetchWithAuth(`${ENV.backendUrl}/videos`, {
                 method: "GET",
                 headers: buildAuthHeaders(token),
             });
@@ -467,7 +468,7 @@ function createMcpServer(): McpServer {
         },
         async ({ token, sectionId }) => {
             try {
-                const response = await fetch(`${ENV.backendUrl}/videos?section_id=${sectionId}`, {
+                const response = await fetchWithAuth(`${ENV.backendUrl}/videos?section_id=${sectionId}`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
                 });
@@ -598,7 +599,7 @@ ${combinedContext}
                     progress: 0,
                 });
 
-                const transcriptResponse = await fetch(
+                const transcriptResponse = await fetchWithAuth(
                     `${ENV.backendUrl}/videos/${videoId}/transcript`,
                     { method: "GET", headers: buildAuthHeaders(token) }
                 );
@@ -781,7 +782,7 @@ ${combinedContext}
                     message: "Menyimpan kuis ke server...",
                 });
 
-                const saveResponse = await fetch(
+                const saveResponse = await fetchWithAuth(
                     `${ENV.backendUrl}/videos/${videoId}/quizzes`,
                     {
                         method: "POST",
@@ -883,7 +884,7 @@ ${combinedContext}
                     assessment_status: "starting",
                 });
 
-                const transcriptResponse = await fetch(
+                const transcriptResponse = await fetchWithAuth(
                     `${ENV.backendUrl}/videos/${videoId}/transcript`,
                     { method: "GET", headers: buildAuthHeaders(token) }
                 );
@@ -948,7 +949,7 @@ ${combinedContext}
 
                 let targetBloomLevels = "C1, C2, and C3"; // Default assessment
                 try {
-                    const qaResponse = await fetch(`${ENV.backendUrl}/question-answers?per_page=100`, {
+                    const qaResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers?per_page=100`, {
                         method: "GET",
                         headers: buildAuthHeaders(token),
                     });
@@ -1077,7 +1078,7 @@ ${combinedContext}
                 for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
                     const question = generatedQuestions[qIndex];
                     try {
-                        const saveResponse = await fetch(assessmentEndpoint, {
+                        const saveResponse = await fetchWithAuth(assessmentEndpoint, {
                             method: "POST",
                             headers: buildAuthHeaders(token),
                             body: JSON.stringify(toAssessmentPayload(question)),
@@ -1169,7 +1170,7 @@ ${combinedContext}
                 assessment_status: "starting",
             });
 
-            const transcriptResponse = await fetch(
+            const transcriptResponse = await fetchWithAuth(
                 `${ENV.backendUrl}/videos/${videoId}/transcript`,
                 { method: "GET", headers: buildAuthHeaders(token) }
             );
@@ -1288,7 +1289,7 @@ ${combinedContext}
             for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
                 const question = generatedQuestions[qIndex];
                 try {
-                    const saveResponse = await fetch(assessmentEndpoint, {
+                    const saveResponse = await fetchWithAuth(assessmentEndpoint, {
                         method: "POST",
                         headers: buildAuthHeaders(token),
                         body: JSON.stringify(toAssessmentPayload(question)),
@@ -1337,7 +1338,7 @@ ${combinedContext}
                     message: "Memulai evaluasi jawaban...",
                 });
 
-                const transcriptResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
+                const transcriptResponse = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
                 });
@@ -1348,7 +1349,7 @@ ${combinedContext}
                 }
                 const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
 
-                const qResponse = await fetch(`${ENV.backendUrl}/questions?video_id=${videoId}`, {
+                const qResponse = await fetchWithAuth(`${ENV.backendUrl}/questions?video_id=${videoId}`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
                 });
@@ -1356,7 +1357,7 @@ ${combinedContext}
                 const qData = await qResponse.json();
                 const questions = qData.data || [];
 
-                const ansResponse = await fetch(`${ENV.backendUrl}/question-answers?video_id=${videoId}&per_page=100`, {
+                const ansResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers?video_id=${videoId}&per_page=100`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
                 });
@@ -1471,7 +1472,7 @@ ${JSON.stringify(evaluationItems, null, 2)}
 
                     console.log(`[Evaluate Tool] Updating score for ${result.question_id}:`, updatePayload);
 
-                    const saveResponse = await fetch(`${ENV.backendUrl}/question-answers/${result.question_id}/score`, {
+                    const saveResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers/${result.question_id}/score`, {
                         method: "PUT",
                         headers: buildAuthHeaders(token),
                         body: JSON.stringify(updatePayload),
