@@ -21,14 +21,41 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 
 import { videosApi } from "@/lib/api/handle-videos"
 import { Video as VideoType, VideoStatus } from "@/lib/types/handle-videos"
+import { batchesApi } from "@/lib/api/batches"
+import { CourseBatch, BatchStatus } from "@/lib/types/batches"
 import { useNotification } from "@/components/notification"
+import { Calendar } from "@/components/ui/calendar"
+import { format, parseISO } from "date-fns"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2 } from "lucide-react"
+import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2, CalendarDays, Users, LockKeyhole } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { FormState } from "@/lib/types/course-management"
+
+const batchStatusConfig: Record<BatchStatus, { label: string; badgeClass: string; dotClass: string }> = {
+  upcoming: {
+    label: "Upcoming",
+    badgeClass: "bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-500/10 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20",
+    dotClass: "bg-indigo-500 dark:bg-indigo-400"
+  },
+  active: {
+    label: "Active",
+    badgeClass: "bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-500/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+    dotClass: "bg-emerald-500 dark:bg-emerald-400"
+  },
+  expired: {
+    label: "Expired",
+    badgeClass: "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-500/10 dark:bg-white/5 dark:text-gray-400 dark:ring-white/10",
+    dotClass: "bg-gray-400 dark:bg-gray-500"
+  },
+  closed: {
+    label: "Closed",
+    badgeClass: "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-500/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+    dotClass: "bg-rose-500 dark:bg-rose-400"
+  },
+}
 
 const statusConfig: Record<VideoStatus, { label: string; color: string; icon: React.ElementType }> = {
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", icon: CheckCircle2 },
@@ -36,8 +63,6 @@ const statusConfig: Record<VideoStatus, { label: string; color: string; icon: Re
   pending: { label: "Pending", color: "bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300", icon: Circle },
   failed: { label: "Failed", color: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", icon: AlertCircle },
 }
-
-
 
 const emptyForm: FormState = {
   title: "",
@@ -105,12 +130,45 @@ export default function CreateClassPage() {
 
   const { aiProcessState, aiProcessingVideoId } = useNotification()
 
+  // Batch Management State
+  const [batches, setBatches] = useState<CourseBatch[]>([])
+  const [isBatchFormOpen, setIsBatchFormOpen] = useState(false)
+  const [batchFormLoading, setBatchFormLoading] = useState(false)
+  const [batchFormError, setBatchFormError] = useState<string | null>(null)
+  const [batchName, setBatchName] = useState("")
+  const [batchStartDate, setBatchStartDate] = useState<Date | undefined>(undefined)
+  const [batchStartTime, setBatchStartTime] = useState("")
+  const [batchEndDate, setBatchEndDate] = useState<Date | undefined>(undefined)
+  const [batchEndTime, setBatchEndTime] = useState("")
+  const [batchMaxStudents, setBatchMaxStudents] = useState("")
+  const [batchStartOpen, setBatchStartOpen] = useState(false)
+  const [batchEndOpen, setBatchEndOpen] = useState(false)
+  const [batchToDelete, setBatchToDelete] = useState<CourseBatch | null>(null)
+  const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false)
+  const [batchDeleteLoading, setBatchDeleteLoading] = useState(false)
+  const [batchCloseLoading, setBatchCloseLoading] = useState<string | null>(null)
+
+  // Batch edit state
+  const [batchToEdit, setBatchToEdit] = useState<CourseBatch | null>(null)
+  const [isBatchEditOpen, setIsBatchEditOpen] = useState(false)
+  const [batchEditName, setBatchEditName] = useState("")
+  const [batchEditStartDate, setBatchEditStartDate] = useState<Date | undefined>(undefined)
+  const [batchEditStartTime, setBatchEditStartTime] = useState("")
+  const [batchEditEndDate, setBatchEditEndDate] = useState<Date | undefined>(undefined)
+  const [batchEditEndTime, setBatchEditEndTime] = useState("")
+  const [batchEditMaxStudents, setBatchEditMaxStudents] = useState("")
+  const [batchEditStartOpen, setBatchEditStartOpen] = useState(false)
+  const [batchEditEndOpen, setBatchEditEndOpen] = useState(false)
+  const [batchEditLoading, setBatchEditLoading] = useState(false)
+  const [batchEditError, setBatchEditError] = useState<string | null>(null)
+
   // Block save/navigation while AI is running or has failed for any video in this class
   const isAiActive = aiProcessState === "connecting" || aiProcessState === "generating"
   const hasFailedVideos = courseSections.some((s) =>
     (s.videos || []).some((v: any) => v.status === "failed")
   )
-  const isBlocked = isAiActive || hasFailedVideos
+  const hasNoBatch = batches.length === 0
+  const isBlocked = isAiActive || hasFailedVideos || hasNoBatch
 
   // Warn on browser back/close while AI is running
   useEffect(() => {
@@ -214,15 +272,6 @@ export default function CreateClassPage() {
 
     return (
       <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-lg transition-all">
-        {/* {isProcessing && (
-          <div className="relative">
-            <Loader2 className="w-9 h-9 text-amber-400 animate-spin" />
-            <div className="absolute inset-0 w-9 h-9 rounded-full border-2 border-amber-400/30 animate-ping" />
-          </div>
-        )}
-        {isPending && (
-          <Clock className="w-9 h-9 text-white/70" />
-        )} */}
         {isFailed && (
           <AlertCircle className="w-9 h-9 text-red-400" />
         )}
@@ -347,7 +396,6 @@ export default function CreateClassPage() {
     setIsDeleteModalVisible(true)
   }
 
-
   useEffect(() => {
     const loadCategories = async () => {
       try {
@@ -410,7 +458,174 @@ export default function CreateClassPage() {
       }
     }
     loadClass()
+    loadBatches()
   }, [editId])
+
+  const loadBatches = async (courseId?: string) => {
+    const id = courseId || editId
+    if (!id) return
+    try {
+      const res = await batchesApi.list(id)
+      setBatches(res.data.data)
+    } catch (err) {
+      console.error("Failed to load batches", err)
+    }
+  }
+
+  // Auto-saves the course as a draft if it hasn't been saved yet, then returns the course ID.
+  const getOrCreateCourseId = async (): Promise<string | null> => {
+    if (editId) return editId
+
+    if (!formState.title.trim()) {
+      toast.error("Course title required", { description: "Please fill in a course title before adding sections or batches." })
+      return null
+    }
+
+    const formData = new FormData()
+    formData.append("name", formState.title)
+    formData.append("status", "draft")
+    formData.append("is_free", formState.is_free ? "true" : "false")
+    formData.append("has_certificate", formState.has_certificate ? "true" : "false")
+    formData.append("price", formState.is_free ? "0" : String(parsePrice(formState.price) ?? 0))
+    if (formState.description) formData.append("description", formState.description)
+    if (formState.short_description) formData.append("short_description", formState.short_description)
+    if (formState.language) formData.append("language", formState.language)
+    if (formState.category) formData.append("category_id", formState.category)
+    if (thumbnailFile) formData.append("thumbnail", thumbnailFile)
+
+    try {
+      const result = await classesApi.create(formData)
+      const newId = result.data.id
+      setIsEditMode(true)
+      router.replace(`/course-management/create?edit=${newId}`)
+      toast.success("Course saved as draft")
+      return newId
+    } catch (error: any) {
+      if (error.response?.data?.errors) {
+        const msgs = Object.values(error.response.data.errors).flat().join("\n")
+        toast.error("Validation Error", { description: msgs })
+      } else {
+        toast.error("Failed to save course", { description: error.response?.data?.message || error.message })
+      }
+      return null
+    }
+  }
+
+  const resetBatchForm = () => {
+    setBatchName("")
+    setBatchStartDate(undefined)
+    setBatchStartTime("")
+    setBatchEndDate(undefined)
+    setBatchEndTime("")
+    setBatchMaxStudents("")
+    setBatchFormError(null)
+  }
+
+  const handleCreateBatch = async () => {
+    if (!batchName.trim()) return setBatchFormError("Batch name is required.")
+    if (!batchStartDate) return setBatchFormError("Start date is required.")
+    if (!batchEndDate) return setBatchFormError("End date is required.")
+    if (batchEndDate <= batchStartDate) return setBatchFormError("End date must be after start date.")
+
+    setBatchFormLoading(true)
+    setBatchFormError(null)
+
+    const courseId = await getOrCreateCourseId()
+    if (!courseId) {
+      setBatchFormLoading(false)
+      return
+    }
+
+    try {
+      await batchesApi.create(courseId, {
+        name: batchName.trim(),
+        start_date: format(batchStartDate, "yyyy-MM-dd"),
+        start_time: batchStartTime || null,
+        end_date: format(batchEndDate, "yyyy-MM-dd"),
+        end_time: batchEndTime || null,
+        max_students: batchMaxStudents ? parseInt(batchMaxStudents) : null,
+      })
+      toast.success("Batch created successfully")
+      setIsBatchFormOpen(false)
+      resetBatchForm()
+      loadBatches(courseId)
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Failed to create batch"
+      setBatchFormError(msg)
+    } finally {
+      setBatchFormLoading(false)
+    }
+  }
+
+  const handleCloseBatch = async (batchId: string) => {
+    if (!editId) return
+    setBatchCloseLoading(batchId)
+    try {
+      await batchesApi.close(editId, batchId)
+      toast.success("Batch closed")
+      loadBatches()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to close batch")
+    } finally {
+      setBatchCloseLoading(null)
+    }
+  }
+
+  const handleDeleteBatch = async () => {
+    if (!editId || !batchToDelete) return
+    setBatchDeleteLoading(true)
+    try {
+      await batchesApi.delete(editId, batchToDelete.id)
+      toast.success("Batch deleted")
+      setIsBatchDeleteOpen(false)
+      setBatchToDelete(null)
+      loadBatches()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to delete batch")
+    } finally {
+      setBatchDeleteLoading(false)
+    }
+  }
+
+  const openBatchEdit = (batch: CourseBatch) => {
+    setBatchToEdit(batch)
+    setBatchEditName(batch.name)
+    setBatchEditStartDate(parseISO(batch.start_date))
+    setBatchEditStartTime(batch.start_time ?? "")
+    setBatchEditEndDate(parseISO(batch.end_date))
+    setBatchEditEndTime(batch.end_time ?? "")
+    setBatchEditMaxStudents(batch.max_students ? String(batch.max_students) : "")
+    setBatchEditError(null)
+    setIsBatchEditOpen(true)
+  }
+
+  const handleUpdateBatch = async () => {
+    if (!editId || !batchToEdit) return
+    if (!batchEditName.trim()) return setBatchEditError("Batch name is required.")
+    if (!batchEditStartDate) return setBatchEditError("Start date is required.")
+    if (!batchEditEndDate) return setBatchEditError("End date is required.")
+
+    setBatchEditLoading(true)
+    setBatchEditError(null)
+    try {
+      await batchesApi.update(editId, batchToEdit.id, {
+        name: batchEditName.trim(),
+        start_date: format(batchEditStartDate, "yyyy-MM-dd"),
+        start_time: batchEditStartTime || null,
+        end_date: format(batchEditEndDate, "yyyy-MM-dd"),
+        end_time: batchEditEndTime || null,
+        max_students: batchEditMaxStudents ? parseInt(batchEditMaxStudents) : null,
+      })
+      toast.success("Batch updated")
+      setIsBatchEditOpen(false)
+      setBatchToEdit(null)
+      loadBatches()
+    } catch (err: any) {
+      setBatchEditError(err?.response?.data?.message || "Failed to update batch")
+    } finally {
+      setBatchEditLoading(false)
+    }
+  }
 
   const handleChange = (field: keyof FormState, value: any) => {
     if (field === "price" || field === "discount_price") {
@@ -442,9 +657,13 @@ export default function CreateClassPage() {
   }
 
   const handleAddSection = async () => {
-    if (!newSectionTitle.trim() || !editId) return
+    if (!newSectionTitle.trim()) return
+
+    const courseId = await getOrCreateCourseId()
+    if (!courseId) return
+
     try {
-      const res = await classesApi.createSection(editId, { title: newSectionTitle, is_published: true })
+      const res = await classesApi.createSection(courseId, { title: newSectionTitle, is_published: true })
       if (res.data) {
         setCourseSections([...courseSections, res.data])
         setNewSectionTitle("")
@@ -557,12 +776,15 @@ export default function CreateClassPage() {
     }
   }
 
-  const generateLOs = async (sectionId: string) => {
+  const generateLOs = async () => {
+    const courseId = await getOrCreateCourseId()
+    if (!courseId) return
+
     const toastId = "generate-lo-toast";
     try {
       setIsGeneratingLO(true)
       toast.loading("Menghubungkan ke AI untuk membuat Learning Objectives...", { id: toastId })
-      
+
       const token = localStorage.getItem("auth_token") || ""
       const mcpUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL
       if (!mcpUrl) throw new Error("MCP server URL not configured")
@@ -571,18 +793,18 @@ export default function CreateClassPage() {
       const mcpClient = new Client({ name: "nextjs-client", version: "1.0.0" }, { capabilities: {} })
       await mcpClient.connect(transport)
 
-      toast.loading("Menganalisis summary video di chapter terpilih...", { id: toastId })
+      toast.loading("Menganalisis topik dan konsep dari semua video...", { id: toastId })
 
       const result = await mcpClient.callTool({
-        name: "generateChapterLearningObjectives",
-        arguments: { token, sectionId },
+        name: "generateCourseLearningObjectives",
+        arguments: { token, courseId },
       })
 
       const textResult = (result as any).content[0].text
-      
+
       // Attempt to clean markdown backticks if any
       const cleanedText = textResult.replace(/^```json\s*/i, "").replace(/```$/i, "").trim()
-      
+
       let parsed: any;
       try {
         parsed = JSON.parse(cleanedText)
@@ -649,11 +871,11 @@ export default function CreateClassPage() {
           </div>
         </div>
 
-        {/* AI / failed-video blocking banner */}
+        {/* Blocking banners */}
         {isBlocked && (
           <div className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-sm ${isAiActive
-              ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300"
-              : "bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300"
+            ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300"
+            : "bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300"
             }`}>
             {isAiActive ? (
               <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin" />
@@ -662,12 +884,18 @@ export default function CreateClassPage() {
             )}
             <div>
               <p className="font-semibold">
-                {isAiActive ? "AI is still processing" : "Video processing failed"}
+                {isAiActive
+                  ? "AI is still processing"
+                  : hasNoBatch
+                    ? "Batch required"
+                    : "Video processing failed"}
               </p>
               <p className="mt-0.5 text-xs opacity-80">
                 {isAiActive
                   ? "Saving changes and leaving this page are disabled until the AI finishes generating quizzes and assessments. Please wait."
-                  : "One or more videos have a failed status. Please delete the failed video and re-upload it before saving changes."}
+                  : hasNoBatch
+                    ? "You must create at least one batch before saving. Students can only enroll through a batch."
+                    : "One or more videos have a failed status. Please delete the failed video and re-upload it before saving changes."}
               </p>
             </div>
           </div>
@@ -745,6 +973,259 @@ export default function CreateClassPage() {
               </CardContent>
             </Card>
 
+            {/* Batch Management */}
+            <Card className="shadow-sm border-gray-200 dark:border-gray-800">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      Batch Management
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      Control when students can enroll. Each batch has a fixed start and end date.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shrink-0"
+                    onClick={() => { resetBatchForm(); setIsBatchFormOpen(true) }}
+                  >
+                    <Plus className="w-4 h-4" /> New Batch
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {batches.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400 dark:text-gray-500 gap-3">
+                    <div>
+                      <p className="font-medium text-sm text-gray-500 dark:text-gray-400">No batches yet</p>
+                      <p className="text-xs mt-1">Create a batch to allow student enrollment.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {batches.map((batch) => {
+                      const cfg = batchStatusConfig[batch.status]
+                      return (
+                        <div
+                          key={batch.id}
+                          className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 flex flex-col gap-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative flex h-2.5 w-2.5 shrink-0">
+                                {batch.status === 'active' && (
+                                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 ${cfg.dotClass}`}></span>
+                                )}
+                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 shadow-sm ${cfg.dotClass}`}></span>
+                              </div>
+                              <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">{batch.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${cfg.badgeClass}`}>
+                                {cfg.label}
+                              </span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+                                    <MoreVertical className="w-3.5 h-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openBatchEdit(batch)}>
+                                    <Edit className="w-4 h-4 mr-2" /> Edit Batch
+                                  </DropdownMenuItem>
+                                  {(batch.status === "active" || batch.status === "upcoming") && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleCloseBatch(batch.id)}
+                                      disabled={batchCloseLoading === batch.id}
+                                    >
+                                      {batchCloseLoading === batch.id
+                                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        : <LockKeyhole className="w-4 h-4 mr-2" />}
+                                      Close Batch
+                                    </DropdownMenuItem>
+                                  )}
+                                  {batch.enrolled_count === 0 && (
+                                    <DropdownMenuItem
+                                      onClick={() => { setBatchToDelete(batch); setIsBatchDeleteOpen(true) }}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" /> Delete Batch
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                              <p className="text-[10px] uppercase tracking-wide font-medium text-gray-400">Start</p>
+                              <p className="font-semibold text-gray-700 dark:text-gray-200 text-[13px]">
+                                {format(parseISO(batch.start_date), "dd MMM yyyy")}
+                              </p>
+                              {batch.start_time && (
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{batch.start_time}</p>
+                              )}
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                              <p className="text-[10px] uppercase tracking-wide font-medium text-gray-400">End</p>
+                              <p className="font-semibold text-gray-700 dark:text-gray-200 text-[13px]">
+                                {format(parseISO(batch.end_date), "dd MMM yyyy")}
+                              </p>
+                              {batch.end_time && (
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{batch.end_time}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 pt-1 border-t border-gray-100 dark:border-gray-800">
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                              <Users className="w-3.5 h-3.5" />
+                              <span>
+                                <span className="font-semibold text-gray-700 dark:text-gray-300">{batch.enrolled_count}</span>
+                                {batch.max_students ? ` / ${batch.max_students}` : ""} students enrolled
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Section Curriculum */}
+            <Card className="shadow-sm border-gray-200 dark:border-gray-800">
+              <CardHeader>
+                <CardTitle className="text-lg">Section Curriculum</CardTitle>
+                <CardDescription>Organize your course into logical sections and manage videos.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-6">
+                  {courseSections.length > 0 ? (
+                    <div className="space-y-4">
+                      {courseSections.map((section, idx) => (
+                        <div key={section.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                          <div className="flex items-center justify-between mb-3">
+                            {editingSectionId === section.id ? (
+                              <div className="flex items-center gap-2 flex-1 mr-4">
+                                <Input
+                                  value={editingSectionTitle}
+                                  onChange={(e) => setEditingSectionTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleUpdateSection(section.id)
+                                    if (e.key === 'Escape') setEditingSectionId(null)
+                                  }}
+                                  autoFocus
+                                  className="h-8 text-sm"
+                                />
+                                <Button size="sm" onClick={() => handleUpdateSection(section.id)} className="h-8">Save</Button>
+                                <Button size="sm" variant="ghost" onClick={() => setEditingSectionId(null)} className="h-8">Cancel</Button>
+                              </div>
+                            ) : (
+                              <h4
+                                className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 group cursor-pointer hover:text-blue-600 transition-colors"
+                                onClick={() => { setEditingSectionId(section.id); setEditingSectionTitle(section.title); }}
+                              >
+                                <span className="flex items-center justify-center bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 w-5 h-5 rounded-full text-xs shrink-0">{idx + 1}</span>
+                                {section.title}
+                                <Edit className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                              </h4>
+                            )}
+                            {editingSectionId !== section.id && (
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteSection(section.id)} className="h-8 w-8 text-gray-400 hover:text-red-600 shrink-0">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          {section.videos && section.videos.length > 0 ? (
+                            <ul className="space-y-2 mt-3">
+                              {section.videos.map((video: VideoType) => {
+                                const cfg = statusConfig[video.status] || statusConfig.pending
+                                const StatusIcon = cfg.icon
+                                return (
+                                  <li key={video.id} className="text-sm flex items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-100 dark:border-gray-700">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                      <div className="w-12 h-8 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center shrink-0 overflow-hidden relative">
+                                        {video.thumbnail_path ? (
+                                          <img src={getImageUrl(video.thumbnail_path) || ""} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <Play className="w-4 h-4 text-gray-500" />
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="truncate font-medium text-gray-700 dark:text-gray-200">{video.title}</span>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                          <Badge className={`text-[10px] ${cfg.color} border-0 pointer-events-none px-1.5 py-0`}>
+                                            <StatusIcon className={`w-3 h-3 mr-1 ${video.status === "processing" ? "animate-spin" : ""}`} />
+                                            {cfg.label}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                          <MoreVertical className="w-4 h-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => openEditModal(video)}>
+                                          <Edit className="w-4 h-4 mr-2" /> Edit Video
+                                        </DropdownMenuItem>
+                                        {video.status === "completed" && (
+                                          <DropdownMenuItem onClick={() => router.push(`/videos/${video.id}/ai-results`)}>
+                                            <FileQuestion className="w-4 h-4 mr-2" /> View AI Results & Assessments
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem onClick={() => openDeleteModal(video)} className="text-red-600">
+                                          <Trash2 className="w-4 h-4 mr-2" /> Delete Video
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-gray-500 italic mt-3">No videos in this section yet.</p>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 w-full border-dashed"
+                            disabled={!editId}
+                            onClick={() => {
+                              setActiveSectionId(section.id)
+                              setIsUploadOpen(true)
+                            }}
+                          >
+                            <UploadCloud className="w-4 h-4 mr-2" /> Add Video to Section
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No sections created yet.</p>
+                  )}
+                  <div className="flex gap-2 items-center border-t border-gray-100 dark:border-gray-800 pt-4">
+                    <Input
+                      value={newSectionTitle}
+                      onChange={(e) => setNewSectionTitle(e.target.value)}
+                      placeholder="e.g. Chapter 1: Introduction"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddSection()}
+                    />
+                    <Button onClick={handleAddSection} className="shrink-0 gap-2">
+                      <Plus className="h-4 w-4" /> Add Section
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Course Content Planning */}
             <Card className="shadow-sm border-gray-200 dark:border-gray-800">
               <CardHeader>
@@ -756,22 +1237,15 @@ export default function CreateClassPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-semibold">What will students learn?</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={isGeneratingLO || courseSections.length === 0}>
-                          {isGeneratingLO ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
-                          Generate Learning Objective
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56">
-                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">Select Chapter</div>
-                        {courseSections.map((section) => (
-                          <DropdownMenuItem key={section.id} onClick={() => generateLOs(section.id)}>
-                            {section.title}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      disabled={isGeneratingLO || courseSections.length === 0}
+                      onClick={generateLOs}
+                    >
+                      {isGeneratingLO ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
+                      Generate Learning Objective
+                    </Button>
                   </div>
                   {formState.what_you_will_learn.map((item, index) => (
                     <div key={`learn-${index}`} className="flex items-center gap-2">
@@ -901,146 +1375,12 @@ export default function CreateClassPage() {
                           }
                           return true
                         }).length === 0 && (
-                          <p className="py-4 text-center text-sm text-muted-foreground">No courses available</p>
-                        )}
+                            <p className="py-4 text-center text-sm text-muted-foreground">No courses available</p>
+                          )}
                       </div>
                     </PopoverContent>
                   </Popover>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Section Curriculum */}
-            <Card className="shadow-sm border-gray-200 dark:border-gray-800">
-              <CardHeader>
-                <CardTitle className="text-lg">Section Curriculum</CardTitle>
-                <CardDescription>Organize your course into logical sections and manage videos.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!isEditMode ? (
-                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-6 text-center text-gray-500 text-sm">
-                    Please create and save the class details first to unlock the curriculum builder.
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {courseSections.length > 0 ? (
-                      <div className="space-y-4">
-                        {courseSections.map((section, idx) => (
-                          <div key={section.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                            <div className="flex items-center justify-between mb-3">
-                              {editingSectionId === section.id ? (
-                                <div className="flex items-center gap-2 flex-1 mr-4">
-                                  <Input
-                                    value={editingSectionTitle}
-                                    onChange={(e) => setEditingSectionTitle(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') handleUpdateSection(section.id)
-                                      if (e.key === 'Escape') setEditingSectionId(null)
-                                    }}
-                                    autoFocus
-                                    className="h-8 text-sm"
-                                  />
-                                  <Button size="sm" onClick={() => handleUpdateSection(section.id)} className="h-8">Save</Button>
-                                  <Button size="sm" variant="ghost" onClick={() => setEditingSectionId(null)} className="h-8">Cancel</Button>
-                                </div>
-                              ) : (
-                                <h4
-                                  className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 group cursor-pointer hover:text-blue-600 transition-colors"
-                                  onClick={() => { setEditingSectionId(section.id); setEditingSectionTitle(section.title); }}
-                                >
-                                  <span className="flex items-center justify-center bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 w-5 h-5 rounded-full text-xs shrink-0">{idx + 1}</span>
-                                  {section.title}
-                                  <Edit className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
-                                </h4>
-                              )}
-                              {editingSectionId !== section.id && (
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteSection(section.id)} className="h-8 w-8 text-gray-400 hover:text-red-600 shrink-0">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                            {section.videos && section.videos.length > 0 ? (
-                              <ul className="space-y-2 mt-3">
-                                {section.videos.map((video: VideoType) => {
-                                  const cfg = statusConfig[video.status] || statusConfig.pending
-                                  const StatusIcon = cfg.icon
-                                  return (
-                                    <li key={video.id} className="text-sm flex items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-100 dark:border-gray-700">
-                                      <div className="flex items-center gap-3 overflow-hidden">
-                                        <div className="w-12 h-8 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center shrink-0 overflow-hidden relative">
-                                          {video.thumbnail_path ? (
-                                            <img src={getImageUrl(video.thumbnail_path) || ""} className="w-full h-full object-cover" />
-                                          ) : (
-                                            <Play className="w-4 h-4 text-gray-500" />
-                                          )}
-                                        </div>
-                                        <div className="flex flex-col min-w-0">
-                                          <span className="truncate font-medium text-gray-700 dark:text-gray-200">{video.title}</span>
-                                          <div className="flex items-center gap-2 mt-0.5">
-                                            <Badge className={`text-[10px] ${cfg.color} border-0 pointer-events-none px-1.5 py-0`}>
-                                              <StatusIcon className={`w-3 h-3 mr-1 ${video.status === "processing" ? "animate-spin" : ""}`} />
-                                              {cfg.label}
-                                            </Badge>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                                            <MoreVertical className="w-4 h-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                          <DropdownMenuItem onClick={() => openEditModal(video)}>
-                                            <Edit className="w-4 h-4 mr-2" /> Edit Video
-                                          </DropdownMenuItem>
-                                          {video.status === "completed" && (
-                                            <DropdownMenuItem onClick={() => router.push(`/videos/${video.id}/ai-results`)}>
-                                              <FileQuestion className="w-4 h-4 mr-2" /> View AI Results & Assessments
-                                            </DropdownMenuItem>
-                                          )}
-                                          <DropdownMenuItem onClick={() => openDeleteModal(video)} className="text-red-600">
-                                            <Trash2 className="w-4 h-4 mr-2" /> Delete Video
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </li>
-                                  )
-                                })}
-                              </ul>
-                            ) : (
-                              <p className="text-sm text-gray-500 italic mt-3">No videos in this section yet.</p>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-3 w-full border-dashed"
-                              onClick={() => {
-                                setActiveSectionId(section.id)
-                                setIsUploadOpen(true)
-                              }}
-                            >
-                              <UploadCloud className="w-4 h-4 mr-2" /> Add Video to Section
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center py-4">No sections created yet.</p>
-                    )}
-                    <div className="flex gap-2 items-center border-t border-gray-100 dark:border-gray-800 pt-4">
-                      <Input
-                        value={newSectionTitle}
-                        onChange={(e) => setNewSectionTitle(e.target.value)}
-                        placeholder="e.g. Chapter 1: Introduction"
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddSection()}
-                      />
-                      <Button onClick={handleAddSection} className="shrink-0 gap-2">
-                        <Plus className="h-4 w-4" /> Add Section
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>
@@ -1168,9 +1508,11 @@ export default function CreateClassPage() {
           >
             {isAiActive
               ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Waiting for AI...</>
-              : hasFailedVideos
-                ? <><ShieldAlert className="w-4 h-4 mr-2" /> Fix Failed Videos First</>
-                : (isEditMode ? "Save Changes" : "Create Class")
+              : hasNoBatch
+                ? <><ShieldAlert className="w-4 h-4 mr-2" /> Add a Batch First</>
+                : hasFailedVideos
+                  ? <><ShieldAlert className="w-4 h-4 mr-2" /> Fix Failed Videos First</>
+                  : (isEditMode ? "Save Changes" : "Create Class")
             }
           </Button>
         </div>
@@ -1513,7 +1855,358 @@ export default function CreateClassPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Batch Create Dialog */}
+        <Dialog open={isBatchFormOpen} onOpenChange={(open) => { setIsBatchFormOpen(open); if (!open) resetBatchForm() }}>
+          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[520px] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
+            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-indigo-50/50 dark:bg-indigo-900/10">
+              <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                Create New Batch
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-5 px-6 py-5">
+              {/* Batch Name */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Batch Name <span className="text-red-500">*</span></Label>
+                <Input
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                  placeholder="e.g. Batch 1 — January 2026"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+
+              {/* Date Range */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Start Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Start Date <span className="text-red-500">*</span></Label>
+                  <Popover open={batchStartOpen} onOpenChange={setBatchStartOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full h-11 rounded-xl justify-start text-left font-normal gap-2"
+                      >
+                        {batchStartDate
+                          ? <span className="text-gray-900 dark:text-white">{format(batchStartDate, "dd MMM yyyy")}</span>
+                          : <span className="text-gray-400">Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={batchStartDate}
+                        onSelect={(date) => { setBatchStartDate(date); setBatchStartOpen(false) }}
+                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        captionLayout="dropdown"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Start Time <span className="text-gray-400">(optional)</span></Label>
+                    <input
+                      type="time"
+                      value={batchStartTime}
+                      onChange={(e) => setBatchStartTime(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* End Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">End Date <span className="text-red-500">*</span></Label>
+                  <Popover open={batchEndOpen} onOpenChange={setBatchEndOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full h-11 rounded-xl justify-start text-left font-normal gap-2"
+                      >
+                        {batchEndDate
+                          ? <span className="text-gray-900 dark:text-white">{format(batchEndDate, "dd MMM yyyy")}</span>
+                          : <span className="text-gray-400">Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={batchEndDate}
+                        onSelect={(date) => { setBatchEndDate(date); setBatchEndOpen(false) }}
+                        disabled={(date) => date < (batchStartDate ?? new Date(new Date().setHours(0, 0, 0, 0)))}
+                        captionLayout="dropdown"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">End Time <span className="text-gray-400">(optional)</span></Label>
+                    <input
+                      type="time"
+                      value={batchEndTime}
+                      onChange={(e) => setBatchEndTime(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Duration Preview */}
+              {batchStartDate && batchEndDate && (
+                <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2.5 text-sm text-indigo-700 dark:text-indigo-300">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>
+                    {batchStartDate.toDateString() === batchEndDate.toDateString() ? (
+                      <>
+                        Single day — <strong>{format(batchStartDate, "dd MMM yyyy")}</strong>
+                        {(batchStartTime || batchEndTime) && (
+                          <> &nbsp;·&nbsp; {batchStartTime || "–"} → {batchEndTime || "–"}</>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <strong>{Math.round((batchEndDate.getTime() - batchStartDate.getTime()) / (1000 * 60 * 60 * 24))} days</strong>
+                        {" "}· {format(batchStartDate, "dd MMM")}{batchStartTime && ` ${batchStartTime}`}
+                        {" "} – {format(batchEndDate, "dd MMM yyyy")}{batchEndTime && ` ${batchEndTime}`}
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {/* Max Students */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">
+                  Max Students
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">(Optional — leave blank for unlimited)</span>
+                </Label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={batchMaxStudents}
+                    onChange={(e) => setBatchMaxStudents(e.target.value)}
+                    placeholder="e.g. 30"
+                    className="h-11 rounded-xl pl-9"
+                  />
+                </div>
+              </div>
+
+              {batchFormError && (
+                <p className="text-sm text-red-500 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {batchFormError}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  onClick={() => { setIsBatchFormOpen(false); resetBatchForm() }}
+                  disabled={batchFormLoading}
+                  className="rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateBatch}
+                  disabled={batchFormLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 min-w-[110px] rounded-xl"
+                >
+                  {batchFormLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Batch"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Batch Edit Dialog */}
+        <Dialog open={isBatchEditOpen} onOpenChange={(open) => { setIsBatchEditOpen(open); if (!open) { setBatchToEdit(null); setBatchEditError(null) } }}>
+          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[520px] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
+            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-indigo-50/50 dark:bg-indigo-900/10">
+              <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Edit className="w-5 h-5 text-indigo-500" />
+                Edit Batch
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-5 px-6 py-5">
+              {/* Name */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Batch Name <span className="text-red-500">*</span></Label>
+                <Input
+                  value={batchEditName}
+                  onChange={(e) => setBatchEditName(e.target.value)}
+                  placeholder="e.g. Batch 1 — January 2026"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+
+              {/* Date + Time grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Start */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Start Date <span className="text-red-500">*</span></Label>
+                  <Popover open={batchEditStartOpen} onOpenChange={setBatchEditStartOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full h-11 rounded-xl justify-start text-left font-normal gap-2">
+                        <CalendarDays className="w-4 h-4 text-indigo-400 shrink-0" />
+                        {batchEditStartDate
+                          ? <span className="text-gray-900 dark:text-white">{format(batchEditStartDate, "dd MMM yyyy")}</span>
+                          : <span className="text-gray-400">Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={batchEditStartDate}
+                        onSelect={(date) => { setBatchEditStartDate(date); setBatchEditStartOpen(false) }}
+                        captionLayout="dropdown"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Start Time <span className="text-gray-400">(optional)</span></Label>
+                    <input
+                      type="time"
+                      value={batchEditStartTime}
+                      onChange={(e) => setBatchEditStartTime(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* End */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">End Date <span className="text-red-500">*</span></Label>
+                  <Popover open={batchEditEndOpen} onOpenChange={setBatchEditEndOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full h-11 rounded-xl justify-start text-left font-normal gap-2">
+                        <CalendarDays className="w-4 h-4 text-rose-400 shrink-0" />
+                        {batchEditEndDate
+                          ? <span className="text-gray-900 dark:text-white">{format(batchEditEndDate, "dd MMM yyyy")}</span>
+                          : <span className="text-gray-400">Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={batchEditEndDate}
+                        onSelect={(date) => { setBatchEditEndDate(date); setBatchEditEndOpen(false) }}
+                        disabled={(date) => date < (batchEditStartDate ?? new Date(new Date().setHours(0, 0, 0, 0)))}
+                        captionLayout="dropdown"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">End Time <span className="text-gray-400">(optional)</span></Label>
+                    <input
+                      type="time"
+                      value={batchEditEndTime}
+                      onChange={(e) => setBatchEditEndTime(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Duration preview */}
+              {batchEditStartDate && batchEditEndDate && (
+                <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2.5 text-sm text-indigo-700 dark:text-indigo-300">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>
+                    {batchEditStartDate.toDateString() === batchEditEndDate.toDateString() ? (
+                      <>
+                        Single day — <strong>{format(batchEditStartDate, "dd MMM yyyy")}</strong>
+                        {(batchEditStartTime || batchEditEndTime) && (
+                          <> &nbsp;·&nbsp; {batchEditStartTime || "–"} → {batchEditEndTime || "–"}</>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <strong>{Math.round((batchEditEndDate.getTime() - batchEditStartDate.getTime()) / (1000 * 60 * 60 * 24))} days</strong>
+                        {" "}· {format(batchEditStartDate, "dd MMM")}{batchEditStartTime && ` ${batchEditStartTime}`}
+                        {" "} – {format(batchEditEndDate, "dd MMM yyyy")}{batchEditEndTime && ` ${batchEditEndTime}`}
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {/* Max students */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">
+                  Max Students
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">(Optional — leave blank for unlimited)</span>
+                </Label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={batchEditMaxStudents}
+                    onChange={(e) => setBatchEditMaxStudents(e.target.value)}
+                    placeholder="e.g. 30"
+                    className="h-11 rounded-xl pl-9"
+                  />
+                </div>
+              </div>
+
+              {batchEditError && (
+                <p className="text-sm text-red-500 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {batchEditError}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  onClick={() => { setIsBatchEditOpen(false); setBatchToEdit(null) }}
+                  disabled={batchEditLoading}
+                  className="rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdateBatch}
+                  disabled={batchEditLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 min-w-[110px] rounded-xl"
+                >
+                  {batchEditLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Batch Delete Confirm Dialog */}
+        <Dialog open={isBatchDeleteOpen} onOpenChange={setIsBatchDeleteOpen}>
+          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[420px] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
+            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-red-50/50 dark:bg-red-900/10">
+              <DialogTitle className="text-xl font-semibold text-red-600 dark:text-red-400">Delete Batch</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 px-6 py-5">
+              <p className="text-gray-600 dark:text-gray-300 text-sm">
+                Are you sure you want to delete <span className="font-semibold">{batchToDelete?.name}</span>? This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-3 pt-1">
+                <Button variant="outline" onClick={() => setIsBatchDeleteOpen(false)} disabled={batchDeleteLoading} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteBatch}
+                  disabled={batchDeleteLoading}
+                  className="min-w-[90px] rounded-xl bg-red-600 hover:bg-red-700"
+                >
+                  {batchDeleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   )
-}
+} 

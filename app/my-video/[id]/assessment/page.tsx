@@ -68,26 +68,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
 
       await Promise.all(submitPromises)
 
-      // Connect to MCP Server directly to evaluate answers synchronously
-      const mcpUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL || "http://localhost:8081"
-      const transport = new SSEClientTransport(new URL(`${mcpUrl}/sse`))
-      const mcpClient = new Client({ name: "nextjs-assessment", version: "1.0.0" }, { capabilities: {} })
 
-      try {
-        await mcpClient.connect(transport)
-        await mcpClient.callTool({
-          name: "evaluateAssessmentAnswers",
-          arguments: {
-            videoId: params.id,
-            userId: String(user?.id || ""),
-            token: token as string,
-          }
-        }, undefined, { timeout: 120_000 })
-      } catch (err) {
-        console.error("Evaluation tool failed:", err)
-      } finally {
-        mcpClient.close()
-      }
 
       // Mark visually
       const updatedQuestions = questions.map(q => ({
@@ -125,7 +106,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
     )
   }
 
-  // Check if all questions are completed or have feedback shown
+  // Check if all questions are completed
   const isEverythingCompleted = questions.every(q => q.has_answered)
 
   return (

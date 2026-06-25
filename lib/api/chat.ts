@@ -18,7 +18,7 @@ export interface ClassChatMessage {
 export const classChatApi = {
   listMessages: async (classId: string, page = 1) => {
     const response = await api.get<ApiResponse<PaginatedResponse<ClassChatMessage>>>(
-      `/classes/${classId}/chat/messages`,
+      `/courses/${classId}/chat/messages`,
       { params: { page } }
     );
     return response.data;
@@ -26,7 +26,7 @@ export const classChatApi = {
 
   sendMessage: async (classId: string, message: string) => {
     const response = await api.post<ApiResponse<ClassChatMessage>>(
-      `/classes/${classId}/chat/messages`,
+      `/courses/${classId}/chat/messages`,
       { message }
     );
     return response.data;

@@ -74,62 +74,62 @@ export interface ApiResponse<T> {
 
 export const classesApi = {
   list: async (params?: Record<string, string | number | undefined>) => {
-    const response = await api.get<ApiResponse<PaginatedResponse<CourseClass>>>('/classes', { params });
+    const response = await api.get<ApiResponse<PaginatedResponse<CourseClass>>>('/courses', { params });
     return response.data;
   },
 
   get: async (id: string) => {
-    const response = await api.get<ApiResponse<CourseClass>>(`/classes/${id}`);
+    const response = await api.get<ApiResponse<CourseClass>>(`/courses/${id}`);
     return response.data;
   },
 
   create: async (payload: Record<string, unknown> | FormData) => {
-    const response = await api.post<ApiResponse<CourseClass>>('/classes', payload);
+    const response = await api.post<ApiResponse<CourseClass>>('/courses', payload);
     return response.data;
   },
 
   update: async (id: string, payload: Record<string, unknown> | FormData) => {
     if (payload instanceof FormData) {
       payload.append('_method', 'PUT');
-      const response = await api.post<ApiResponse<CourseClass>>(`/classes/${id}`, payload);
+      const response = await api.post<ApiResponse<CourseClass>>(`/courses/${id}`, payload);
       return response.data;
     }
-    const response = await api.put<ApiResponse<CourseClass>>(`/classes/${id}`, payload);
+    const response = await api.put<ApiResponse<CourseClass>>(`/courses/${id}`, payload);
     return response.data;
   },
 
   remove: async (id: string) => {
-    const response = await api.delete<ApiResponse<null>>(`/classes/${id}`);
+    const response = await api.delete<ApiResponse<null>>(`/courses/${id}`);
     return response.data;
   },
 
   enroll: async (id: string) => {
-    const response = await api.post<ApiResponse<{ class_id: string }>>(`/classes/${id}/enroll`);
+    const response = await api.post<ApiResponse<{ class_id: string }>>(`/courses/${id}/enroll`);
     return response.data;
   },
 
   enrolled: async () => {
-    const response = await api.get<ApiResponse<PaginatedResponse<CourseClass>>>('/classes/enrolled');
+    const response = await api.get<ApiResponse<PaginatedResponse<CourseClass>>>('/courses/enrolled');
     return response.data;
   },
 
   createSection: async (classId: string, payload: { title: string; order?: number; is_published?: boolean }) => {
-    const response = await api.post<ApiResponse<any>>(`/classes/${classId}/sections`, payload);
+    const response = await api.post<ApiResponse<any>>(`/courses/${classId}/sections`, payload);
     return response.data;
   },
 
   updateSection: async (classId: string, sectionId: string, payload: { title: string; order?: number; is_published?: boolean }) => {
-    const response = await api.put<ApiResponse<any>>(`/classes/${classId}/sections/${sectionId}`, payload);
+    const response = await api.put<ApiResponse<any>>(`/courses/${classId}/sections/${sectionId}`, payload);
     return response.data;
   },
 
   deleteSection: async (classId: string, sectionId: string) => {
-    const response = await api.delete<ApiResponse<null>>(`/classes/${classId}/sections/${sectionId}`);
+    const response = await api.delete<ApiResponse<null>>(`/courses/${classId}/sections/${sectionId}`);
     return response.data;
   },
 
   updateSectionOrder: async (classId: string, order: string[]) => {
-    const response = await api.post<ApiResponse<null>>(`/classes/${classId}/sections/order`, { order });
+    const response = await api.post<ApiResponse<null>>(`/courses/${classId}/sections/order`, { order });
     return response.data;
   },
 };

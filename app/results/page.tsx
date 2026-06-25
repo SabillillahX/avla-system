@@ -8,7 +8,6 @@ import api from "@/lib/api/axios"
 interface QuizData {
   question: string;
   correct_answer: string;
-  explanation: string;
 }
 
 interface QuizResult {
@@ -22,16 +21,13 @@ interface QuizResult {
 interface QuestionData {
   type: string;
   question: string;
-  accepted_answers: string[];
-  explanation: string;
+  correct_answer: string;
 }
 
 interface AssessmentResult {
   id: number;
   user_answer: string;
   is_correct: boolean;
-  score: number;
-  ai_feedback: string | null;
   created_at: string;
   question: QuestionData;
 }
@@ -145,12 +141,9 @@ export default function ResultsPage() {
                 <AssessmentResultCard
                   key={`assessment-${result.id}`}
                   isCorrect={result.is_correct}
-                  score={result.score ?? 0}
                   question={result.question.question}
                   userAnswer={result.user_answer}
-                  correctAnswer={result.question.accepted_answers?.[0] || "-"}
-                  aiFeedback={result.ai_feedback}
-                  explanation={result.question.explanation}
+                  correctAnswer={result.question.correct_answer || "-"}
                   date={formatDate(result.created_at)}
                   type={result.question.type}
                 />
@@ -175,7 +168,6 @@ export default function ResultsPage() {
                   question={result.quiz.question}
                   userAnswer={result.user_answer}
                   correctAnswer={result.quiz.correct_answer}
-                  explanation={result.quiz.explanation}
                   date={formatDate(result.created_at)}
                 />
               ))
@@ -189,30 +181,19 @@ export default function ResultsPage() {
 
 function AssessmentResultCard({
   isCorrect,
-  score,
   question,
   userAnswer,
   correctAnswer,
-  aiFeedback,
-  explanation,
   date,
   type
 }: {
   isCorrect: boolean;
-  score: number;
   question: string;
   userAnswer: string;
   correctAnswer: string;
-  aiFeedback: string | null;
-  explanation: string;
   date: string;
   type: string;
 }) {
-  const scoreColor = score >= 70
-    ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800"
-    : score >= 40
-      ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800"
-      : "text-red-700 bg-red-50 border-red-200 dark:text-red-300 dark:bg-red-900/30 dark:border-red-800"
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -236,9 +217,6 @@ function AssessmentResultCard({
               <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium px-2 py-0.5 rounded capitalize">
                 {type.replace("_", " ")}
               </span>
-              <span className={`text-sm font-bold px-3 py-0.5 rounded-full border ${scoreColor}`}>
-                Score: {score}/100
-              </span>
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mt-2">
               {question}
@@ -257,31 +235,11 @@ function AssessmentResultCard({
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Your answer</span>
             <p className="text-gray-900 dark:text-gray-100">{userAnswer || "-"}</p>
           </div>
-          <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1 block">Reference answer</span>
+          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Correct answer</span>
             <p className="text-gray-900 dark:text-gray-100">{correctAnswer}</p>
           </div>
         </div>
-
-        {aiFeedback ? (
-          <div className={`p-4 rounded-xl border ${isCorrect
-            ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30"
-            : "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30"
-            }`}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <Sparkles className={`w-3.5 h-3.5 ${isCorrect ? "text-emerald-600" : "text-amber-600"}`} />
-              <span className={`text-xs font-semibold uppercase tracking-wider ${isCorrect ? "text-emerald-600" : "text-amber-600"}`}>
-                AI Analysis & Feedback
-              </span>
-            </div>
-            <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed">{aiFeedback}</p>
-          </div>
-        ) : explanation ? (
-          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30">
-            <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1 block">Explanation</span>
-            <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed">{explanation}</p>
-          </div>
-        ) : null}
       </div>
     </div>
   )
@@ -292,14 +250,12 @@ function QuizResultCard({
   question,
   userAnswer,
   correctAnswer,
-  explanation,
   date,
 }: {
   isCorrect: boolean;
   question: string;
   userAnswer: string;
   correctAnswer: string;
-  explanation: string;
   date: string;
 }) {
   return (
@@ -342,18 +298,11 @@ function QuizResultCard({
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Your answer</span>
             <p className="text-gray-900 dark:text-gray-100">{userAnswer || "-"}</p>
           </div>
-          <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1 block">Correct answer</span>
+          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Correct answer</span>
             <p className="text-gray-900 dark:text-gray-100">{correctAnswer}</p>
           </div>
         </div>
-
-        {explanation && (
-          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30">
-            <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1 block">Explanation</span>
-            <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed">{explanation}</p>
-          </div>
-        )}
       </div>
     </div>
   )

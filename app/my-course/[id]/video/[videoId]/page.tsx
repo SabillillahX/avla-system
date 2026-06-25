@@ -34,7 +34,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string, vid
     const fetchVideo = async () => {
       try {
         const [videoData, questionsResponse] = await Promise.all([
-          api.get(`/classes/${params.id}/videos/${params.videoId}`).then(res => res.data.data),
+          api.get(`/courses/${params.id}/videos/${params.videoId}`).then(res => res.data.data),
           assessmentApi.getQuestions(params.videoId).catch(() => ({ data: [] }))
         ])
         setVideo(videoData)

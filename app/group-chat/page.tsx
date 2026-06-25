@@ -96,7 +96,7 @@ export default function GroupChatPage() {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
 
         if (user.roles?.includes("student")) {
-          const response = await fetch(`${backendBaseUrl}/classes/enrolled`, {
+          const response = await fetch(`${backendBaseUrl}/courses/enrolled`, {
             headers: {
               Accept: "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -110,7 +110,7 @@ export default function GroupChatPage() {
           const payload = await response.json()
           result = extractCourseArray(payload?.data)
         } else {
-          const response = await fetch(`${backendBaseUrl}/classes`, {
+          const response = await fetch(`${backendBaseUrl}/courses`, {
             headers: {
               Accept: "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -185,7 +185,7 @@ export default function GroupChatPage() {
 
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-        const response = await fetch(`${backendBaseUrl}/classes/${activeConversation.classId}/chat/messages`, {
+        const response = await fetch(`${backendBaseUrl}/courses/${activeConversation.classId}/chat/messages`, {
           headers: {
             Accept: "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -228,7 +228,7 @@ export default function GroupChatPage() {
 
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-      const sendResponse = await fetch(`${backendBaseUrl}/classes/${activeConversation.classId}/chat/messages`, {
+      const sendResponse = await fetch(`${backendBaseUrl}/courses/${activeConversation.classId}/chat/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -244,7 +244,7 @@ export default function GroupChatPage() {
 
       setDraftMessage("")
 
-      const response = await fetch(`${backendBaseUrl}/classes/${activeConversation.classId}/chat/messages`, {
+      const response = await fetch(`${backendBaseUrl}/courses/${activeConversation.classId}/chat/messages`, {
         headers: {
           Accept: "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

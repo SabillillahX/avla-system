@@ -42,7 +42,7 @@ export default function CoursesPage() {
       try {
         setIsClassesLoading(true)
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-        const response = await fetch(`${backendBaseUrl}/classes`, {
+        const response = await fetch(`${backendBaseUrl}/courses`, {
           headers: {
             Accept: "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -79,7 +79,7 @@ export default function CoursesPage() {
 
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-        const response = await fetch(`${backendBaseUrl}/classes/enrolled`, {
+        const response = await fetch(`${backendBaseUrl}/courses/enrolled`, {
           headers: {
             Accept: "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),

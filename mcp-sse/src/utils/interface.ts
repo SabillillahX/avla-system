@@ -2,7 +2,6 @@ export interface ParsedQuiz {
     question: string;
     options: [string, string, string, string];
     correct_answer: string;
-    explanation: string;
 }
 
 export interface AssessmentQuestion {
@@ -11,7 +10,6 @@ export interface AssessmentQuestion {
     question: string;
     options: string[] | null;
     correct_answers: string[];
-    explanation: string;
 }
 
 export interface SemanticAssessmentQuestion {
@@ -21,7 +19,6 @@ export interface SemanticAssessmentQuestion {
     question: string;
     reference_answer: string;
     semantic_keywords: string[];
-    explanation: string;
 }
 
 export interface TranscriptSegment {

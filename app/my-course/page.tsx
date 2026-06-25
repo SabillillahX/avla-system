@@ -46,7 +46,7 @@ export default function MyCoursePage() {
 
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-        const response = await fetch(`${backendBaseUrl}/classes/enrolled`, {
+        const response = await fetch(`${backendBaseUrl}/courses/enrolled`, {
           headers: {
             Accept: "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -147,7 +147,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       setIsCheckingEnrollment(true)
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/classes/enrolled`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/courses/enrolled`, {
           headers: {
             Accept: "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),

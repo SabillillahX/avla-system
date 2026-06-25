@@ -8,8 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   ArrowLeft, Loader2, Plus, HelpCircle, FileText, Pencil, Trash2,
@@ -27,7 +25,6 @@ interface QuizEditState {
   question: string
   options: string[]
   correct_answer: string
-  explanation: string
 }
 
 function QuizEditModal({
@@ -44,7 +41,6 @@ function QuizEditModal({
     question: quiz.question,
     options: [...quiz.options],
     correct_answer: quiz.correct_answer,
-    explanation: quiz.explanation || "",
   })
 
   const updateOption = (index: number, value: string) => {
@@ -145,17 +141,6 @@ function QuizEditModal({
               ))}
             </div>
           </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Explanation / Feedback</Label>
-            <textarea
-              value={form.explanation}
-              onChange={(e) => setForm((prev) => ({ ...prev, explanation: e.target.value }))}
-              rows={3}
-              placeholder="Explain why the correct answer is right..."
-              className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
-            />
-          </div>
         </div>
 
         <div className="shrink-0 px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-2">
@@ -177,7 +162,7 @@ function QuizEditModal({
 
 interface AssessmentEditState {
   question: string
-  explanation: string
+  correct_answer: string
 }
 
 function AssessmentEditModal({
@@ -194,8 +179,8 @@ function AssessmentEditModal({
   onSaved: (result: AssessmentQuestion) => void
 }) {
   const [form, setForm] = useState<AssessmentEditState>({
-    question: assessment?.question || "",
-    explanation: assessment?.explanation || "",
+    question: assessment?.question ?? "",
+    correct_answer: assessment?.correct_answer ?? "",
   })
   const [isSaving, setIsSaving] = useState(false)
 
@@ -204,13 +189,12 @@ function AssessmentEditModal({
 
     setIsSaving(true)
     try {
+      // Only send editable fields — bloom_level is AI-set and never touched here.
       const payload: UpdateAssessmentPayload | CreateAssessmentPayload = {
         video_id: videoId,
-        type: assessment?.type || "essay",
+        type: isNew ? "essay" : assessment!.type,
         question: form.question.trim(),
-        explanation: form.explanation.trim() || null,
-        bloom_level: assessment?.bloom_level ?? null,
-        options: assessment?.options ?? null,
+        correct_answer: form.correct_answer.trim() || null,
       }
 
       const result = isNew
@@ -231,14 +215,15 @@ function AssessmentEditModal({
       <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl bg-white dark:bg-gray-900">
         <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-blue-50/50 dark:bg-blue-900/10 shrink-0">
           <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-500" />
             {isNew ? "Add New Assessment Question" : "Edit Assessment Question"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
           <div className="space-y-1.5">
-            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Question <span className="text-red-500">*</span></Label>
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Question <span className="text-red-500">*</span>
+            </Label>
             <textarea
               value={form.question}
               onChange={(e) => setForm((prev) => ({ ...prev, question: e.target.value }))}
@@ -249,16 +234,18 @@ function AssessmentEditModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Explanation</Label>
+            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Correct Answer
+              <span className="ml-1.5 text-xs text-gray-400 font-normal">(Optional — used as the answer key)</span>
+            </Label>
             <textarea
-              value={form.explanation}
-              onChange={(e) => setForm((prev) => ({ ...prev, explanation: e.target.value }))}
+              value={form.correct_answer}
+              onChange={(e) => setForm((prev) => ({ ...prev, correct_answer: e.target.value }))}
               rows={3}
-              placeholder="Explain the reasoning behind the correct answer..."
-              className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+              placeholder="Enter the expected correct answer or key points..."
+              className="w-full rounded-xl bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
             />
           </div>
-
         </div>
 
         <div className="shrink-0 px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-2">
@@ -327,7 +314,6 @@ export default function ManageQuestionsPage({ params }: { params: { videoId: str
           question: q.question,
           options: q.options,
           correct_answer: q.correct_answer,
-          explanation: q.explanation || null,
         })),
       })
       setQuizzes(updatedQuizzes)
@@ -341,13 +327,17 @@ export default function ManageQuestionsPage({ params }: { params: { videoId: str
   }
 
   const handleAssessmentSaved = (result: AssessmentQuestion) => {
-    if (isAddingAssessment) {
-      setAssessments((prev) => [...prev, result])
-      setIsAddingAssessment(false)
-    } else {
-      setAssessments((prev) => prev.map((a) => (a.uuid === result.uuid ? result : a)))
-      setEditingAssessment(null)
-    }
+    setAssessments((prev) => {
+      const idx = prev.findIndex(
+        (a) => a.uuid.toLowerCase() === result.uuid.toLowerCase()
+      )
+      if (idx === -1) return [...prev, result]
+      const next = [...prev]
+      next[idx] = result
+      return next
+    })
+    setEditingAssessment(null)
+    setIsAddingAssessment(false)
   }
 
   const handleDeleteAssessment = async (uuid: string) => {
@@ -408,63 +398,38 @@ export default function ManageQuestionsPage({ params }: { params: { videoId: str
               </div>
             ) : (
               quizzes.map((quiz, index) => (
-                <Card key={quiz.id || index} className="shadow-sm border-gray-100 dark:border-gray-800 hover:shadow-md transition-shadow">
+                <Card key={quiz.id || index} className="shadow-sm border-gray-200 dark:border-gray-700">
                   <CardHeader className="py-4 pb-3">
                     <div className="flex items-start justify-between gap-3">
-                      <CardTitle className="text-base font-medium flex items-start gap-3 flex-1">
-                        <span className="flex items-center justify-center bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 w-6 h-6 rounded-full text-xs shrink-0 mt-0.5 font-semibold">
-                          {index + 1}
-                        </span>
-                        <span className="text-gray-900 dark:text-white leading-snug">{quiz.question}</span>
+                      <CardTitle className="text-sm font-medium flex items-start gap-2 flex-1 text-gray-900 dark:text-white">
+                        <span className="shrink-0 tabular-nums">{index + 1}.</span>
+                        <span className="leading-snug">{quiz.question}</span>
                       </CardTitle>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="shrink-0 h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                        className="shrink-0 h-8 w-8 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg"
                         onClick={() => setEditingQuiz(quiz)}
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0 pb-4 space-y-3 pl-9">
-                    <ul className="space-y-1.5">
-                      {quiz.options.map((opt, i) => {
-                        const isCorrect = opt === quiz.correct_answer
-                        return (
-                          <li
-                            key={i}
-                            className={cn(
-                              "text-sm p-2.5 rounded-lg border flex items-center gap-2.5",
-                              isCorrect
-                                ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300"
-                                : "bg-gray-50 border-gray-100 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
-                            )}
-                          >
-                            {isCorrect ? (
-                              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                            ) : (
-                              <div className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300 dark:border-gray-600" />
-                            )}
+                  <CardContent className="pt-0 pb-4 space-y-1 pl-6">
+                    {quiz.options.map((opt, i) => {
+                      const isCorrect = opt === quiz.correct_answer
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-sm py-1">
+                          {isCorrect
+                            ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-gray-700 dark:text-gray-300" />
+                            : <div className="w-3.5 h-3.5 shrink-0 rounded-full border border-gray-300 dark:border-gray-600" />}
+                          <span className={isCorrect ? "font-medium text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400"}>
                             {opt}
-                            {isCorrect && <span className="ml-auto text-xs font-semibold opacity-60">Correct</span>}
-                          </li>
-                        )
-                      })}
-                    </ul>
-
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400 pt-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> Trigger at {quiz.trigger_time}s
-                      </span>
-                    </div>
-
-                    {quiz.explanation && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Explanation</p>
-                        <p className="text-sm text-blue-800 dark:text-blue-300">{quiz.explanation}</p>
-                      </div>
-                    )}
+                          </span>
+                        </div>
+                      )
+                    })}
+                    <p className="text-xs text-gray-400 dark:text-gray-500 pt-2">Trigger at {quiz.trigger_time}s</p>
                   </CardContent>
                 </Card>
               ))
@@ -490,24 +455,21 @@ export default function ManageQuestionsPage({ params }: { params: { videoId: str
               </div>
             ) : (
               assessments.map((assessment, index) => {
-                const keywords = Array.isArray(assessment.options) ? assessment.options : []
                 const isDeleting = deletingAssessmentId === assessment.uuid
 
                 return (
-                  <Card key={assessment.uuid || index} className="shadow-sm border-l-4 border-l-blue-400 border-gray-100 dark:border-gray-800 hover:shadow-md transition-shadow">
+                  <Card key={assessment.uuid} className="shadow-sm border-gray-200 dark:border-gray-700">
                     <CardHeader className="py-4 pb-2">
                       <div className="flex items-start justify-between gap-3">
-                        <CardTitle className="text-base font-medium flex items-start gap-3 flex-1">
-                          <span className="flex items-center justify-center bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 w-6 h-6 rounded-full text-xs shrink-0 mt-0.5 font-semibold">
-                            {index + 1}
-                          </span>
-                          <span className="text-gray-900 dark:text-white leading-snug">{assessment.question}</span>
+                        <CardTitle className="text-sm font-medium flex items-start gap-2 flex-1  dark:text-white">
+                          <span className="shrink-0 tabular-nums">{index + 1}.</span>
+                          <span className="leading-snug">{assessment.question}</span>
                         </CardTitle>
                         <div className="flex items-center gap-1 shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                            className="h-8 w-8 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg"
                             onClick={() => setEditingAssessment(assessment)}
                           >
                             <Pencil className="w-4 h-4" />
@@ -515,56 +477,22 @@ export default function ManageQuestionsPage({ params }: { params: { videoId: str
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                            className="h-8 w-8 text-gray-400 hover:text-red-600 rounded-lg"
                             onClick={() => handleDeleteAssessment(assessment.uuid)}
                             disabled={isDeleting}
                           >
-                            {isDeleting ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
+                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                           </Button>
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2 pl-9 mt-2">
-                        {assessment.type && (
-                          <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border-0">
-                            {assessment.type}
-                          </Badge>
-                        )}
-                      </div>
                     </CardHeader>
 
-                    <CardContent className="pt-2 pb-4 space-y-3 pl-9">
-                      {keywords.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                            Semantic Keywords
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {keywords.map((kw, i) => (
-                              <span
-                                key={i}
-                                className="text-xs bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300 px-2.5 py-0.5 rounded-full"
-                              >
-                                {kw}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {assessment.explanation && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-3">
-                          <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
-                            Explanation
-                          </p>
-                          <p className="text-sm text-blue-800 dark:text-blue-300">{assessment.explanation}</p>
-                        </div>
-                      )}
-                    </CardContent>
+                    {assessment.correct_answer && (
+                      <CardContent className="pt-1 pb-4 pl-5">
+                        <p className="text-xs text-gray-500 dark:text-gray-900 font-bold mb-0.5">Correct answer</p>
+                        <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{assessment.correct_answer}</p>
+                      </CardContent>
+                    )}
                   </Card>
                 )
               })

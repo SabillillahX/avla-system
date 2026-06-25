@@ -161,10 +161,9 @@ const quizSchema = {
             minItems: 4,
             maxItems: 4
         },
-        correct_answer: { type: "string" },
-        explanation: { type: "string" }
+        correct_answer: { type: "string" }
     },
-    required: ["question", "options", "correct_answer", "explanation"],
+    required: ["question", "options", "correct_answer"],
     additionalProperties: false
 };
 
@@ -181,10 +180,9 @@ const fullAssessmentSchema = {
                     difficulty_level: { type: "integer" },
                     question: { type: "string" },
                     reference_answer: { type: "string" },
-                    semantic_keywords: { type: "array", items: { type: "string" } },
-                    explanation: { type: "string" }
+                    semantic_keywords: { type: "array", items: { type: "string" } }
                 },
-                required: ["type", "bloom_level", "difficulty_level", "question", "reference_answer", "semantic_keywords", "explanation"],
+                required: ["type", "bloom_level", "difficulty_level", "question", "reference_answer", "semantic_keywords"],
                 additionalProperties: false
             }
         }
@@ -290,31 +288,30 @@ Your task is to write exactly 1 (one) multiple-choice question for an adaptive p
 3. **Three high-quality distractors.** Each wrong option must represent a plausible misconception or a partially correct idea. A learner who only skimmed the content should NOT immediately spot the correct answer. Avoid obviously absurd options.
 4. **No A/B/C/D or numbering inside option text.** The option strings themselves must be clean.
 5. **Randomize correct answer position.** Do NOT always put the correct answer at the first index. Randomly place it in the second, third, or fourth position as well.
-6. **Adaptive explanation.** The explanation must: (a) clearly state why the correct answer is right using evidence from the transcript, and (b) address the most tempting wrong answer and explain why it fails.
-7. **STRICTLY INDONESIAN.** You MUST write the entire question, all options, and the explanation in the Indonesian language (Bahasa Indonesia), regardless of the transcript's original language.
+6. **STRICTLY INDONESIAN.** You MUST write the entire question and all options in the Indonesian language (Bahasa Indonesia), regardless of the transcript's original language.
 
 ## Strict Output Format
 Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing text:
 {
   "question": "A clear, conceptual question ending with a question mark?",
   "options": ["Plausible wrong answer", "Correct answer text", "Plausible wrong answer", "Plausible wrong answer"],
-  "correct_answer": "${includeAnswers ? "Correct answer text" : ""}",
-  "explanation": "${includeAnswers ? "The correct answer is [X] because [evidence from transcript]. A common mistake is choosing [distractor] because [why it seems right], but [why it is actually wrong]." : ""}"
+  "correct_answer": "${includeAnswers ? "Correct answer text" : ""}"
 }
 
-CRITICAL: ${includeAnswers ? "The value of \"correct_answer\" must be an exact character-for-character copy of one of the strings in the \"options\" array." : "You MUST leave \"correct_answer\" and \"explanation\" as empty strings because the teacher requested to add answers manually."}
+CRITICAL: ${includeAnswers ? "The value of \"correct_answer\" must be an exact character-for-character copy of one of the strings in the \"options\" array." : "You MUST leave \"correct_answer\" as an empty string because the teacher requested to add answers manually."}
 
 ## Task
 The full video transcript is provided to you. I want you to write ONE multiple-choice question specifically focusing on the concepts discussed in THIS specific excerpt from the video:
 
 """
-${transcriptText}
+\${transcriptText}
 """
 
-Ensure the question makes sense in the broader context of the whole video.`;
+Ensure the question makes sense in the broader context of the whole video.\`;
+}the whole video.`;
 }
 
-function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3", includeAnswers: boolean = true): string {
+function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3"): string {
     return `You are an expert in Adaptive Learning Systems and Instructional Design.
 I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
 
@@ -327,13 +324,13 @@ Distribute the 10 questions across the following levels: ${targetBloomLevels}
 ## Question Style Rules (No Multiple Choice)
 1. **short_answer**: Requires a concise explanation (1-3 sentences).
 2. **essay**: Requires deep reasoning and connection between concepts.
-3. Every question MUST be evaluatable via Semantic Similarity. This means you must provide a "reference_answer" that is rich in keywords and core concepts.
-4. **STRICTLY INDONESIAN.** All questions, reference answers, explanations, and semantic keywords MUST be written in the Indonesian language (Bahasa Indonesia).
+3. Every question MUST be evaluatable via Semantic Similarity. However, you are ONLY generating the questions. DO NOT provide answers or keywords.
+4. **STRICTLY INDONESIAN.** All questions MUST be written in the Indonesian language (Bahasa Indonesia).
 
 ## Formatting Rules
 - "bloom_level": String (e.g., "C3 - Applying").
-- "reference_answer": ${includeAnswers ? "A comprehensive ideal answer used as a baseline for semantic comparison." : "MUST BE AN EMPTY STRING."}
-- "semantic_keywords": ${includeAnswers ? "An array of 5-10 essential terms that must be present in the student's response." : "MUST BE AN EMPTY ARRAY []."}
+- "reference_answer": MUST BE AN EMPTY STRING.
+- "semantic_keywords": MUST BE AN EMPTY ARRAY [].
 
 ## Strict Output Format (JSON Only)
 Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
@@ -343,9 +340,8 @@ Return ONLY a valid JSON array. Do not include markdown formatting or explanatio
     "bloom_level": "C2",
     "difficulty_level": 2,
     "question": "Text of the question?",
-    "reference_answer": "${includeAnswers ? "The ideal complete answer for semantic matching..." : ""}",
-    "semantic_keywords": ${includeAnswers ? "[\"keyword1\", \"keyword2\"]" : "[]"},
-    "explanation": "${includeAnswers ? "Logic behind the correct concept." : ""}"
+    "reference_answer": "",
+    "semantic_keywords": []
   }
 ]`;
 }
@@ -355,8 +351,7 @@ function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number): s
 
 ### OBJECTIVES
 - Generate exactly ${quantity} questions that specifically target the **${targetLevel}** level of Bloom's Taxonomy.
-- For every question, provide a "reference_answer" that will serve as the ground truth for Semantic Similarity evaluation (Vector Embedding comparison).
-- Include "semantic_keywords" that represent the core technical concepts that MUST be present in a correct response.
+- DO NOT generate reference answers or keywords. You are only generating the questions.
 
 ### BLOOM'S TAXONOMY GUIDELINES (Target: ${targetLevel})
 - **C1 (Remember):** Focus on recalling facts, terms, and basic concepts.
@@ -364,10 +359,9 @@ function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number): s
 - **C3 (Apply):** Focus on using information in new situations/scenarios.
 - **C4 (Analyze):** Focus on drawing connections among ideas; breaking info into parts.
 - **C5 (Evaluate):** Focus on justifying a stand or decision; critiquing.
-- **C6 (Create):** Focus on producing new or original work based on the material.
 
 ### STRICTLY INDONESIAN
-All questions, reference answers, explanations, and semantic keywords MUST be written in the Indonesian language (Bahasa Indonesia).
+All questions MUST be written in the Indonesian language (Bahasa Indonesia).
 
 ### OUTPUT FORMAT (Strict JSON)
 Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
@@ -377,9 +371,8 @@ Return ONLY a valid JSON array. Do not include markdown formatting or explanatio
     "bloom_level": "${targetLevel}",
     "difficulty_level": 3,
     "question": "The question text here...",
-    "reference_answer": "A detailed, ideal answer (2-4 sentences) that covers all key points for semantic matching.",
-    "semantic_keywords": ["keyword1", "keyword2", "keyword3"],
-    "explanation": "Pedagogical explanation of why this is the correct concept."
+    "reference_answer": "",
+    "semantic_keywords": []
   }
 ]`;
 }
@@ -460,31 +453,33 @@ function createMcpServer(): McpServer {
     );
 
     server.tool(
-        "generateChapterLearningObjectives",
-        "Generate overall learning objectives for a specific chapter/section by analyzing all its video summaries.",
+        "generateCourseLearningObjectives",
+        "Generate overall learning objectives for a specific course by analyzing all its video topics, learning objectives, and key concepts.",
         {
             token: z.string().describe("Bearer token of the currently logged-in user"),
-            sectionId: z.string().describe("ID of the target section/chapter"),
+            courseId: z.string().describe("ID of the target course"),
         },
-        async ({ token, sectionId }) => {
+        async ({ token, courseId }) => {
             try {
-                const response = await fetchWithAuth(`${ENV.backendUrl}/videos?section_id=${sectionId}`, {
+                const response = await fetchWithAuth(`${ENV.backendUrl}/courses/${courseId}`, {
                     method: "GET",
                     headers: buildAuthHeaders(token),
                 });
 
                 if (!response.ok) {
                     return {
-                        content: [{ type: "text", text: `Gagal mengambil data video untuk chapter ini: HTTP ${response.status}` }],
+                        content: [{ type: "text", text: `Gagal mengambil data course: HTTP ${response.status}` }],
                     };
                 }
 
                 const jsonBody = await response.json();
-                const videoList = jsonBody.data?.data ?? jsonBody.data ?? [];
+                const courseData = jsonBody.data ?? jsonBody;
+                const sections = courseData.sections ?? [];
+                const videoList = sections.flatMap((sec: any) => sec.videos ?? []);
 
                 if (videoList.length === 0) {
                     return {
-                        content: [{ type: "text", text: "Tidak ada video di dalam chapter ini, tidak bisa membuat Learning Objectives." }],
+                        content: [{ type: "text", text: "Tidak ada video di dalam course ini, tidak bisa membuat Learning Objectives." }],
                     };
                 }
 
@@ -495,7 +490,7 @@ function createMcpServer(): McpServer {
                     if (video.summary) {
                         try {
                             let parsedSummary: any = video.summary;
-                            
+
                             // Keep parsing if it's a string (handles double-stringified JSON)
                             while (typeof parsedSummary === 'string') {
                                 try {
@@ -505,35 +500,39 @@ function createMcpServer(): McpServer {
                                 }
                             }
 
-                            if (parsedSummary && typeof parsedSummary === 'object' && parsedSummary.summary) {
-                                combinedContext += `\n- Video: ${video.title}\n  Ringkasan: ${parsedSummary.summary}\n`;
-                                videoCount++;
-                            } else if (typeof parsedSummary === 'string' && parsedSummary.trim() !== '') {
-                                // Fallback: if summary is just a plain string (not JSON)
-                                combinedContext += `\n- Video: ${video.title}\n  Ringkasan: ${parsedSummary}\n`;
+                            if (parsedSummary && typeof parsedSummary === 'object') {
+                                const topic = parsedSummary.topic ?? "-";
+                                const lo = Array.isArray(parsedSummary.learning_objectives)
+                                    ? parsedSummary.learning_objectives.join(", ")
+                                    : (parsedSummary.learning_objectives ?? "-");
+                                const keyConcepts = Array.isArray(parsedSummary.key_concepts)
+                                    ? parsedSummary.key_concepts.join(", ")
+                                    : (parsedSummary.key_concepts ?? "-");
+
+                                combinedContext += `\n- Video: ${video.title}\n  Topic: ${topic}\n  Learning Objectives: ${lo}\n  Key Concepts: ${keyConcepts}\n`;
                                 videoCount++;
                             }
                         } catch (e) {
-                            console.warn(`[Chapter LO] Gagal membaca summary untuk video ${video.id}`);
+                            console.warn(`[Course LO] Gagal membaca summary untuk video ${video.id}`);
                         }
                     }
                 }
 
                 if (!combinedContext) {
                     return {
-                        content: [{ type: "text", text: "Video di chapter ini belum memiliki summary. Pastikan transkrip dan summary video sudah di-generate." }],
+                        content: [{ type: "text", text: "Video di course ini belum memiliki summary. Pastikan transkrip dan summary video sudah di-generate." }],
                     };
                 }
 
-                const prompt = `You are an expert curriculum designer. Based on the summaries of ${videoCount} videos within a single chapter, generate up to 4 overarching Chapter-Level Learning Objectives.
+                const prompt = `You are an expert curriculum designer. Based on the topics, learning objectives, and key concepts of ${videoCount} videos across the entire course, generate up to 6 overarching Course-Level Learning Objectives.
 
 Requirements:
-1. Synthesize the individual video concepts into broad, cohesive chapter objectives.
-2. The number of learning objectives MUST NOT exceed 4.
+1. Synthesize the individual video concepts into broad, cohesive course objectives.
+2. The number of learning objectives MUST NOT exceed 6.
 3. Align each objective with Bloom's Taxonomy, using clear and measurable action verbs.
 4. The generated learning objectives MUST be written entirely in Indonesian (e.g., "Siswa mampu menganalisis...", "Mampu menerapkan...").
 
-### Videos in this Chapter:
+### Videos in this Course:
 ${combinedContext}
 `;
                 const loSchema = {
@@ -542,7 +541,7 @@ ${combinedContext}
                         learning_objectives: {
                             type: "array",
                             items: { type: "string" },
-                            description: "Daftar learning objectives (maksimal 4)",
+                            description: "Daftar learning objectives (maksimal 6)",
                         }
                     },
                     required: ["learning_objectives"]
@@ -556,7 +555,7 @@ ${combinedContext}
 
             } catch (error: any) {
                 return {
-                    content: [{ type: "text", text: `Error generating chapter learning objectives: ${error.message || String(error)}` }],
+                    content: [{ type: "text", text: `Error generating course learning objectives: ${error.message || String(error)}` }],
                 };
             }
         }
@@ -860,9 +859,8 @@ ${combinedContext}
                 .describe(
                     "If true (default), attempt parallel generation with quiz. If false, wait for quiz to complete first."
                 ),
-            includeAnswers: z.boolean().optional().default(true).describe("If true, AI generates the answers and feedback. If false, leaves them blank."),
         },
-        async ({ token, userId, videoId, parallelWithQuiz = true, includeAnswers = true }) => {
+        async ({ token, userId, videoId, parallelWithQuiz = true }) => {
             const userIdStr = String(userId);
             const videoIdStr = String(videoId);
 
@@ -984,7 +982,7 @@ ${combinedContext}
 
                 for (let attempt = 0; attempt < maxAttempts; attempt++) {
                     try {
-                        const prompt = buildFullAssessmentPrompt(targetBloomLevels, includeAnswers);
+                        const prompt = buildFullAssessmentPrompt(targetBloomLevels);
                         const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
                         let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
@@ -996,9 +994,9 @@ ${combinedContext}
                             "bloom_level": "C2",
                             "difficulty_level": 2,
                             "question": "string",
-                            "reference_answer": "string",
-                            "semantic_keywords": ["string"],
-                            "explanation": "string"
+                            "reference_answer": "",
+                            "semantic_keywords": [],
+                            "explanation": ""
                           }
                         ]
 
@@ -1071,7 +1069,6 @@ ${combinedContext}
                     question: question.question,
                     options: question.semantic_keywords,
                     accepted_answers: [question.reference_answer],
-                    explanation: question.explanation,
                     bloom_level: question.bloom_level,
                 });
 
@@ -1226,9 +1223,8 @@ ${combinedContext}
                             "bloom_level": "${targetLevel}",
                             "difficulty_level": 3,
                             "question": "string",
-                            "reference_answer": "string",
-                            "semantic_keywords": ["string"],
-                            "explanation": "string"
+                            "reference_answer": "",
+                            "semantic_keywords": []
                           }
                         ]
 
@@ -1282,7 +1278,6 @@ ${combinedContext}
                 question: question.question,
                 options: question.semantic_keywords,
                 accepted_answers: [question.reference_answer],
-                explanation: question.explanation,
                 bloom_level: question.bloom_level,
             });
 
@@ -1322,190 +1317,7 @@ ${combinedContext}
         }
     );
 
-    server.tool(
-        "evaluateAssessmentAnswers",
-        "Evaluates the user's answers for a given video assessment and saves the scores to the database.",
-        {
-            videoId: z.string().describe("ID of the video"),
-            userId: z.string().describe("User ID"),
-            token: z.string().describe("Bearer token for API access"),
-        },
-        async ({ videoId, userId, token }) => {
-            try {
-                emitNotificationToUser(userId, {
-                    event: "assessment_evaluation_started",
-                    video_id: videoId,
-                    message: "Memulai evaluasi jawaban...",
-                });
 
-                const transcriptResponse = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}/transcript`, {
-                    method: "GET",
-                    headers: buildAuthHeaders(token),
-                });
-                let transcriptSegments: TranscriptSegment[] = [];
-                if (transcriptResponse.ok) {
-                    const transcriptData = await transcriptResponse.json();
-                    transcriptSegments = transcriptData.data || [];
-                }
-                const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
-
-                const qResponse = await fetchWithAuth(`${ENV.backendUrl}/questions?video_id=${videoId}`, {
-                    method: "GET",
-                    headers: buildAuthHeaders(token),
-                });
-                if (!qResponse.ok) throw new Error("Failed to fetch questions");
-                const qData = await qResponse.json();
-                const questions = qData.data || [];
-
-                const ansResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers?video_id=${videoId}&per_page=100`, {
-                    method: "GET",
-                    headers: buildAuthHeaders(token),
-                });
-                if (!ansResponse.ok) throw new Error("Failed to fetch answers");
-                const ansData = await ansResponse.json();
-                const allAnswers = ansData.data || [];
-
-                const evaluationItems: Array<{
-                    question_id: string;
-                    question: string;
-                    reference: string;
-                    student_answer: string;
-                }> = [];
-                for (const ans of allAnswers) {
-                    const question = questions.find((q: any) => q.uuid === ans.question.uuid || q.uuid === ans.question_id);
-                    if (!question) continue;
-
-                    let referenceAnswer = "";
-                    if (Array.isArray(question.accepted_answers)) {
-                        referenceAnswer = question.accepted_answers.join(" ");
-                    } else if (typeof question.accepted_answers === "string") {
-                        referenceAnswer = question.accepted_answers;
-                    }
-
-                    evaluationItems.push({
-                        question_id: question.uuid,
-                        question: question.question,
-                        reference: referenceAnswer,
-                        student_answer: ans.user_answer
-                    });
-                }
-
-                if (evaluationItems.length === 0) {
-                    return { content: [{ type: "text", text: "No valid questions matched to evaluate" }] };
-                }
-
-                const prompt = `You are a warm, supportive study advisor — not a cold grading machine. You speak Indonesian using "kamu" (never "Anda"). Your tone is like a trusted senior friend who genuinely cares about the student's growth.
-
-I have provided the Full Video Transcript. 
-Evaluate the student's answer not just against the reference, but check if their answer demonstrates understanding of the concepts as taught in the video transcript.
-
-## Your Task
-Evaluate each student answer against the reference answer using semantic similarity. Then write a short, personal feedback (1-3 sentences max) in Indonesian.
-
-## Feedback Style Guide
-- **Correct answers:** Acknowledge specifically what the student understood well. Example: "Bagus, kamu sudah memahami konsep X dengan tepat." Don't just say "benar" — point out the insight they demonstrated.
-- **Partially correct:** Recognize what they got right first, then gently point out what's missing. Example: "Kamu sudah di jalur yang benar soal X, tapi coba perdalam lagi bagian Y."
-- **Wrong answers:** Never say "salah" bluntly. Instead: (1) acknowledge their effort, (2) explain the key concept briefly, (3) give one concrete learning tip. Example: "Sepertinya konsep X masih perlu diperkuat. Coba review ulang bagian tentang Y — buat catatan kecil poin-poin pentingnya supaya lebih mudah diingat."
-- **Irrelevant answers:** Be honest but kind. Example: "Jawaban kamu belum nyambung dengan pertanyaannya. Coba baca ulang materinya pelan-pelan, fokus ke bagian tentang X."
-
-## Rules
-- STRICTLY INDONESIAN: All feedback MUST be written in the Indonesian language (Bahasa Indonesia). Do NOT write anything in English. Keep it casual but respectful.
-- Never be patronizing or overly dramatic
-- Keep it practical — if suggesting a study method, make it specific (e.g. "coba buat mind map", "highlight kata kunci", "ulangi bagian video menit ke-X")
-- Match the depth of feedback to the question type (short_answer = brief feedback, essay = slightly more detailed)
-
-## Input Data
-${JSON.stringify(evaluationItems, null, 2)}
-
-## Output Format (STRICT JSON, no markdown)
-[
-  {
-    "question_id": "uuid string",
-    "score": number (0-100),
-    "decision": "correct" | "partial" | "wrong",
-    "feedback": "Personal feedback in Indonesian as described above."
-  }
-]`;
-
-                const evaluationSchema = {
-                    type: "object",
-                    properties: {
-                        items: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                    question_id: { type: "string" },
-                                    score: { type: "number" },
-                                    decision: { type: "string", enum: ["correct", "partial", "wrong"] },
-                                    feedback: { type: "string" }
-                                },
-                                required: ["question_id", "score", "decision", "feedback"],
-                                additionalProperties: false
-                            }
-                        }
-                    },
-                    required: ["items"],
-                    additionalProperties: false
-                };
-
-                const rawOutput = await callOpenRouterApi(prompt, evaluationSchema, transcriptContext);
-                let parsedResults = [];
-                try {
-                    const cleanedOutput = rawOutput.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const parsedData = JSON.parse(cleanedOutput);
-                    parsedResults = parsedData.items || parsedData;
-                } catch (e) {
-                    console.error("[Evaluate Tool] Failed to parse AI response:", rawOutput);
-                    throw new Error("Failed to parse evaluation response");
-                }
-
-                const savePromises = parsedResults.map(async (result: any) => {
-                    const studentAns = evaluationItems.find((a: any) => a.question_id === result.question_id);
-                    if (!studentAns) return;
-
-                    const updatePayload = {
-                        score: result.score,
-                        is_correct: result.decision === "correct",
-                        feedback: result.feedback
-                    };
-
-                    console.log(`[Evaluate Tool] Updating score for ${result.question_id}:`, updatePayload);
-
-                    const saveResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers/${result.question_id}/score`, {
-                        method: "PUT",
-                        headers: buildAuthHeaders(token),
-                        body: JSON.stringify(updatePayload),
-                    });
-
-                    if (!saveResponse.ok) {
-                        const errText = await saveResponse.text();
-                        console.error(`[Evaluate Tool] Failed to update ${result.question_id}:`, saveResponse.status, errText);
-                    } else {
-                        console.log(`[Evaluate Tool] Successfully updated ${result.question_id}`);
-                    }
-                });
-
-                await Promise.allSettled(savePromises);
-
-                emitNotificationToUser(userId, {
-                    event: "assessment_evaluation_completed",
-                    video_id: videoId,
-                    message: "Evaluasi jawaban selesai.",
-                });
-
-                return { content: [{ type: "text", text: `Evaluated ${parsedResults.length} answers successfully.` }] };
-            } catch (error) {
-                console.error("[Evaluate Tool Error]", error);
-                emitNotificationToUser(userId, {
-                    event: "assessment_evaluation_failed",
-                    video_id: videoId,
-                    message: "Evaluasi jawaban gagal.",
-                });
-                return { content: [{ type: "text", text: `Failed to evaluate answers: ${error instanceof Error ? error.message : "Unknown error"}` }] };
-            }
-        }
-    );
 
     return server;
 }

@@ -55,9 +55,7 @@ export interface AssessmentQuestion {
   video_id: string;
   type: string;
   question: string;
-  options: string[] | null;
-  accepted_answers: string | string[];
-  explanation: string | null;
+  correct_answer: string | null;
   bloom_level: string | null;
   created_at: string;
   updated_at: string;

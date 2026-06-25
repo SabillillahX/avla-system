@@ -15,10 +15,7 @@ export interface UpdateAssessmentPayload {
   video_id: string;
   type: string;
   question: string;
-  options?: string[] | null;
-  accepted_answers?: string[];
-  explanation?: string | null;
-  bloom_level?: string | null;
+  correct_answer?: string | null;
 }
 
 export interface CreateAssessmentPayload extends UpdateAssessmentPayload {}
@@ -68,7 +65,7 @@ export const videosApi = {
       if (payload.description) formData.append("description", payload.description);
       if (payload.category_id) formData.append("category_id", payload.category_id);
       if (payload.course_id) formData.append("course_id", payload.course_id);
-      if (payload.section_id) formData.append("section_id", payload.section_id);
+      if (payload.section_id) formData.append("chapter_id", payload.section_id);
       if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
       if (payload.generate_ai_quiz !== undefined) {
         formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
@@ -108,7 +105,7 @@ export const videosApi = {
         if (payload.description) formData.append("description", payload.description);
         if (payload.category_id) formData.append("category_id", payload.category_id);
         if (payload.course_id) formData.append("course_id", payload.course_id);
-        if (payload.section_id) formData.append("section_id", payload.section_id);
+        if (payload.section_id) formData.append("chapter_id", payload.section_id);
         if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
         if (payload.generate_ai_quiz !== undefined) {
           formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
@@ -149,7 +146,7 @@ export const videosApi = {
     if (payload.description !== undefined) formData.append("description", payload.description);
     if (payload.category_id !== undefined) formData.append("category_id", payload.category_id);
     if (payload.course_id !== undefined) formData.append("course_id", payload.course_id);
-    if (payload.section_id !== undefined) formData.append("section_id", payload.section_id);
+    if (payload.section_id !== undefined) formData.append("chapter_id", payload.section_id);
     if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
 
     const response = await api.post<ApiResponse<Video>>(

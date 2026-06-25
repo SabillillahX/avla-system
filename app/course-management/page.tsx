@@ -114,35 +114,37 @@ export default function ClassManagementPage() {
               {filteredClasses.map((item) => (
                 <div
                   key={item.id}
-                  className="group flex flex-col lg:flex-row gap-5 rounded-xl border border-gray-100 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 p-6 sm:p-7 transition-all duration-200 hover:shadow-md"
+                  className="group flex flex-col md:flex-row gap-5 rounded-xl border border-gray-200 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900/40 dark:hover:border-gray-700 p-5 transition-all duration-200 hover:shadow-sm"
                 >
-                  <div className="w-full lg:w-56 h-36 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 relative">
-                    {/* Reverted to standard img to prevent Next.js errors about missing width/height properties when using unoptimized remote images without fill */}
+                  {/* Thumbnail Image */}
+                  <div className="w-full md:w-56 h-40 md:h-auto shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
                     <img
                       src={item.imageUrl}
                       alt={item.title}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                    <div className="absolute top-2 right-2">
-                      <Badge
-                        variant="secondary"
-                        className={
-                          item.status === "published"
-                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-200/50 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 font-medium backdrop-blur-md"
-                            : "bg-amber-500/10 text-amber-700 border-amber-200/50 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 font-medium backdrop-blur-md"
-                        }
-                      >
-                        {item.status === "published" ? "Published" : "Draft"}
-                      </Badge>
-                    </div>
                   </div>
 
-                  <div className="flex-1 flex flex-col justify-between space-y-4">
-                    <div className="space-y-1.5">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {item.title}
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
+                  {/* Content Details */}
+                  <div className="flex-1 flex flex-col justify-between py-1">
+                    <div>
+                      {/* Header row: Title & Badge */}
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {item.title}
+                        </h3>
+                        <Badge
+                          variant="secondary"
+                          className={`shrink-0 border-0 px-2.5 py-0.5 text-xs font-medium ${item.status === "published"
+                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400"
+                              : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/10 dark:text-amber-400"
+                            }`}
+                        >
+                          {item.status === "published" ? "Published" : "Draft"}
+                        </Badge>
+                      </div>
+
+                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-4">
                         {item.description}
                       </p>
                     </div>
@@ -166,7 +168,8 @@ export default function ClassManagementPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-row lg:flex-col justify-center gap-2 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-4 lg:pt-0 lg:pl-5 min-w-[140px]">
+                  {/* Actions */}
+                  <div className="flex flex-row md:flex-col justify-center gap-2 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800 pt-4 md:pt-0 md:pl-5 min-w-[140px]">
                     <Link href={`/course-management/create?edit=${item.id}`} className="w-full">
                       <Button variant="outline" size="sm" className="w-full justify-start gap-2 shadow-sm border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                         <Edit2 className="w-3.5 h-3.5" /> Edit Details
