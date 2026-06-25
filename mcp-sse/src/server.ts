@@ -251,12 +251,56 @@ function chunkTranscriptByCount(
     return chunks;
 }
 
+interface SummaryMetadata {
+    topic: string;
+    key_concepts: string;
+    learning_objectives: string;
+}
+
+async function fetchVideoSummaryMetadata(videoId: string, token: string): Promise<SummaryMetadata | null> {
+    try {
+        const response = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}`, {
+            method: "GET",
+            headers: buildAuthHeaders(token)
+        });
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        const summaryRaw = data.data?.summary;
+        if (!summaryRaw) return null;
+
+        let summaryData = summaryRaw;
+        if (typeof summaryRaw === "string") {
+            try {
+                summaryData = JSON.parse(summaryRaw);
+                if (typeof summaryData === "string") {
+                    summaryData = JSON.parse(summaryData);
+                }
+            } catch (e) {
+                return null;
+            }
+        }
+
+        const parseArray = (val: any) => Array.isArray(val) ? val.join(", ") : (val || "");
+
+        return {
+            topic: parseArray(summaryData.topic),
+            key_concepts: parseArray(summaryData.key_concepts),
+            learning_objectives: parseArray(summaryData.learning_objectives)
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
 function buildQuizGenerationPrompt(
     transcriptText: string,
     chunkIndex: number = 0,
     totalChunks: number = 1,
     durationMinutes: number = 3,
-    includeAnswers: boolean = true
+    includeAnswers: boolean = true,
+    summaryMetadata?: SummaryMetadata | null
 ): string {
     const positionPercent = Math.round(((chunkIndex + 1) / totalChunks) * 100);
     const isEarlyChunk = chunkIndex < Math.ceil(totalChunks * 0.33);
@@ -273,6 +317,10 @@ function buildQuizGenerationPrompt(
             ? "This is a substantial video. The learner has been engaged for an extended period — the question should reflect appropriate depth and avoid repeating surface-level facts covered earlier."
             : "This is a short, focused video. Keep the question tight and directly tied to the single core concept presented in this excerpt.";
 
+    const competencyAlignment = summaryMetadata
+        ? `\n## Competency Alignment\nAlign the questions with the following Topics, Key Concepts, and Learning Objectives, BUT ensure that answers and facts are taken ONLY from the provided transcript to prevent hallucinations.\n- Topic: ${summaryMetadata.topic}\n- Key Concepts: ${summaryMetadata.key_concepts}\n- Learning Objectives: ${summaryMetadata.learning_objectives}\n`
+        : "";
+
     return `You are a Senior Instructional Designer and Expert Educator with 20+ years of experience designing high-stakes assessments for universities and professional certification programs.
 
 Your task is to write exactly 1 (one) multiple-choice question for an adaptive pop-up quiz that pauses an educational video at the moment the learner has just finished watching the excerpt below.
@@ -281,7 +329,7 @@ Your task is to write exactly 1 (one) multiple-choice question for an adaptive p
 - Chunk: ${chunkIndex + 1} of ${totalChunks} (${positionPercent}% through the video)
 - Target cognitive level: ${cognitiveLevel}
 - ${depthNote}
-
+${competencyAlignment}
 ## Question Quality Standards
 1. **Test understanding, not verbatim recall.** Do NOT write questions like "What did the speaker say about X?" Write questions that confirm the learner *understood* the concept — e.g. "Why does X work this way?" or "What would happen if Y?"
 2. **One unambiguously correct answer.** Based strictly on the transcript excerpt provided.
@@ -304,16 +352,20 @@ CRITICAL: ${includeAnswers ? "The value of \"correct_answer\" must be an exact c
 The full video transcript is provided to you. I want you to write ONE multiple-choice question specifically focusing on the concepts discussed in THIS specific excerpt from the video:
 
 """
-\${transcriptText}
+${transcriptText}
 """
 
-Ensure the question makes sense in the broader context of the whole video.\`;
-}the whole video.`;
+Ensure the question makes sense in the broader context of the whole video.`;
 }
 
-function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3"): string {
+function buildFullAssessmentPrompt(targetBloomLevels: string = "C1, C2, and C3", summaryMetadata?: SummaryMetadata | null): string {
+    const competencyAlignment = summaryMetadata
+        ? `\n## Competency Alignment\nAlign the questions with the following Topics, Key Concepts, and Learning Objectives, BUT ensure that answers and facts are taken ONLY from the provided transcript to prevent hallucinations.\n- Topic: ${summaryMetadata.topic}\n- Key Concepts: ${summaryMetadata.key_concepts}\n- Learning Objectives: ${summaryMetadata.learning_objectives}\n`
+        : "";
+
     return `You are an expert in Adaptive Learning Systems and Instructional Design.
 I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
+${competencyAlignment}
 
 ## Bloom's Taxonomy Integration
 Distribute the 10 questions across the following levels: ${targetBloomLevels}
@@ -346,9 +398,13 @@ Return ONLY a valid JSON array. Do not include markdown formatting or explanatio
 ]`;
 }
 
-function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number): string {
-    return `You are an expert Instructional Designer specializing in Adaptive Learning Systems and Psychometrics. Your task is to generate high-quality assessment questions based on a video transcript using Bloom's Taxonomy and Semantic Similarity principles.
+function buildSemanticAssessmentPrompt(targetLevel: string, quantity: number, summaryMetadata?: SummaryMetadata | null): string {
+    const competencyAlignment = summaryMetadata
+        ? `\n### COMPETENCY ALIGNMENT\nAlign the questions with the following Topics, Key Concepts, and Learning Objectives, BUT ensure that answers and facts are taken ONLY from the provided transcript to prevent hallucinations.\n- Topic: ${summaryMetadata.topic}\n- Key Concepts: ${summaryMetadata.key_concepts}\n- Learning Objectives: ${summaryMetadata.learning_objectives}\n`
+        : "";
 
+    return `You are an expert Instructional Designer specializing in Adaptive Learning Systems and Psychometrics. Your task is to generate high-quality assessment questions based on a video transcript using Bloom's Taxonomy and Semantic Similarity principles.
+${competencyAlignment}
 ### OBJECTIVES
 - Generate exactly ${quantity} questions that specifically target the **${targetLevel}** level of Bloom's Taxonomy.
 - DO NOT generate reference answers or keywords. You are only generating the questions.
@@ -680,6 +736,7 @@ ${combinedContext}
 
                 const totalChunks = transcriptChunks.length;
 
+                const summaryMetadata = await fetchVideoSummaryMetadata(String(videoId), token);
                 const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
                 const generatedQuizzes: (ParsedQuiz & { trigger_time: number })[] = [];
                 let failedChunkCount = 0;
@@ -695,7 +752,8 @@ ${combinedContext}
                             chunkIndex,
                             totalChunks,
                             durationMinutes,
-                            includeAnswers
+                            includeAnswers,
+                            summaryMetadata
                         );
 
                         // Menggunakan transcriptContext agar OpenRouter/Gemini bisa memanfaatkan Context Caching
@@ -978,11 +1036,12 @@ ${combinedContext}
                 const maxAttempts = 3;
                 let lastErrorMessage = "Assessment format from AI is invalid.";
 
+                const summaryMetadata = await fetchVideoSummaryMetadata(String(videoId), token);
                 const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
 
                 for (let attempt = 0; attempt < maxAttempts; attempt++) {
                     try {
-                        const prompt = buildFullAssessmentPrompt(targetBloomLevels);
+                        const prompt = buildFullAssessmentPrompt(targetBloomLevels, summaryMetadata);
                         const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
                         let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 
@@ -1207,11 +1266,12 @@ ${combinedContext}
             const maxAttempts = 2;
             let lastErrorMessage = "Format dari AI tidak valid.";
 
+            const summaryMetadata = await fetchVideoSummaryMetadata(String(videoId), token);
             const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    const prompt = buildSemanticAssessmentPrompt(targetLevel, quantity);
+                    const prompt = buildSemanticAssessmentPrompt(targetLevel, quantity, summaryMetadata);
                     const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
                     let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
 

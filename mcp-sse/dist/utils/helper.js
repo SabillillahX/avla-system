@@ -1,17 +1,45 @@
 import dotenv from "dotenv";
 dotenv.config();
 export const ENV = {
-    geminiApiKey: process.env.GEMINI_API ?? "",
+    groqApiKey: process.env.GROQ_API_KEY ?? "",
+    openRouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+    openRouterModel: process.env.OPENROUTER_MODEL ?? "google/gemini-3.1-flash-lite",
     backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL ?? "",
     allowedOrigins: process.env.ALLOWED_ORIGINS ?? "",
     port: Number(process.env.PORT ?? 8081),
 };
-export const REQUIRED_ENV_KEYS = ["geminiApiKey", "backendUrl"];
+export const REQUIRED_ENV_KEYS = ["openRouterApiKey", "backendUrl"];
 for (const key of REQUIRED_ENV_KEYS) {
     if (!ENV[key]) {
         console.error(`[Config] Missing required environment variable: ${key}`);
         process.exit(1);
     }
+}
+/**
+ * fetch() that survives redirects without losing the Authorization header.
+ *
+ * Node's global fetch (undici) strips sensitive headers — including
+ * Authorization — when a redirect crosses origins. In production an
+ * http→https (or trailing-slash) redirect counts as cross-origin, so the
+ * backend would receive the request with no bearer token and reply 401.
+ *
+ * We follow redirects manually and re-attach the original headers on each
+ * hop so the token always reaches Laravel.
+ */
+export async function fetchWithAuth(url, init = {}, maxRedirects = 5) {
+    let currentUrl = url;
+    for (let hop = 0; hop <= maxRedirects; hop++) {
+        const response = await fetch(currentUrl, { ...init, redirect: "manual" });
+        const isRedirect = response.status >= 300 && response.status < 400;
+        const location = response.headers.get("location");
+        if (!isRedirect || !location) {
+            return response;
+        }
+        // Resolve relative redirect targets against the current URL.
+        currentUrl = new URL(location, currentUrl).toString();
+        console.warn(`[fetchWithAuth] Following redirect (${response.status}) to ${currentUrl} — re-attaching auth header.`);
+    }
+    throw new Error(`Too many redirects while requesting ${url}`);
 }
 export const ALLOWED_ORIGINS = Array.from(new Set([
     ...ENV.allowedOrigins
@@ -112,8 +140,12 @@ export function coerceQuizFromObject(rawObject) {
             .slice(0, 4);
         if (normalizedOptions.length !== 4)
             continue;
-        const correctAnswer = resolveCorrectAnswer(rawCorrectAnswer, normalizedOptions);
-        if (!correctAnswer)
+        const correctAnswer = rawCorrectAnswer === ""
+            ? ""
+            : resolveCorrectAnswer(rawCorrectAnswer, normalizedOptions);
+        // null means the AI returned something unresolvable (genuine parse failure)
+        // empty string is intentional — teacher chose to fill answers manually
+        if (correctAnswer === null || correctAnswer === undefined)
             continue;
         return {
             question: normalizeWhitespace(rawQuestion),
@@ -183,7 +215,7 @@ export function coerceAssessmentQuestionFromObject(rawObject) {
     const type = obj.type;
     const difficulty = obj.difficulty_level;
     const question = obj.question;
-    const metadata = obj.metadata;
+    const options = obj.options ?? obj.metadata; // fallback: AI may still output "metadata"
     const correctAnswers = obj.correct_answers;
     const explanation = obj.explanation;
     if (!type || !Number.isInteger(difficulty) || difficulty < 1 || difficulty > 5)
@@ -195,20 +227,20 @@ export function coerceAssessmentQuestionFromObject(rawObject) {
     const validTypes = ["multiple_choice", "short_answer", "essay"];
     if (!validTypes.includes(type))
         return null;
-    let normalizedMetadata = null;
-    if (type === "multiple_choice" && Array.isArray(metadata)) {
-        const mcMetadata = metadata
+    let normalizedOptions = null;
+    if (type === "multiple_choice" && Array.isArray(options)) {
+        const mcOptions = options
             .filter((m) => typeof m === "string" && !!m.trim())
             .map(normalizeOptionText)
             .filter(Boolean)
             .slice(0, 4);
-        if (mcMetadata.length === 4) {
-            normalizedMetadata = mcMetadata;
+        if (mcOptions.length === 4) {
+            normalizedOptions = mcOptions;
             // Validate correct_answer is in options
             const correctAnswersNormalized = correctAnswers
                 .filter((ans) => typeof ans === "string")
                 .map(normalizeForComparison);
-            const optionsNormalized = mcMetadata.map(normalizeForComparison);
+            const optionsNormalized = mcOptions.map(normalizeForComparison);
             const allCorrectInOptions = correctAnswersNormalized.every((ans) => optionsNormalized.includes(ans));
             if (!allCorrectInOptions)
                 return null;
@@ -230,7 +262,7 @@ export function coerceAssessmentQuestionFromObject(rawObject) {
         type: type,
         difficulty_level: difficulty,
         question: normalizeWhitespace(question),
-        metadata: normalizedMetadata,
+        options: normalizedOptions,
         correct_answers: normalizedCorrectAnswers,
         explanation: typeof explanation === "string" ? normalizeWhitespace(explanation) : "",
     };
@@ -242,22 +274,81 @@ export function parseAssessmentFromLlmOutput(rawOutput) {
     for (const candidate of candidates) {
         try {
             const parsed = JSON.parse(candidate);
-            if (Array.isArray(parsed)) {
-                for (const item of parsed) {
-                    const coerced = coerceAssessmentQuestionFromObject(item);
-                    if (coerced) {
-                        questions.push(coerced);
-                    }
-                }
-                if (questions.length > 0)
-                    return questions;
-            }
-            else {
-                const coerced = coerceAssessmentQuestionFromObject(parsed);
+            const itemsArray = Array.isArray(parsed)
+                ? parsed
+                : (Array.isArray(parsed.items) ? parsed.items : (Array.isArray(parsed.questions) ? parsed.questions : [parsed]));
+            for (const item of itemsArray) {
+                const coerced = coerceAssessmentQuestionFromObject(item);
                 if (coerced) {
                     questions.push(coerced);
                 }
             }
+            if (questions.length > 0)
+                return questions;
+        }
+        catch {
+            // continue to next candidate
+        }
+    }
+    return questions;
+}
+export function coerceSemanticQuestionFromObject(rawObject) {
+    if (typeof rawObject !== "object" || !rawObject)
+        return null;
+    const obj = rawObject;
+    const type = obj.type;
+    const bloomLevel = obj.bloom_level;
+    const difficulty = obj.difficulty_level;
+    const question = obj.question;
+    const referenceAnswer = obj.reference_answer;
+    const semanticKeywords = obj.semantic_keywords;
+    const explanation = obj.explanation;
+    if (type !== "short_answer" && type !== "essay")
+        return null;
+    if (!bloomLevel || typeof bloomLevel !== "string" || !bloomLevel.trim())
+        return null;
+    if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 5)
+        return null;
+    if (!question || typeof question !== "string" || !question.trim())
+        return null;
+    // reference_answer and semantic_keywords may be intentionally empty when
+    // the teacher chose to fill answers manually (includeAnswers=false)
+    const normalizedReference = typeof referenceAnswer === "string"
+        ? normalizeWhitespace(referenceAnswer)
+        : "";
+    const normalizedKeywords = Array.isArray(semanticKeywords)
+        ? semanticKeywords
+            .filter((kw) => typeof kw === "string" && !!kw.trim())
+            .map(normalizeWhitespace)
+        : [];
+    return {
+        type: type,
+        bloom_level: normalizeWhitespace(bloomLevel),
+        difficulty_level: difficulty,
+        question: normalizeWhitespace(question),
+        reference_answer: normalizedReference,
+        semantic_keywords: normalizedKeywords,
+        explanation: typeof explanation === "string" ? normalizeWhitespace(explanation) : "",
+    };
+}
+export function parseSemanticAssessmentFromLlmOutput(rawOutput) {
+    const cleaned = rawOutput.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const candidates = [cleaned, extractFirstJsonObject(cleaned)].filter((v) => Boolean(v));
+    const questions = [];
+    for (const candidate of candidates) {
+        try {
+            const parsed = JSON.parse(candidate);
+            const itemsArray = Array.isArray(parsed)
+                ? parsed
+                : (Array.isArray(parsed.items) ? parsed.items : (Array.isArray(parsed.questions) ? parsed.questions : [parsed]));
+            for (const item of itemsArray) {
+                const coerced = coerceSemanticQuestionFromObject(item);
+                if (coerced) {
+                    questions.push(coerced);
+                }
+            }
+            if (questions.length > 0)
+                return questions;
         }
         catch {
             // continue to next candidate

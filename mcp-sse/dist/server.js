@@ -3,12 +3,16 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import cors from "cors";
 import { z } from "zod";
-import { ENV, ALLOWED_ORIGINS } from "./utils/helper.js";
-import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput } from "./utils/helper.js";
-// In memory stores
+import { ENV, ALLOWED_ORIGINS, fetchWithAuth } from "./utils/helper.js";
+import { parseQuizFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
+import { getOrLoadTranscriptContext } from "./utils/cacheManager.js";
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const activeSSESessions = new Map();
 const notificationClientsByUserId = new Map();
-const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PENDING_NOTIFICATION_TTL_MS = 5 * 60 * 1000;
+const inflightQuizJobs = new Map();
+const inflightAssessmentJobs = new Map();
+const INFLIGHT_JOB_TTL_MS = 10 * 60 * 1000;
 const pendingNotificationsByUserId = new Map();
 function bufferNotificationForUser(userId, payload) {
     const existing = pendingNotificationsByUserId.get(userId) ?? [];
@@ -30,28 +34,121 @@ function flushPendingNotifications(userId, client) {
     }
 }
 function emitNotificationToUser(userId, payload) {
-    const client = notificationClientsByUserId.get(userId);
-    if (!client) {
+    const clients = notificationClientsByUserId.get(userId);
+    if (!clients || clients.size === 0) {
         bufferNotificationForUser(userId, payload);
         console.log(`[Notifications] userId=${userId} offline — buffered event "${payload.event}"`);
         return;
     }
-    client.write(`data: ${JSON.stringify(payload)}\n\n`);
-}
-async function callGeminiApi(prompt) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${ENV.geminiApiKey}`;
-    const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    const deadClients = new Set();
+    clients.forEach(client => {
+        if (client.writableEnded || client.closed) {
+            deadClients.add(client);
+            return;
+        }
+        client.write(`data: ${JSON.stringify(payload)}\n\n`);
     });
-    if (!response.ok) {
-        const errorBody = await response.text().catch(() => "Unknown error");
-        throw new Error(`Gemini API error ${response.status}: ${errorBody}`);
+    deadClients.forEach(client => clients.delete(client));
+    if (clients.size === 0) {
+        notificationClientsByUserId.delete(userId);
     }
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "No response generated.";
 }
+async function callOpenRouterApi(prompt, expectedSchema, transcriptContext) {
+    let finalPrompt = prompt;
+    if (transcriptContext && transcriptContext.rawText) {
+        finalPrompt += `\n\n## Full Video Transcript\n"""\n${transcriptContext.rawText}\n"""`;
+    }
+    const maxRetries = 3;
+    let delayMs = 2000;
+    const requestBody = {
+        model: ENV.openRouterModel,
+        messages: [
+            {
+                role: "user",
+                content: finalPrompt
+            }
+        ],
+        temperature: 0.1,
+        top_p: 1,
+    };
+    if (expectedSchema) {
+        requestBody.response_format = {
+            type: "json_schema",
+            json_schema: {
+                name: "json_response",
+                strict: true,
+                schema: expectedSchema
+            }
+        };
+    }
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${ENV.openRouterApiKey}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": ENV.backendUrl,
+                    "X-Title": "AVLA AI"
+                },
+                body: JSON.stringify(requestBody)
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errText}`);
+            }
+            const data = await response.json();
+            return data.choices?.[0]?.message?.content || (expectedSchema ? "{}" : "");
+        }
+        catch (error) {
+            if (attempt === maxRetries) {
+                throw error;
+            }
+            console.warn(`[OpenRouter] Error: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delayMs / 1000}s...`);
+            await sleep(delayMs);
+            delayMs *= 2;
+        }
+    }
+    throw new Error("Failed to call OpenRouter API. Unexpected error.");
+}
+const quizSchema = {
+    type: "object",
+    properties: {
+        question: { type: "string" },
+        options: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 4,
+            maxItems: 4
+        },
+        correct_answer: { type: "string" }
+    },
+    required: ["question", "options", "correct_answer"],
+    additionalProperties: false
+};
+const fullAssessmentSchema = {
+    type: "object",
+    properties: {
+        items: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    type: { type: "string", enum: ["multiple_choice", "short_answer", "essay"] },
+                    bloom_level: { type: "string" },
+                    difficulty_level: { type: "integer" },
+                    question: { type: "string" },
+                    reference_answer: { type: "string" },
+                    semantic_keywords: { type: "array", items: { type: "string" } }
+                },
+                required: ["type", "bloom_level", "difficulty_level", "question", "reference_answer", "semantic_keywords"],
+                additionalProperties: false
+            }
+        }
+    },
+    required: ["items"],
+    additionalProperties: false
+};
 function getVideoDurationSeconds(segments) {
     if (segments.length === 0)
         return 0;
@@ -67,7 +164,6 @@ function calculateTargetQuizCount(durationSeconds) {
     }
     return Math.min(10, Math.max(4, Math.ceil(minutes / 2)));
 }
-// Transcript
 function chunkTranscriptByCount(segments, targetCount) {
     if (segments.length === 0)
         return [];
@@ -100,7 +196,7 @@ function chunkTranscriptByCount(segments, targetCount) {
     }
     return chunks;
 }
-function buildQuizGenerationPrompt(transcriptText, chunkIndex = 0, totalChunks = 1, durationMinutes = 3) {
+function buildQuizGenerationPrompt(transcriptText, chunkIndex = 0, totalChunks = 1, durationMinutes = 3, includeAnswers = true) {
     const positionPercent = Math.round(((chunkIndex + 1) / totalChunks) * 100);
     const isEarlyChunk = chunkIndex < Math.ceil(totalChunks * 0.33);
     const isLateChunk = chunkIndex >= Math.ceil(totalChunks * 0.66);
@@ -126,73 +222,99 @@ Your task is to write exactly 1 (one) multiple-choice question for an adaptive p
 2. **One unambiguously correct answer.** Based strictly on the transcript excerpt provided.
 3. **Three high-quality distractors.** Each wrong option must represent a plausible misconception or a partially correct idea. A learner who only skimmed the content should NOT immediately spot the correct answer. Avoid obviously absurd options.
 4. **No A/B/C/D or numbering inside option text.** The option strings themselves must be clean.
-5. **Adaptive explanation.** The explanation must: (a) clearly state why the correct answer is right using evidence from the transcript, and (b) address the most tempting wrong answer and explain why it fails.
-6. **Language matching.** Detect the language of the transcript and write the entire question, all options, and the explanation in that SAME language.
+5. **Randomize correct answer position.** Do NOT always put the correct answer at the first index. Randomly place it in the second, third, or fourth position as well.
+6. **STRICTLY INDONESIAN.** You MUST write the entire question and all options in the Indonesian language (Bahasa Indonesia), regardless of the transcript's original language.
 
 ## Strict Output Format
 Return ONLY a valid JSON object — no markdown fences, no preamble, no trailing text:
 {
   "question": "A clear, conceptual question ending with a question mark?",
-  "options": ["Correct answer text", "Plausible wrong answer", "Plausible wrong answer", "Plausible wrong answer"],
-  "correct_answer": "Correct answer text",
-  "explanation": "The correct answer is [X] because [evidence from transcript]. A common mistake is choosing [distractor] because [why it seems right], but [why it is actually wrong]."
+  "options": ["Plausible wrong answer", "Correct answer text", "Plausible wrong answer", "Plausible wrong answer"],
+  "correct_answer": "${includeAnswers ? "Correct answer text" : ""}"
 }
 
-CRITICAL: The value of "correct_answer" must be an exact character-for-character copy of one of the strings in the "options" array.
+CRITICAL: ${includeAnswers ? "The value of \"correct_answer\" must be an exact character-for-character copy of one of the strings in the \"options\" array." : "You MUST leave \"correct_answer\" as an empty string because the teacher requested to add answers manually."}
 
-## Transcript Excerpt
+## Task
+The full video transcript is provided to you. I want you to write ONE multiple-choice question specifically focusing on the concepts discussed in THIS specific excerpt from the video:
+
 """
-${transcriptText}
-"""`;
+\${transcriptText}
+"""
+
+Ensure the question makes sense in the broader context of the whole video.\`;
+}the whole video.`;
 }
-function buildFullAssessmentPrompt(fullTranscript) {
-    return `You are an Expert Instructional Designer creating a final summative assessment for an educational video.
-I will provide you with the full transcript of the video. 
+function buildFullAssessmentPrompt(targetBloomLevels = "C1, C2, and C3") {
+    return `You are an expert in Adaptive Learning Systems and Instructional Design.
+I will provide you with a video transcript. Your task is to generate exactly 10 questions specifically designed for Semantic Similarity evaluation (7 must be "essay" and 3 must be "short_answer").
 
-Your task is to generate EXACTLY 10 questions based on the entire transcript. 
-The questions must test deep comprehension, not just surface-level recall.
+## Bloom's Taxonomy Integration
+Distribute the 10 questions across the following levels: ${targetBloomLevels}
+- If targeting C1-C3: Focus on definitions, conceptual understanding, and application.
+- If targeting C4-C5: Focus on analysis, evaluation, and drawing connections among ideas.
+- Map each question to a specific 'bloom_level' (must be one of the targeted levels, e.g. "C1", "C2", etc.).
 
-## Question Type Distribution Requirements
-You must provide a mix of question types. Aim for approximately:
-- 5 Multiple Choice Questions (multiple_choice)
-- 3 Short Answer / Fill-in-the-blank Questions (short_answer)
-- 2 Essay Questions (essay)
+## Question Style Rules (No Multiple Choice)
+1. **short_answer**: Requires a concise explanation (1-3 sentences).
+2. **essay**: Requires deep reasoning and connection between concepts.
+3. Every question MUST be evaluatable via Semantic Similarity. However, you are ONLY generating the questions. DO NOT provide answers or keywords.
+4. **STRICTLY INDONESIAN.** All questions MUST be written in the Indonesian language (Bahasa Indonesia).
 
-## Formatting Rules per Question Type
-1. **multiple_choice**: 
-   - Must have exactly 4 plausible options in the "metadata" array.
-   - "correct_answers" must contain an array with exactly one string (the exact text of the correct option).
-2. **short_answer**: 
-   - "metadata" must be null or an empty array.
-   - "correct_answers" must contain an array of 1 to 3 acceptable exact string matches.
-3. **essay**: 
-   - "metadata" must be null.
-   - "correct_answers" must contain the AI Evaluation Rubric (key points the student must mention for a perfect score).
+## Formatting Rules
+- "bloom_level": String (e.g., "C3 - Applying").
+- "reference_answer": MUST BE AN EMPTY STRING.
+- "semantic_keywords": MUST BE AN EMPTY ARRAY [].
 
-## Strict Output Format
-Return ONLY a valid JSON array containing exactly 10 objects. Do not wrap it in markdown blockquotes (\`\`\`json). Just the raw array.
-
+## Strict Output Format (JSON Only)
+Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
 [
   {
-    "type": "multiple_choice", // or "short_answer" or "essay"
-    "difficulty_level": 3, // integer between 1 (easy) and 5 (hard)
-    "question": "Clear, contextual question text?",
-    "metadata": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
-    "correct_answers": ["Option 2"], // See rules above based on type
-    "explanation": "Why this answer is correct and why common misconceptions are wrong."
+    "type": "short_answer",
+    "bloom_level": "C2",
+    "difficulty_level": 2,
+    "question": "Text of the question?",
+    "reference_answer": "",
+    "semantic_keywords": []
   }
-]
+]`;
+}
+function buildSemanticAssessmentPrompt(targetLevel, quantity) {
+    return `You are an expert Instructional Designer specializing in Adaptive Learning Systems and Psychometrics. Your task is to generate high-quality assessment questions based on a video transcript using Bloom's Taxonomy and Semantic Similarity principles.
 
-## Full Video Transcript
-"""
-${fullTranscript}
-"""`;
+### OBJECTIVES
+- Generate exactly ${quantity} questions that specifically target the **${targetLevel}** level of Bloom's Taxonomy.
+- DO NOT generate reference answers or keywords. You are only generating the questions.
+
+### BLOOM'S TAXONOMY GUIDELINES (Target: ${targetLevel})
+- **C1 (Remember):** Focus on recalling facts, terms, and basic concepts.
+- **C2 (Understand):** Focus on explaining ideas or concepts in own words.
+- **C3 (Apply):** Focus on using information in new situations/scenarios.
+- **C4 (Analyze):** Focus on drawing connections among ideas; breaking info into parts.
+- **C5 (Evaluate):** Focus on justifying a stand or decision; critiquing.
+
+### STRICTLY INDONESIAN
+All questions MUST be written in the Indonesian language (Bahasa Indonesia).
+
+### OUTPUT FORMAT (Strict JSON)
+Return ONLY a valid JSON array. Do not include markdown formatting or explanations outside the JSON.
+[
+  {
+    "type": "short_answer",
+    "bloom_level": "${targetLevel}",
+    "difficulty_level": 3,
+    "question": "The question text here...",
+    "reference_answer": "",
+    "semantic_keywords": []
+  }
+]`;
 }
 function buildAuthHeaders(token) {
+    const cleanToken = token.replace(/^["']|["']$/g, '').trim();
     return {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${cleanToken}`,
     };
 }
 function createMcpServer() {
@@ -200,11 +322,10 @@ function createMcpServer() {
         name: "MCP Server",
         version: "1.0.0",
     });
-    // Tool: getCurrentUser 
     server.tool("getCurrentUser", "Get information about the currently logged-in user", {
         token: z.string().describe("Bearer token of the currently logged-in user"),
     }, async ({ token }) => {
-        const response = await fetch(`${ENV.backendUrl}/me`, {
+        const response = await fetchWithAuth(`${ENV.backendUrl}/me`, {
             method: "GET",
             headers: buildAuthHeaders(token),
         });
@@ -218,12 +339,11 @@ function createMcpServer() {
             content: [{ type: "text", text: `User details: ${JSON.stringify(userData)}` }],
         };
     });
-    // Tool: analyzeVideoAudioPaths 
-    server.tool("analyzeVideoAudioPaths", "Fetch user's video data and use Gemini to answer questions about their audio paths", {
+    server.tool("analyzeVideoAudioPaths", "Fetch user's video data and use LLM to answer questions about their audio paths", {
         token: z.string().describe("Bearer token of the currently logged-in user"),
-        prompt: z.string().describe("Question or instruction for Gemini about the audio path data"),
+        prompt: z.string().describe("Question or instruction for LLM about the audio path data"),
     }, async ({ token, prompt }) => {
-        const response = await fetch(`${ENV.backendUrl}/videos`, {
+        const response = await fetchWithAuth(`${ENV.backendUrl}/videos`, {
             method: "GET",
             headers: buildAuthHeaders(token),
         });
@@ -239,11 +359,103 @@ function createMcpServer() {
             title: video.title,
             audio_path: video.mp3_audio_path ?? null,
         }));
-        const fullPrompt = `Here is the user's video audio path data:\n${JSON.stringify(audioPathData, null, 2)}\n\nTask: ${prompt}\n\nAnalyze strictly based on the provided data.`;
-        const aiAnswer = await callGeminiApi(fullPrompt);
+        const fullPrompt = `Here is the user's video audio path data:\n${JSON.stringify(audioPathData, null, 2)}\n\nTask: ${prompt}\n\nAnalyze strictly based on the provided data. You MUST answer in Indonesian (Bahasa Indonesia).`;
+        const aiAnswer = await callOpenRouterApi(fullPrompt, undefined);
         return { content: [{ type: "text", text: aiAnswer }] };
     });
-    // Tool: generateAdaptiveVideoQuizzes 
+    server.tool("generateCourseLearningObjectives", "Generate overall learning objectives for a specific course by analyzing all its video topics, learning objectives, and key concepts.", {
+        token: z.string().describe("Bearer token of the currently logged-in user"),
+        courseId: z.string().describe("ID of the target course"),
+    }, async ({ token, courseId }) => {
+        try {
+            const response = await fetchWithAuth(`${ENV.backendUrl}/courses/${courseId}`, {
+                method: "GET",
+                headers: buildAuthHeaders(token),
+            });
+            if (!response.ok) {
+                return {
+                    content: [{ type: "text", text: `Gagal mengambil data course: HTTP ${response.status}` }],
+                };
+            }
+            const jsonBody = await response.json();
+            const courseData = jsonBody.data ?? jsonBody;
+            const sections = courseData.sections ?? [];
+            const videoList = sections.flatMap((sec) => sec.videos ?? []);
+            if (videoList.length === 0) {
+                return {
+                    content: [{ type: "text", text: "Tidak ada video di dalam course ini, tidak bisa membuat Learning Objectives." }],
+                };
+            }
+            let combinedContext = "";
+            let videoCount = 0;
+            for (const video of videoList) {
+                if (video.summary) {
+                    try {
+                        let parsedSummary = video.summary;
+                        // Keep parsing if it's a string (handles double-stringified JSON)
+                        while (typeof parsedSummary === 'string') {
+                            try {
+                                parsedSummary = JSON.parse(parsedSummary);
+                            }
+                            catch (e) {
+                                break; // Not a valid JSON string, stop parsing
+                            }
+                        }
+                        if (parsedSummary && typeof parsedSummary === 'object') {
+                            const topic = parsedSummary.topic ?? "-";
+                            const lo = Array.isArray(parsedSummary.learning_objectives)
+                                ? parsedSummary.learning_objectives.join(", ")
+                                : (parsedSummary.learning_objectives ?? "-");
+                            const keyConcepts = Array.isArray(parsedSummary.key_concepts)
+                                ? parsedSummary.key_concepts.join(", ")
+                                : (parsedSummary.key_concepts ?? "-");
+                            combinedContext += `\n- Video: ${video.title}\n  Topic: ${topic}\n  Learning Objectives: ${lo}\n  Key Concepts: ${keyConcepts}\n`;
+                            videoCount++;
+                        }
+                    }
+                    catch (e) {
+                        console.warn(`[Course LO] Gagal membaca summary untuk video ${video.id}`);
+                    }
+                }
+            }
+            if (!combinedContext) {
+                return {
+                    content: [{ type: "text", text: "Video di course ini belum memiliki summary. Pastikan transkrip dan summary video sudah di-generate." }],
+                };
+            }
+            const prompt = `You are an expert curriculum designer. Based on the topics, learning objectives, and key concepts of ${videoCount} videos across the entire course, generate up to 6 overarching Course-Level Learning Objectives.
+
+Requirements:
+1. Synthesize the individual video concepts into broad, cohesive course objectives.
+2. The number of learning objectives MUST NOT exceed 6.
+3. Align each objective with Bloom's Taxonomy, using clear and measurable action verbs.
+4. The generated learning objectives MUST be written entirely in Indonesian (e.g., "Siswa mampu menganalisis...", "Mampu menerapkan...").
+
+### Videos in this Course:
+${combinedContext}
+`;
+            const loSchema = {
+                type: "object",
+                properties: {
+                    learning_objectives: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Daftar learning objectives (maksimal 6)",
+                    }
+                },
+                required: ["learning_objectives"]
+            };
+            const llmResponse = await callOpenRouterApi(prompt, loSchema);
+            return {
+                content: [{ type: "text", text: llmResponse }],
+            };
+        }
+        catch (error) {
+            return {
+                content: [{ type: "text", text: `Error generating course learning objectives: ${error.message || String(error)}` }],
+            };
+        }
+    });
     server.tool("generateAdaptiveVideoQuizzes", "Generate adaptive multiple-choice quizzes from video transcripts. Quiz count and intervals are automatically calculated from video duration. Minimum 3 quizzes for videos under 5 minutes, minimum 4 for videos over 5 minutes, maximum 10 for videos 10 minutes or longer.", {
         token: z.string().describe("Bearer token of the currently logged-in user"),
         userId: z.union([z.number(), z.string()]).describe("User ID for realtime progress notifications"),
@@ -252,89 +464,102 @@ function createMcpServer() {
             .number()
             .optional()
             .describe("Optional: override the auto-calculated quiz interval (in minutes). When omitted, interval is determined dynamically from video duration."),
-    }, async ({ token, userId, videoId, intervalMinutes }) => {
+        includeAnswers: z.boolean().optional().default(true).describe("If true, AI generates the answers and feedback. If false, leaves them blank."),
+    }, async ({ token, userId, videoId, intervalMinutes, includeAnswers }) => {
         const userIdStr = String(userId);
-        emitNotificationToUser(userIdStr, {
-            event: "quiz_generation_started",
-            video_id: videoId,
-            message: "Memulai pembuatan kuis adaptif...",
-            progress: 0,
-        });
-        const transcriptResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, { method: "GET", headers: buildAuthHeaders(token) });
-        if (!transcriptResponse.ok) {
-            const errorText = await transcriptResponse.text();
-            emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_failed",
-                video_id: videoId,
-                message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
-            });
+        const videoIdStr = String(videoId);
+        // Deduplication guard: skip if already generating quizzes for this video
+        const existingQuizJob = inflightQuizJobs.get(videoIdStr);
+        if (existingQuizJob && (Date.now() - existingQuizJob) < INFLIGHT_JOB_TTL_MS) {
+            console.log(`[Quiz] Skipping duplicate request for videoId=${videoIdStr} (already in-flight)`);
             return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
-                    },
-                ],
+                content: [{ type: "text", text: `Quiz generation already in progress for video ${videoIdStr}.` }],
             };
         }
-        const transcriptBody = await transcriptResponse.json();
-        const transcriptSegments = transcriptBody.data ?? [];
-        if (transcriptSegments.length === 0) {
+        inflightQuizJobs.set(videoIdStr, Date.now());
+        try {
             emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_failed",
+                event: "quiz_generation_started",
                 video_id: videoId,
-                message: "Transkrip video kosong, kuis tidak bisa dibuat.",
+                message: "Memulai pembuatan kuis adaptif...",
+                progress: 0,
             });
-            return {
-                content: [{ type: "text", text: "No transcript segments found." }],
-            };
-        }
-        const durationSeconds = getVideoDurationSeconds(transcriptSegments);
-        const durationMinutes = durationSeconds / 60;
-        let targetQuizCount;
-        if (intervalMinutes !== undefined && intervalMinutes > 0) {
-            // Manual override: convert interval to count, then clamp to rules
-            const rawCount = Math.ceil(durationSeconds / (intervalMinutes * 60));
-            targetQuizCount = Math.min(10, Math.max(3, rawCount));
-            console.log(`[Quiz] Manual interval override: ${intervalMinutes}min → clamped to ${targetQuizCount} quizzes`);
-        }
-        else {
-            targetQuizCount = calculateTargetQuizCount(durationSeconds);
-        }
-        console.log(`[Quiz] videoId=${videoId} | duration=${durationMinutes.toFixed(1)}min | targetQuizzes=${targetQuizCount}`);
-        emitNotificationToUser(userIdStr, {
-            event: "quiz_generation_analyzing",
-            video_id: videoId,
-            message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — akan membuat ${targetQuizCount} soal kuis...`,
-            progress: 3,
-            quiz_count: targetQuizCount,
-            duration_minutes: Math.round(durationMinutes * 10) / 10,
-        });
-        const transcriptChunks = chunkTranscriptByCount(transcriptSegments, targetQuizCount);
-        if (transcriptChunks.length === 0) {
+            const transcriptResponse = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}/transcript`, { method: "GET", headers: buildAuthHeaders(token) });
+            if (!transcriptResponse.ok) {
+                const errorText = await transcriptResponse.text();
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
+                        },
+                    ],
+                };
+            }
+            const transcriptBody = await transcriptResponse.json();
+            const transcriptSegments = transcriptBody.data ?? [];
+            if (transcriptSegments.length === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_failed",
+                    video_id: videoId,
+                    message: "Transkrip video kosong, kuis tidak bisa dibuat.",
+                });
+                return {
+                    content: [{ type: "text", text: "No transcript segments found." }],
+                };
+            }
+            const durationSeconds = getVideoDurationSeconds(transcriptSegments);
+            const durationMinutes = durationSeconds / 60;
+            let targetQuizCount;
+            if (intervalMinutes !== undefined && intervalMinutes > 0) {
+                const rawCount = Math.ceil(durationSeconds / (intervalMinutes * 60));
+                targetQuizCount = Math.min(10, Math.max(3, rawCount));
+                console.log(`[Quiz] Manual interval override: ${intervalMinutes}min → clamped to ${targetQuizCount} quizzes`);
+            }
+            else {
+                targetQuizCount = calculateTargetQuizCount(durationSeconds);
+            }
+            console.log(`[Quiz] videoId=${videoId} | duration=${durationMinutes.toFixed(1)}min | targetQuizzes=${targetQuizCount}`);
             emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_failed",
+                event: "quiz_generation_analyzing",
                 video_id: videoId,
-                message: "Gagal membagi transkrip menjadi potongan.",
+                message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — akan membuat ${targetQuizCount} soal kuis...`,
+                progress: 3,
+                quiz_count: targetQuizCount,
+                duration_minutes: Math.round(durationMinutes * 10) / 10,
             });
-            return {
-                content: [{ type: "text", text: "Failed to chunk transcript." }],
-            };
-        }
-        const totalChunks = transcriptChunks.length;
-        const generatedQuizzes = [];
-        let failedChunkCount = 0;
-        let lastErrorMessage = "Format kuis dari AI tidak valid.";
-        for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
-            const chunk = transcriptChunks[chunkIndex];
-            if (!chunk.text)
-                continue;
-            try {
-                const prompt = buildQuizGenerationPrompt(chunk.text, chunkIndex, totalChunks, durationMinutes);
-                const rawLlmOutput = await callGeminiApi(prompt);
-                let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
-                if (!parsedQuiz) {
-                    const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY valid JSON — no markdown, no preamble:
+            const transcriptChunks = chunkTranscriptByCount(transcriptSegments, targetQuizCount);
+            if (transcriptChunks.length === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_failed",
+                    video_id: videoId,
+                    message: "Gagal membagi transkrip menjadi potongan.",
+                });
+                return {
+                    content: [{ type: "text", text: "Failed to chunk transcript." }],
+                };
+            }
+            const totalChunks = transcriptChunks.length;
+            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+            const generatedQuizzes = [];
+            let failedChunkCount = 0;
+            let lastErrorMessage = "Format kuis dari AI tidak valid.";
+            for (let chunkIndex = 0; chunkIndex < transcriptChunks.length; chunkIndex++) {
+                const chunk = transcriptChunks[chunkIndex];
+                if (!chunk.text)
+                    continue;
+                try {
+                    const prompt = buildQuizGenerationPrompt(chunk.text, chunkIndex, totalChunks, durationMinutes, includeAnswers);
+                    // Menggunakan transcriptContext agar OpenRouter/Gemini bisa memanfaatkan Context Caching
+                    const rawLlmOutput = await callOpenRouterApi(prompt, quizSchema, transcriptContext);
+                    let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
+                    if (!parsedQuiz) {
+                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY valid JSON — no markdown, no preamble:
                         {
                         "question": "string",
                         "options": ["string", "string", "string", "string"],
@@ -344,106 +569,114 @@ function createMcpServer() {
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                    const repairedOutput = await callGeminiApi(repairPrompt);
-                    parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
+                        const repairedOutput = await callOpenRouterApi(repairPrompt, quizSchema);
+                        parsedQuiz = parseQuizFromLlmOutput(repairedOutput);
+                    }
+                    if (!parsedQuiz) {
+                        throw new Error("Unable to extract a valid quiz format from LLM output after repair attempt.");
+                    }
+                    generatedQuizzes.push({ ...parsedQuiz, trigger_time: chunk.trigger_time });
                 }
-                if (!parsedQuiz) {
-                    throw new Error("Unable to extract a valid quiz format from LLM output after repair attempt.");
+                catch (error) {
+                    failedChunkCount++;
+                    lastErrorMessage =
+                        error instanceof Error
+                            ? error.message
+                            : "Unknown error during quiz generation.";
+                    console.error(`[Quiz] Chunk ${chunkIndex + 1}/${totalChunks} failed: ${lastErrorMessage}`);
                 }
-                generatedQuizzes.push({ ...parsedQuiz, trigger_time: chunk.trigger_time });
+                finally {
+                    const processedChunks = chunkIndex + 1;
+                    const progressPercent = Math.min(95, Math.round((processedChunks / totalChunks) * 100));
+                    emitNotificationToUser(userIdStr, {
+                        event: "quiz_generation_progress",
+                        video_id: videoId,
+                        processed_chunks: processedChunks,
+                        total_chunks: totalChunks,
+                        progress: progressPercent,
+                        message: `Membuat soal ${processedChunks} dari ${totalChunks}...`,
+                    });
+                    if (chunkIndex < transcriptChunks.length - 1) {
+                        console.log(`[Quiz] Menunggu 2 detik sebelum menembak soal berikutnya...`);
+                        await sleep(2000);
+                    }
+                }
             }
-            catch (error) {
-                failedChunkCount++;
-                lastErrorMessage =
-                    error instanceof Error
-                        ? error.message
-                        : "Unknown error during quiz generation.";
-                console.error(`[Quiz] Chunk ${chunkIndex + 1}/${totalChunks} failed: ${lastErrorMessage}`);
-            }
-            finally {
-                const processedChunks = chunkIndex + 1;
-                const progressPercent = Math.min(95, Math.round((processedChunks / totalChunks) * 100));
+            if (generatedQuizzes.length === 0) {
                 emitNotificationToUser(userIdStr, {
-                    event: "quiz_generation_progress",
+                    event: "quiz_generation_failed",
                     video_id: videoId,
-                    processed_chunks: processedChunks,
-                    total_chunks: totalChunks,
-                    progress: progressPercent,
-                    message: `Membuat soal ${processedChunks} dari ${totalChunks}...`,
+                    message: `Gagal membuat kuis: ${lastErrorMessage} (0/${totalChunks} chunk berhasil)`,
                 });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Quiz generation failed. Detail: ${lastErrorMessage}`,
+                        },
+                    ],
+                };
             }
-        }
-        if (generatedQuizzes.length === 0) {
             emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_failed",
+                event: "quiz_generation_saving",
                 video_id: videoId,
-                message: `Gagal membuat kuis: ${lastErrorMessage} (0/${totalChunks} chunk berhasil)`,
+                progress: 97,
+                message: "Menyimpan kuis ke server...",
             });
+            const saveResponse = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}/quizzes`, {
+                method: "POST",
+                headers: buildAuthHeaders(token),
+                body: JSON.stringify({ quizzes: generatedQuizzes }),
+            });
+            if (!saveResponse.ok) {
+                const saveErrorText = await saveResponse.text();
+                emitNotificationToUser(userIdStr, {
+                    event: "quiz_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal menyimpan kuis: ${saveResponse.status}`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to save quizzes: ${saveResponse.status} - ${saveErrorText}`,
+                        },
+                    ],
+                };
+            }
+            const saveResult = await saveResponse.json();
+            const savedQuizCount = saveResult.saved_count ?? generatedQuizzes.length;
+            const skippedCount = totalChunks - generatedQuizzes.length;
+            emitNotificationToUser(userIdStr, {
+                event: "quiz_generation_completed",
+                video_id: videoId,
+                progress: 100,
+                saved_count: savedQuizCount,
+                message: `${savedQuizCount} kuis berhasil dibuat dan disimpan.`,
+            });
+            const triggerSummary = generatedQuizzes
+                .map((q) => `${q.trigger_time}s`)
+                .join(", ");
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Quiz generation failed. Detail: ${lastErrorMessage}`,
+                        text: [
+                            `Done! Generated ${savedQuizCount} quizzes from a ${durationMinutes.toFixed(1)}-minute video.`,
+                            skippedCount > 0
+                                ? `(${skippedCount} chunk(s) skipped due to LLM errors)`
+                                : "",
+                            `Quiz trigger times: [${triggerSummary}]`,
+                        ]
+                            .filter(Boolean)
+                            .join(" "),
                     },
                 ],
             };
         }
-        emitNotificationToUser(userIdStr, {
-            event: "quiz_generation_saving",
-            video_id: videoId,
-            progress: 97,
-            message: "Menyimpan kuis ke server...",
-        });
-        const saveResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/quizzes`, {
-            method: "POST",
-            headers: buildAuthHeaders(token),
-            body: JSON.stringify({ quizzes: generatedQuizzes }),
-        });
-        if (!saveResponse.ok) {
-            const saveErrorText = await saveResponse.text();
-            emitNotificationToUser(userIdStr, {
-                event: "quiz_generation_failed",
-                video_id: videoId,
-                message: `Gagal menyimpan kuis: ${saveResponse.status}`,
-            });
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Failed to save quizzes: ${saveResponse.status} - ${saveErrorText}`,
-                    },
-                ],
-            };
+        finally {
+            inflightQuizJobs.delete(videoIdStr);
         }
-        const saveResult = await saveResponse.json();
-        const savedQuizCount = saveResult.saved_count ?? generatedQuizzes.length;
-        const skippedCount = totalChunks - generatedQuizzes.length;
-        emitNotificationToUser(userIdStr, {
-            event: "quiz_generation_completed",
-            video_id: videoId,
-            progress: 100,
-            saved_count: savedQuizCount,
-            message: `${savedQuizCount} kuis berhasil dibuat dan disimpan.`,
-        });
-        const triggerSummary = generatedQuizzes
-            .map((q) => `${q.trigger_time}s`)
-            .join(", ");
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: [
-                        `Done! Generated ${savedQuizCount} quizzes from a ${durationMinutes.toFixed(1)}-minute video.`,
-                        skippedCount > 0
-                            ? `(${skippedCount} chunk(s) skipped due to LLM errors)`
-                            : "",
-                        `Quiz trigger times: [${triggerSummary}]`,
-                    ]
-                        .filter(Boolean)
-                        .join(" "),
-                },
-            ],
-        };
     });
     // Tool: generateFullAssessment
     server.tool("generateFullAssessment", "Generate a complete summative assessment with 10 mixed-type questions (5 MC, 3 short answer, 2 essay) from the full video transcript. Can run in parallel with adaptive quiz generation.", {
@@ -456,247 +689,401 @@ function createMcpServer() {
             .describe("If true (default), attempt parallel generation with quiz. If false, wait for quiz to complete first."),
     }, async ({ token, userId, videoId, parallelWithQuiz = true }) => {
         const userIdStr = String(userId);
-        emitNotificationToUser(userIdStr, {
-            event: "assessment_generation_started",
-            video_id: videoId,
-            message: "Memulai pembuatan penilaian ringkasan...",
-            assessment_progress: 0,
-            assessment_status: "starting",
-        });
-        const transcriptResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/transcript`, { method: "GET", headers: buildAuthHeaders(token) });
-        if (!transcriptResponse.ok) {
-            const errorText = await transcriptResponse.text();
-            emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_failed",
-                video_id: videoId,
-                message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
-            });
+        const videoIdStr = String(videoId);
+        const existingAssessmentJob = inflightAssessmentJobs.get(videoIdStr);
+        if (existingAssessmentJob && (Date.now() - existingAssessmentJob) < INFLIGHT_JOB_TTL_MS) {
+            console.log(`[Assessment] Skipping duplicate request for videoId=${videoIdStr} (already in-flight)`);
             return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
-                    },
-                ],
+                content: [{ type: "text", text: `Assessment generation already in progress for video ${videoIdStr}.` }],
             };
         }
-        const transcriptBody = await transcriptResponse.json();
-        const transcriptSegments = transcriptBody.data ?? [];
-        if (transcriptSegments.length === 0) {
+        inflightAssessmentJobs.set(videoIdStr, Date.now());
+        try {
             emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_failed",
+                event: "assessment_generation_started",
                 video_id: videoId,
-                message: "Transkrip video kosong, penilaian tidak bisa dibuat.",
+                message: "Starting to create assessment...",
+                assessment_progress: 0,
+                assessment_status: "starting",
             });
-            return {
-                content: [{ type: "text", text: "No transcript segments found." }],
-            };
-        }
-        // Construct full transcript from segments
-        const fullTranscript = transcriptSegments
-            .map((seg) => seg.text)
-            .join(" ")
-            .trim();
-        if (!fullTranscript) {
+            const transcriptResponse = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}/transcript`, { method: "GET", headers: buildAuthHeaders(token) });
+            if (!transcriptResponse.ok) {
+                const errorText = await transcriptResponse.text();
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: `Gagal mengambil transkrip: ${transcriptResponse.status}`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}`,
+                        },
+                    ],
+                };
+            }
+            const transcriptBody = await transcriptResponse.json();
+            const transcriptSegments = transcriptBody.data ?? [];
+            if (transcriptSegments.length === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: "No transcript segments found, cannot create assessment.",
+                });
+                return {
+                    content: [{ type: "text", text: "No transcript segments found." }],
+                };
+            }
+            const fullTranscript = transcriptSegments
+                .map((seg) => seg.text)
+                .join(" ")
+                .trim();
+            if (!fullTranscript) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: "Transcript is empty, cannot create assessment.",
+                });
+                return {
+                    content: [{ type: "text", text: "Transcript is empty." }],
+                };
+            }
+            const durationSeconds = getVideoDurationSeconds(transcriptSegments);
+            const durationMinutes = durationSeconds / 60;
             emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_failed",
+                event: "assessment_generation_analyzing",
                 video_id: videoId,
-                message: "Transkrip kosong, penilaian tidak bisa dibuat.",
+                message: `Video duration: ${durationMinutes.toFixed(1)} minutes — creating 10 assessment questions...`,
+                assessment_progress: 5,
+                assessment_status: "analyzing",
             });
-            return {
-                content: [{ type: "text", text: "Transcript is empty." }],
-            };
-        }
-        const durationSeconds = getVideoDurationSeconds(transcriptSegments);
-        const durationMinutes = durationSeconds / 60;
-        emitNotificationToUser(userIdStr, {
-            event: "assessment_generation_analyzing",
-            video_id: videoId,
-            message: `Video berdurasi ${durationMinutes.toFixed(1)} menit — membuat 10 soal penilaian...`,
-            assessment_progress: 5,
-            assessment_status: "analyzing",
-        });
-        let generatedQuestions = [];
-        let failedAttempts = 0;
-        const maxAttempts = 2;
-        let lastErrorMessage = "Format penilaian dari AI tidak valid.";
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            let targetBloomLevels = "C1, C2, and C3"; // Default assessment
             try {
-                const prompt = buildFullAssessmentPrompt(fullTranscript);
-                const rawLlmOutput = await callGeminiApi(prompt);
-                let parsedQuestions = parseAssessmentFromLlmOutput(rawLlmOutput);
-                if (!parsedQuestions || parsedQuestions.length === 0) {
-                    const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly 10 objects — no markdown, no preamble:
+                const qaResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers?per_page=100`, {
+                    method: "GET",
+                    headers: buildAuthHeaders(token),
+                });
+                if (qaResponse.ok) {
+                    const qaBody = await qaResponse.json();
+                    const answers = qaBody.data || [];
+                    if (answers.length > 0) {
+                        const newestVideoId = answers[0].question?.video_id;
+                        if (newestVideoId) {
+                            const videoAnswers = answers.filter((a) => a.question?.video_id === newestVideoId);
+                            const correctCount = videoAnswers.filter((a) => a.is_correct === true).length;
+                            if (correctCount > 6) {
+                                targetBloomLevels = "C4 and C5";
+                                console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Upgrading to C4-C5.`);
+                            }
+                            else {
+                                console.log(`[Assessment] User scored ${correctCount}/${videoAnswers.length} on video ${newestVideoId}. Maintaining C1-C3.`);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                console.error("[Assessment] Error fetching previous question answers:", err);
+            }
+            let generatedQuestions = [];
+            let failedAttempts = 0;
+            const maxAttempts = 3;
+            let lastErrorMessage = "Assessment format from AI is invalid.";
+            const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    const prompt = buildFullAssessmentPrompt(targetBloomLevels);
+                    const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
+                    let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
+                    if (!parsedQuestions || parsedQuestions.length === 0) {
+                        const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly 10 objects — no markdown, no preamble:
                         [
                           {
-                            "type": "multiple_choice",
-                            "difficulty_level": 3,
+                            "type": "short_answer",
+                            "bloom_level": "C2",
+                            "difficulty_level": 2,
                             "question": "string",
-                            "metadata": ["string", "string", "string", "string"],
-                            "correct_answers": ["string"],
-                            "explanation": "string"
+                            "reference_answer": "",
+                            "semantic_keywords": [],
+                            "explanation": ""
                           }
                         ]
 
                         Your previous output to fix:
                         ${rawLlmOutput}`;
-                    const repairedOutput = await callGeminiApi(repairPrompt);
-                    parsedQuestions = parseAssessmentFromLlmOutput(repairedOutput);
+                        const repairedOutput = await callOpenRouterApi(repairPrompt, fullAssessmentSchema);
+                        parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
+                    }
+                    if (parsedQuestions && parsedQuestions.length === 10) {
+                        generatedQuestions = parsedQuestions.slice(0, 10);
+                        break;
+                    }
+                    else {
+                        throw new Error(`Generated only ${parsedQuestions?.length ?? 0} valid questions, need exactly 10.`);
+                    }
                 }
-                if (parsedQuestions && parsedQuestions.length >= 8) {
-                    // Accept if we get at least 8 out of 10
-                    generatedQuestions = parsedQuestions.slice(0, 10);
-                    break;
-                }
-                else {
-                    throw new Error(`Generated only ${parsedQuestions?.length ?? 0} valid questions, need at least 8.`);
+                catch (error) {
+                    failedAttempts++;
+                    lastErrorMessage =
+                        error instanceof Error
+                            ? error.message
+                            : "Unknown error during assessment generation.";
+                    console.error(`[Assessment] Attempt ${attempt + 1}/${maxAttempts} failed: ${lastErrorMessage}`);
+                    emitNotificationToUser(userIdStr, {
+                        event: "assessment_generation_progress",
+                        video_id: videoId,
+                        assessment_progress: 20 + attempt * 25,
+                        message: `Upaya ${attempt + 1} gagal, mencoba lagi...`,
+                    });
+                    if (attempt < maxAttempts - 1) {
+                        await sleep(1000);
+                    }
                 }
             }
-            catch (error) {
-                failedAttempts++;
-                lastErrorMessage =
-                    error instanceof Error
-                        ? error.message
-                        : "Unknown error during assessment generation.";
-                console.error(`[Assessment] Attempt ${attempt + 1}/${maxAttempts} failed: ${lastErrorMessage}`);
+            if (generatedQuestions.length < 10) {
                 emitNotificationToUser(userIdStr, {
-                    event: "assessment_generation_progress",
+                    event: "assessment_generation_failed",
                     video_id: videoId,
-                    assessment_progress: 20 + attempt * 25,
-                    message: `Upaya ${attempt + 1} gagal, mencoba lagi...`,
+                    message: `Failed to create assessment: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} attempts failed)`,
                 });
-                if (attempt < maxAttempts - 1) {
-                    // Add delay before retry
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
-                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Assessment generation failed. Detail: ${lastErrorMessage}`,
+                        },
+                    ],
+                };
             }
-        }
-        if (generatedQuestions.length < 8) {
             emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_failed",
+                event: "assessment_generation_saving",
                 video_id: videoId,
-                message: `Gagal membuat penilaian: ${lastErrorMessage} (${failedAttempts}/${maxAttempts} upaya gagal)`,
+                assessment_progress: 95,
+                message: "Saving assessment to server...",
             });
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Assessment generation failed. Detail: ${lastErrorMessage}`,
-                    },
-                ],
-            };
-        }
-        emitNotificationToUser(userIdStr, {
-            event: "assessment_generation_saving",
-            video_id: videoId,
-            assessment_progress: 95,
-            message: "Menyimpan penilaian ke server...",
-        });
-        let savedAssessmentCount = 0;
-        let saveError = false;
-        // Try primary endpoint first
-        try {
-            const saveResponse = await fetch(`${ENV.backendUrl}/videos/${videoId}/assessments`, {
-                method: "POST",
-                headers: buildAuthHeaders(token),
-                body: JSON.stringify({ questions: generatedQuestions }),
+            let savedAssessmentCount = 0;
+            const assessmentEndpoint = `${ENV.backendUrl}/questions`;
+            const toAssessmentPayload = (question) => ({
+                video_id: String(videoId),
+                type: question.type,
+                question: question.question,
+                options: question.semantic_keywords,
+                accepted_answers: [question.reference_answer],
+                bloom_level: question.bloom_level,
             });
-            if (saveResponse.ok) {
-                try {
-                    const saveResult = await saveResponse.json();
-                    savedAssessmentCount = saveResult.saved_count ?? generatedQuestions.length;
-                    console.log(`[Assessment] Saved ${savedAssessmentCount} questions via primary endpoint`);
-                }
-                catch {
-                    // Response OK but JSON parse failed, assume all saved
-                    savedAssessmentCount = generatedQuestions.length;
-                }
-            }
-            else {
-                saveError = true;
-                console.warn(`[Assessment] Primary save endpoint returned ${saveResponse.status}. Attempting fallback...`);
-            }
-        }
-        catch (error) {
-            saveError = true;
-            console.error(`[Assessment] Primary endpoint request failed:`, error);
-        }
-        // Fallback: Try saving as individual questions if primary failed
-        if (saveError) {
-            console.log(`[Assessment] Using fallback: saving questions individually...`);
-            savedAssessmentCount = 0;
             for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
                 const question = generatedQuestions[qIndex];
                 try {
-                    const fallbackResponse = await fetch(`${ENV.backendUrl}/questions`, {
+                    const saveResponse = await fetchWithAuth(assessmentEndpoint, {
                         method: "POST",
                         headers: buildAuthHeaders(token),
-                        body: JSON.stringify({
-                            video_id: videoId,
-                            type: question.type,
-                            difficulty_level: question.difficulty_level,
-                            question: question.question,
-                            metadata: question.metadata,
-                            accepted_answers: question.correct_answers,
-                            explanation: question.explanation,
-                        }),
+                        body: JSON.stringify(toAssessmentPayload(question)),
                     });
-                    if (fallbackResponse.ok) {
+                    if (saveResponse.ok) {
                         savedAssessmentCount++;
                         console.log(`[Assessment] Saved question ${qIndex + 1}/${generatedQuestions.length}`);
                     }
                     else {
-                        console.warn(`[Assessment] Failed to save question ${qIndex + 1}: HTTP ${fallbackResponse.status}`);
+                        const errorText = await saveResponse
+                            .text()
+                            .catch(() => "Unknown backend error");
+                        console.warn(`[Assessment] Failed to save question ${qIndex + 1}: HTTP ${saveResponse.status} | Response: ${errorText}`);
                     }
                 }
                 catch (error) {
                     console.error(`[Assessment] Error saving question ${qIndex + 1}:`, error);
                 }
             }
-        }
-        if (savedAssessmentCount === 0) {
+            if (savedAssessmentCount === 0) {
+                emitNotificationToUser(userIdStr, {
+                    event: "assessment_generation_failed",
+                    video_id: videoId,
+                    message: `Failed to save assessment: No questions were saved successfully.`,
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to save assessment: No questions were saved successfully.`,
+                        },
+                    ],
+                };
+            }
             emitNotificationToUser(userIdStr, {
-                event: "assessment_generation_failed",
+                event: "assessment_generation_completed",
                 video_id: videoId,
-                message: `Gagal menyimpan penilaian: Tidak ada soal yang berhasil disimpan.`,
+                assessment_progress: 100,
+                assessment_saved_count: savedAssessmentCount,
+                message: `${savedAssessmentCount} assessment questions successfully created and saved.`,
             });
+            const questionSummary = generatedQuestions
+                .slice(0, savedAssessmentCount)
+                .map((q) => `${q.type}(L${q.difficulty_level})`)
+                .join(", ");
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Failed to save assessment: No questions were saved successfully.`,
+                        text: [
+                            `Done! Generated and saved ${savedAssessmentCount} assessment questions.`,
+                            `Question types: ${questionSummary}`,
+                        ]
+                            .filter(Boolean)
+                            .join(" | "),
                     },
                 ],
             };
         }
+        finally {
+            inflightAssessmentJobs.delete(videoIdStr);
+        }
+    });
+    // Tool: generateSemanticAssessment
+    server.tool("generateSemanticAssessment", "Generate a set of semantic similarity questions targeting a specific Bloom's Taxonomy level.", {
+        token: z.string().describe("Bearer token of the currently logged-in user"),
+        userId: z.union([z.number(), z.string()]).describe("User ID for realtime progress notifications"),
+        videoId: z.union([z.number(), z.string()]).describe("ID of the target video"),
+        targetLevel: z.enum(["C1", "C2", "C3", "C4", "C5", "C6"]).describe("Target Bloom's Taxonomy Level"),
+        quantity: z.number().describe("Number of questions to generate"),
+    }, async ({ token, userId, videoId, targetLevel, quantity }) => {
+        const userIdStr = String(userId);
         emitNotificationToUser(userIdStr, {
-            event: "assessment_generation_completed",
+            event: "semantic_generation_started",
+            video_id: videoId,
+            message: `Memulai pembuatan pertanyaan semantik level ${targetLevel}...`,
+            assessment_progress: 0,
+            assessment_status: "starting",
+        });
+        const transcriptResponse = await fetchWithAuth(`${ENV.backendUrl}/videos/${videoId}/transcript`, { method: "GET", headers: buildAuthHeaders(token) });
+        if (!transcriptResponse.ok) {
+            const errorText = await transcriptResponse.text();
+            return {
+                content: [
+                    { type: "text", text: `Failed to fetch transcript: ${transcriptResponse.status} - ${errorText}` },
+                ],
+            };
+        }
+        const transcriptBody = await transcriptResponse.json();
+        const transcriptSegments = transcriptBody.data ?? [];
+        if (transcriptSegments.length === 0) {
+            return { content: [{ type: "text", text: "No transcript segments found." }] };
+        }
+        const fullTranscript = transcriptSegments.map((seg) => seg.text).join(" ").trim();
+        if (!fullTranscript) {
+            return { content: [{ type: "text", text: "Transcript is empty." }] };
+        }
+        emitNotificationToUser(userIdStr, {
+            event: "semantic_generation_analyzing",
+            video_id: videoId,
+            message: `Membuat ${quantity} soal semantik...`,
+            assessment_progress: 5,
+            assessment_status: "analyzing",
+        });
+        let generatedQuestions = [];
+        let failedAttempts = 0;
+        const maxAttempts = 2;
+        let lastErrorMessage = "Format dari AI tidak valid.";
+        const transcriptContext = await getOrLoadTranscriptContext(String(videoId), token, transcriptSegments);
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const prompt = buildSemanticAssessmentPrompt(targetLevel, quantity);
+                const rawLlmOutput = await callOpenRouterApi(prompt, fullAssessmentSchema, transcriptContext);
+                let parsedQuestions = parseSemanticAssessmentFromLlmOutput(rawLlmOutput);
+                if (!parsedQuestions || parsedQuestions.length === 0) {
+                    const repairPrompt = `You returned malformed output. Fix it into this exact JSON schema and return ONLY a valid JSON array with exactly ${quantity} objects — no markdown, no preamble:
+                        [
+                          {
+                            "type": "short_answer",
+                            "bloom_level": "${targetLevel}",
+                            "difficulty_level": 3,
+                            "question": "string",
+                            "reference_answer": "",
+                            "semantic_keywords": []
+                          }
+                        ]
+
+                        Your previous output to fix:
+                        ${rawLlmOutput}`;
+                    const repairedOutput = await callOpenRouterApi(repairPrompt, fullAssessmentSchema);
+                    parsedQuestions = parseSemanticAssessmentFromLlmOutput(repairedOutput);
+                }
+                if (parsedQuestions && parsedQuestions.length >= Math.max(1, quantity - 2)) {
+                    generatedQuestions = parsedQuestions.slice(0, quantity);
+                    break;
+                }
+                else {
+                    throw new Error(`Generated only ${parsedQuestions?.length ?? 0} valid questions, expected at least ${Math.max(1, quantity - 2)}.`);
+                }
+            }
+            catch (error) {
+                failedAttempts++;
+                lastErrorMessage = error instanceof Error ? error.message : "Unknown error";
+                if (attempt < maxAttempts - 1) {
+                    await sleep(1000);
+                }
+            }
+        }
+        if (generatedQuestions.length === 0) {
+            emitNotificationToUser(userIdStr, {
+                event: "semantic_generation_failed",
+                video_id: videoId,
+                message: `Gagal membuat pertanyaan: ${lastErrorMessage}`,
+            });
+            return {
+                content: [{ type: "text", text: `Generation failed. Detail: ${lastErrorMessage}` }],
+            };
+        }
+        emitNotificationToUser(userIdStr, {
+            event: "semantic_generation_saving",
+            video_id: videoId,
+            assessment_progress: 95,
+            message: "Menyimpan pertanyaan semantik ke server...",
+        });
+        let savedAssessmentCount = 0;
+        const assessmentEndpoint = `${ENV.backendUrl}/questions`;
+        const toAssessmentPayload = (question) => ({
+            video_id: String(videoId),
+            type: question.type,
+            question: question.question,
+            options: question.semantic_keywords,
+            accepted_answers: [question.reference_answer],
+            bloom_level: question.bloom_level,
+        });
+        for (let qIndex = 0; qIndex < generatedQuestions.length; qIndex++) {
+            const question = generatedQuestions[qIndex];
+            try {
+                const saveResponse = await fetchWithAuth(assessmentEndpoint, {
+                    method: "POST",
+                    headers: buildAuthHeaders(token),
+                    body: JSON.stringify(toAssessmentPayload(question)),
+                });
+                if (saveResponse.ok) {
+                    savedAssessmentCount++;
+                }
+            }
+            catch (error) {
+                console.error(`[Semantic Assessment] Error saving question ${qIndex + 1}:`, error);
+            }
+        }
+        emitNotificationToUser(userIdStr, {
+            event: "semantic_generation_completed",
             video_id: videoId,
             assessment_progress: 100,
             assessment_saved_count: savedAssessmentCount,
-            message: `${savedAssessmentCount} soal penilaian berhasil dibuat dan disimpan.`,
+            message: `${savedAssessmentCount} pertanyaan semantik berhasil dibuat dan disimpan.`,
         });
-        const questionSummary = generatedQuestions
-            .slice(0, savedAssessmentCount)
-            .map((q) => `${q.type}(L${q.difficulty_level})`)
-            .join(", ");
         return {
             content: [
                 {
                     type: "text",
-                    text: [
-                        `Done! Generated and saved ${savedAssessmentCount} assessment questions.`,
-                        `Question types: ${questionSummary}`,
-                    ]
-                        .filter(Boolean)
-                        .join(" | "),
+                    text: `Done! Generated and saved ${savedAssessmentCount} semantic similarity questions.`,
                 },
             ],
         };
     });
     return server;
 }
-// Express app setup
 const app = express();
 const corsOptions = {
     origin: (requestOrigin, callback) => {
@@ -718,13 +1105,14 @@ function resolveAllowedOriginHeader(requestOrigin) {
         return requestOrigin;
     return ALLOWED_ORIGINS[0] ?? "http://localhost:3000";
 }
-// Routes
 app.get("/notifications", (req, res) => {
     const userId = req.query.userId;
     if (!userId) {
         res.status(400).json({ error: "Missing required query parameter: userId" });
         return;
     }
+    req.socket.setTimeout(0);
+    req.socket.setKeepAlive(true);
     const allowedOrigin = resolveAllowedOriginHeader(req.headers.origin);
     res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -733,46 +1121,101 @@ app.get("/notifications", (req, res) => {
         "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Credentials": "true",
         Vary: "Origin",
+        "X-Accel-Buffering": "no"
     });
     res.write(":\n\n");
-    notificationClientsByUserId.set(userId, res);
-    console.log(`[Notifications] Client connected: userId=${userId}`);
+    if (!notificationClientsByUserId.has(userId)) {
+        notificationClientsByUserId.set(userId, new Set());
+    }
+    notificationClientsByUserId.get(userId).add(res);
+    console.log(`[Notifications] Client connected: userId = ${userId} (Total clients: ${notificationClientsByUserId.get(userId).size})`);
     flushPendingNotifications(userId, res);
     const heartbeatInterval = setInterval(() => {
-        res.write("event: ping\ndata: {}\n\n");
+        if (!res.writableEnded && !res.closed) {
+            res.write("event: ping\ndata: {}\n\n");
+        }
     }, 15_000);
     req.on("close", () => {
         clearInterval(heartbeatInterval);
-        notificationClientsByUserId.delete(userId);
-        console.log(`[Notifications] Client disconnected: userId=${userId}`);
+        const clients = notificationClientsByUserId.get(userId);
+        if (clients) {
+            clients.delete(res);
+            if (clients.size === 0) {
+                notificationClientsByUserId.delete(userId);
+            }
+        }
+        console.log(`[Notifications] Client disconnected: userId = ${userId} (Remaining: ${clients?.size || 0})`);
     });
 });
-app.post("/webhook/transcription-done", express.json(), (req, res) => {
-    const { video_id, user_id, status } = req.body ?? {};
+app.post("/webhook/transcription-done", express.json(), async (req, res) => {
+    const { video_id, user_id, status, token, skip_ai } = req.body ?? {};
     if (!video_id || !user_id || !status) {
         res.status(400).json({ error: "Missing required fields: video_id, user_id, status" });
         return;
     }
     if (status === "completed") {
         emitNotificationToUser(String(user_id), {
+            event: "video_status_changed",
+            video_id,
+            status: "completed",
+        });
+        emitNotificationToUser(String(user_id), {
             event: "transcription_ready",
             video_id,
+            skip_ai: skip_ai === true,
         });
-        console.log(`[Webhook] transcription_ready sent: videoId=${video_id}, userId=${user_id}`);
+        console.log(`[Webhook] transcription_ready sent for videoId = ${video_id}`);
+        if (token) {
+            getOrLoadTranscriptContext(String(video_id), String(token))
+                .then(() => {
+                console.log(`[Webhook-Preloader] Success warming cache for video ${video_id}`);
+            })
+                .catch((err) => {
+                console.error(`[Webhook-Preloader] Failed warming cache background worker:`, err.message);
+            });
+        }
+        else {
+            console.warn(`[Webhook-Preloader] No token provided in payload. Skipping warm-up optimization.`);
+        }
     }
+    res.status(200).json({ received: true, preloading: status === "completed" && !!token });
+});
+app.post("/webhook/video-status", express.json(), (req, res) => {
+    const { video_id, user_id, status } = req.body ?? {};
+    if (!video_id || !user_id || !status) {
+        res.status(400).json({ error: "Missing required fields: video_id, user_id, status" });
+        return;
+    }
+    emitNotificationToUser(String(user_id), {
+        event: "video_status_changed",
+        video_id,
+        status,
+    });
+    console.log(`[Webhook] video_status_changed sent: videoId = ${video_id}, userId = ${user_id}, status = ${status}`);
     res.status(200).json({ received: true });
 });
 app.get("/sse", async (req, res) => {
+    req.socket.setTimeout(0);
+    req.socket.setKeepAlive(true);
     const allowedOrigin = resolveAllowedOriginHeader(req.headers.origin);
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     const transport = new SSEServerTransport("/messages", res);
     const mcpServer = createMcpServer();
     await mcpServer.connect(transport);
     activeSSESessions.set(transport.sessionId, transport);
     console.log(`[SSE] Session opened: ${transport.sessionId}`);
+    const keepAliveInterval = setInterval(() => {
+        if (!res.writableEnded) {
+            res.write(":\n\n");
+        }
+    }, 15_000);
     req.on("close", () => {
+        clearInterval(keepAliveInterval);
         activeSSESessions.delete(transport.sessionId);
         console.log(`[SSE] Session closed: ${transport.sessionId}`);
     });
@@ -788,7 +1231,7 @@ app.post("/messages", async (req, res) => {
         await transport.handlePostMessage(req, res);
     }
     catch (error) {
-        console.error(`[SSE] Error handling message for session ${sessionId}:`, error);
+        console.error(`[SSE] Error handling message for session ${sessionId}: `, error);
         if (!res.headersSent) {
             res.status(500).json({ error: "Internal server error while handling message." });
         }
