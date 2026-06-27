@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { classesApi, type CourseClass } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, extractCourseArray, getImageUrl } from "@/lib/class-utils"
-import { Plus, Search, Edit2, Eye, EyeOff, Trash2, Clock, Users, BookOpen } from "lucide-react"
+import { Plus, Search, Edit2, Eye, EyeOff, Trash2, Clock, Users, BookOpen, CheckSquare } from "lucide-react"
 import { ClassRow } from "@/lib/types/course-management"
 
 const mapClassRow = (course: CourseClass): ClassRow => {
@@ -173,6 +173,11 @@ export default function ClassManagementPage() {
                     <Link href={`/course-management/create?edit=${item.id}`} className="w-full">
                       <Button variant="outline" size="sm" className="w-full justify-start gap-2 shadow-sm border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                         <Edit2 className="w-3.5 h-3.5" /> Edit Details
+                      </Button>
+                    </Link>
+                    <Link href={`/course-management/${item.id}/assessments`} className="w-full">
+                      <Button variant="outline" size="sm" className="w-full justify-start gap-2 shadow-sm border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <CheckSquare className="w-3.5 h-3.5" /> Grade Assessments
                       </Button>
                     </Link>
                     <Button

@@ -30,9 +30,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2, CalendarDays, Users, LockKeyhole } from "lucide-react"
+import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2, CalendarDays, Users, LockKeyhole, Eye } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { FormState } from "@/lib/types/course-management"
+import { useAuth } from "@/contexts/AuthContext"
+import { CertificateDialog } from "@/components/certificate/CertificateDialog"
+import { buildCertificateId, countLectures } from "@/components/certificate/certificate-utils"
 
 const batchStatusConfig: Record<BatchStatus, { label: string; badgeClass: string; dotClass: string }> = {
   upcoming: {
@@ -82,9 +85,11 @@ export default function CreateClassPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
+  const { user } = useAuth()
 
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [isCertPreviewOpen, setIsCertPreviewOpen] = useState(false)
   const [categories, setCategories] = useState<CategoryItem[]>([])
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState("")
@@ -1475,16 +1480,18 @@ export default function CreateClassPage() {
               </CardContent>
             </Card>
 
-            {/* Settings Section */}
             <Card className="shadow-sm border-gray-200 dark:border-gray-800">
               <CardHeader>
-                <CardTitle className="text-lg">Settings</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  Certificate
+                </CardTitle>
+                <CardDescription>Award a certificate of completion to students.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="has_certificate">Certificate</Label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Award upon completion.</p>
+                    <Label htmlFor="has_certificate">Enable certificate</Label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Issued once a student reaches 100% completion.</p>
                   </div>
                   <Switch
                     id="has_certificate"
@@ -1492,6 +1499,26 @@ export default function CreateClassPage() {
                     onCheckedChange={(checked) => handleChange("has_certificate", checked)}
                   />
                 </div>
+
+                {formState.has_certificate && (
+                  <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/50 dark:bg-indigo-900/10 p-3 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                        Certificate template is generated automatically with the student's name, your name,
+                        the course title and the completion date.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={() => setIsCertPreviewOpen(true)}
+                    >
+                      <Eye className="w-4 h-4" /> Preview certificate
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -2206,6 +2233,20 @@ export default function CreateClassPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <CertificateDialog
+          open={isCertPreviewOpen}
+          onOpenChange={setIsCertPreviewOpen}
+          sample
+          data={{
+            studentName: "Alex Johnson",
+            courseName: formState.title.trim() || "Your Course Title",
+            instructorName: user?.name || "Course Instructor",
+            dateText: format(new Date(), "dd MMMM yyyy"),
+            certificateId: buildCertificateId(editId || "SAMPLE", user?.id || "PREVIEW"),
+            lectureCount: countLectures({ sections: courseSections }),
+          }}
+        />
       </div>
     </ProtectedRoute>
   )

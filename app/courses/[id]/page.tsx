@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
-import { classesApi, type CourseClass, type CourseSection } from "@/lib/api/classes"
+import { classesApi, type CourseClass, type CourseSection, type CourseBatchInfo } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
 import {
   Star, ArrowLeft, Users, BookOpen, Globe, Award, ChevronDown,
-  ChevronUp, PlayCircle, CheckCircle, Loader2, Lock, Clock, X, Receipt, ShieldCheck
+  ChevronUp, PlayCircle, CheckCircle, Loader2, Lock, Clock, X, Receipt, ShieldCheck,
+  CalendarDays, AlertCircle
 } from "lucide-react"
 import { CheckoutModal } from "@/components/CheckoutModal"
 import { cn } from "@/lib/utils"
@@ -273,6 +274,14 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     getImageUrl(course.thumbnail_url) ||
     "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop"
 
+  // Batch availability logic
+  const allBatches: CourseBatchInfo[] = course.batches || []
+  const activeBatch = allBatches.find((batch) => batch.status === "active") || course.active_batch || null
+  const upcomingBatch = allBatches.find((batch) => batch.status === "upcoming") || null
+  const hasActiveBatch = !!activeBatch
+  const isBatchFull = activeBatch ? (activeBatch.max_students !== null && activeBatch.enrolled_count >= activeBatch.max_students) : false
+  const canEnrollBatch = hasActiveBatch && !isBatchFull
+
   return (
     <ProtectedRoute>
       <Script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY} strategy="lazyOnload" />
@@ -395,13 +404,23 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     </span>
                   )}
                 </div>
+                <BatchScheduleBanner
+                  activeBatch={activeBatch}
+                  upcomingBatch={upcomingBatch}
+                  isBatchFull={isBatchFull}
+                  isEnrolled={isEnrolled}
+                />
                 <CTAButtons
                   canEnroll={canEnroll}
+                  canEnrollBatch={canEnrollBatch}
                   isJoining={isJoining}
                   isCheckingEnrollment={isCheckingEnrollment}
                   joined={joined}
                   courseId={course.id}
                   onJoin={handleJoin}
+                  activeBatch={activeBatch}
+                  upcomingBatch={upcomingBatch}
+                  isBatchFull={isBatchFull}
                 />
               </div>
 
@@ -485,13 +504,23 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                       )}
                     </div>
 
+                    <BatchScheduleBanner
+                      activeBatch={activeBatch}
+                      upcomingBatch={upcomingBatch}
+                      isBatchFull={isBatchFull}
+                      isEnrolled={isEnrolled}
+                    />
                     <CTAButtons
                       canEnroll={canEnroll}
+                      canEnrollBatch={canEnrollBatch}
                       isJoining={isJoining}
                       isCheckingEnrollment={isCheckingEnrollment}
                       joined={joined}
                       courseId={course.id}
                       onJoin={handleJoin}
+                      activeBatch={activeBatch}
+                      upcomingBatch={upcomingBatch}
+                      isBatchFull={isBatchFull}
                     />
 
                     <Separator className="bg-gray-100 dark:bg-gray-800" />
@@ -531,6 +560,14 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                         <span>Last updated</span>
                         <span className="font-semibold text-gray-900 dark:text-white">{formatDateLabel(course.updated_at)}</span>
                       </li>
+                      {activeBatch && (
+                        <li className="flex items-center justify-between">
+                          <span>Batch ends</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {new Date(activeBatch.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        </li>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -554,20 +591,119 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   )
 }
 
+function BatchScheduleBanner({
+  activeBatch,
+  upcomingBatch,
+  isBatchFull,
+  isEnrolled,
+}: {
+  activeBatch: CourseBatchInfo | null
+  upcomingBatch: CourseBatchInfo | null
+  isBatchFull: boolean
+  isEnrolled: boolean
+}) {
+  if (isEnrolled) return null
+
+  const formatBatchDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  if (activeBatch && !isBatchFull) {
+    return (
+      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+        <CalendarDays className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+            {activeBatch.name} — Enrolling Now
+          </p>
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+            {formatBatchDate(activeBatch.start_date)} – {formatBatchDate(activeBatch.end_date)}
+          </p>
+          {activeBatch.max_students && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+              {activeBatch.enrolled_count} / {activeBatch.max_students} spots filled
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (isBatchFull && activeBatch) {
+    return (
+      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            Current Batch is Full
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+            {activeBatch.name} has reached its maximum of {activeBatch.max_students} students.
+            {upcomingBatch ? " A new batch is scheduled soon." : " Please check back later."}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (upcomingBatch) {
+    return (
+      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+        <CalendarDays className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+            Next Batch: {upcomingBatch.name}
+          </p>
+          <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">
+            Starts {formatBatchDate(upcomingBatch.start_date)} – Enrollment opens soon
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // No active or upcoming batch
+  return (
+    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+      <Clock className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0 mt-0.5" />
+      <div>
+        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          No Active Batch
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          This course has no scheduled batch right now. Check back later.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function CTAButtons({
   canEnroll,
+  canEnrollBatch,
   isJoining,
   isCheckingEnrollment,
   joined,
   courseId,
   onJoin,
+  activeBatch,
+  upcomingBatch,
+  isBatchFull,
 }: {
   canEnroll: boolean | undefined
+  canEnrollBatch: boolean
   isJoining: boolean
   isCheckingEnrollment: boolean
   joined: boolean
   courseId: string
   onJoin: () => void
+  activeBatch: CourseBatchInfo | null
+  upcomingBatch: CourseBatchInfo | null
+  isBatchFull: boolean
 }) {
   if (isCheckingEnrollment) {
     return (
@@ -589,6 +725,24 @@ function CTAButtons({
           <Button variant="outline" className="w-full">My Courses</Button>
         </Link>
       </div>
+    )
+  }
+
+  // Batch is full
+  if (isBatchFull) {
+    return (
+      <Button disabled className="w-full gap-2 bg-gray-400 cursor-not-allowed">
+        Batch Full
+      </Button>
+    )
+  }
+
+  // No active batch available
+  if (!canEnrollBatch) {
+    return (
+      <Button disabled className="w-full gap-2 bg-gray-400 cursor-not-allowed">
+        {upcomingBatch ? "Enrollment Not Open Yet" : "No Active Batch"}
+      </Button>
     )
   }
 

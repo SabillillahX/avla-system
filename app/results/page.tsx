@@ -27,7 +27,9 @@ interface QuestionData {
 interface AssessmentResult {
   id: number;
   user_answer: string;
-  is_correct: boolean;
+  is_correct: boolean | null;
+  score: number | null;
+  feedback: string | null;
   created_at: string;
   question: QuestionData;
 }
@@ -141,6 +143,8 @@ export default function ResultsPage() {
                 <AssessmentResultCard
                   key={`assessment-${result.id}`}
                   isCorrect={result.is_correct}
+                  score={result.score}
+                  feedback={result.feedback}
                   question={result.question.question}
                   userAnswer={result.user_answer}
                   correctAnswer={result.question.correct_answer || "-"}
@@ -181,13 +185,17 @@ export default function ResultsPage() {
 
 function AssessmentResultCard({
   isCorrect,
+  score,
+  feedback,
   question,
   userAnswer,
   correctAnswer,
   date,
   type
 }: {
-  isCorrect: boolean;
+  isCorrect: boolean | null;
+  score: number | null;
+  feedback: string | null;
   question: string;
   userAnswer: string;
   correctAnswer: string;
@@ -195,12 +203,16 @@ function AssessmentResultCard({
   type: string;
 }) {
 
+  const isGraded = isCorrect !== null;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
       <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 mb-4">
         <div className="flex items-start gap-3">
           <div className="mt-1">
-            {isCorrect ? (
+            {!isGraded ? (
+              <Clock className="w-6 h-6 text-gray-400" />
+            ) : isCorrect ? (
               <CheckCircle2 className="w-6 h-6 text-emerald-500" />
             ) : (
               <XCircle className="w-6 h-6 text-red-500" />
@@ -208,15 +220,22 @@ function AssessmentResultCard({
           </div>
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className={`text-sm font-semibold px-2.5 py-0.5 rounded ${isCorrect
+              <span className={`text-sm font-semibold px-2.5 py-0.5 rounded ${!isGraded
+                ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                : isCorrect
                 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                 : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
                 }`}>
-                {isCorrect ? "Correct" : "Wrong"}
+                {!isGraded ? "Pending Review" : isCorrect ? "Correct" : "Wrong"}
               </span>
               <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium px-2 py-0.5 rounded capitalize">
                 {type.replace("_", " ")}
               </span>
+              {isGraded && score !== null && (
+                <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-semibold px-2 py-0.5 rounded">
+                  Score: {score}
+                </span>
+              )}
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mt-2">
               {question}
@@ -235,11 +254,22 @@ function AssessmentResultCard({
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Your answer</span>
             <p className="text-gray-900 dark:text-gray-100">{userAnswer || "-"}</p>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Correct answer</span>
-            <p className="text-gray-900 dark:text-gray-100">{correctAnswer}</p>
-          </div>
+          {isGraded && (
+            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Correct answer</span>
+              <p className="text-gray-900 dark:text-gray-100">{correctAnswer}</p>
+            </div>
+          )}
         </div>
+        
+        {isGraded && feedback && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40 mt-4">
+            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Teacher's Feedback
+            </span>
+            <p className="text-gray-800 dark:text-gray-200 text-sm mt-1 whitespace-pre-line">{feedback}</p>
+          </div>
+        )}
       </div>
     </div>
   )

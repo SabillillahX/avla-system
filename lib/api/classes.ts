@@ -31,6 +31,18 @@ export interface PrerequisiteCourse {
   thumbnail_url: string | null;
 }
 
+export interface CourseBatchInfo {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  status: 'upcoming' | 'active' | 'expired' | 'closed';
+  max_students: number | null;
+  enrolled_count: number;
+}
+
 export interface CourseClass {
   id: string;
   name: string;
@@ -57,6 +69,8 @@ export interface CourseClass {
   sections?: CourseSection[] | null;
   students?: unknown[] | null;
   students_count?: number | null;
+  active_batch?: CourseBatchInfo | null;
+  batches?: CourseBatchInfo[] | null;
   created_at: string;
   updated_at: string;
 }

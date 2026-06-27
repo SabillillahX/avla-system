@@ -77,6 +77,7 @@ const navItems = [
   { name: "Documents", icon: FileText, path: "/documents" },
 
   { name: "Course Management", icon: ClipboardList, path: "/course-management", visibleFor: ["teacher", "admin"] },
+  { name: "Teacher Apps", icon: Users, path: "/admin/teacher-applications", visibleFor: ["admin"] },
 ]
 
 const notifications = [

@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
-import { type CourseClass } from "@/lib/api/classes"
-import { Search, PlayCircle, BookOpen, Clock, Trophy } from "lucide-react"
+import { type CourseClass, type CourseBatchInfo } from "@/lib/api/classes"
+import { Search, PlayCircle, BookOpen, Clock, Trophy, CalendarDays, AlertCircle } from "lucide-react"
 import { getImageUrl } from "@/lib/class-utils"
 
 type FilterMode = "all" | "in-progress" | "completed"
@@ -98,6 +98,13 @@ export default function MyCoursePage() {
 
       const progressPercent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0
 
+      // Determine batch status for this enrolled course
+      const allBatches: CourseBatchInfo[] = course.batches || []
+      const activeBatch = allBatches.find((b) => b.status === "active") || course.active_batch || null
+      const hasExpiredBatches = allBatches.some((b) => b.status === "expired" || b.status === "closed")
+      const hasActiveBatch = !!activeBatch
+      const isBatchExpired = !hasActiveBatch && hasExpiredBatches
+
       return {
         ...course,
         progress: progressPercent,
@@ -105,6 +112,9 @@ export default function MyCoursePage() {
         completedLessons: completedVideos,
         lastLesson: lastLessonStr,
         status: progressPercent === 100 && totalVideos > 0 ? "completed" as const : "in-progress" as const,
+        activeBatch,
+        isBatchExpired,
+        batchEndDate: activeBatch?.end_date || allBatches.find((b) => b.status === "expired" || b.status === "closed")?.end_date || null,
       }
     })
   }, [enrolledClasses])
@@ -197,7 +207,7 @@ export default function MyCoursePage() {
         {!isFetching && filteredCourses.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
             {filteredCourses.map((course) => (
-              <Card key={course.id} className="group overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-blue-200 dark:hover:border-blue-900/50 transition-all duration-300 rounded-2xl flex flex-col h-full cursor-pointer">
+              <Card key={course.id} className={`group overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-blue-200 dark:hover:border-blue-900/50 transition-all duration-300 rounded-2xl flex flex-col h-full cursor-pointer ${course.isBatchExpired ? 'opacity-75' : ''}`}>
                 <Link href={`/my-course/${course.id}`} className="flex flex-col h-full">
                   
                   {/* Thumbnail Container */}
@@ -208,7 +218,7 @@ export default function MyCoursePage() {
                         "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop"
                       }
                       alt={course.name}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 ${course.isBatchExpired ? 'grayscale-[30%]' : ''}`}
                     />
                     
                     {/* Overlay Gradient & Play Button */}
@@ -222,9 +232,16 @@ export default function MyCoursePage() {
 
                     {/* Top Badges */}
                     <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
-                      <Badge className="bg-black/50 backdrop-blur-md text-white border-none hover:bg-black/60 shadow-sm">
-                        {course.category?.name || "General"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-black/50 backdrop-blur-md text-white border-none hover:bg-black/60 shadow-sm">
+                          {course.category?.name || "General"}
+                        </Badge>
+                        {course.isBatchExpired && (
+                          <Badge className="bg-rose-500/90 backdrop-blur-md text-white border-none hover:bg-rose-600 shadow-sm">
+                            Batch Ended
+                          </Badge>
+                        )}
+                      </div>
                       {course.status === "completed" && (
                         <div className="bg-emerald-500 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md">
                           <Trophy className="w-4 h-4" />
@@ -235,7 +252,7 @@ export default function MyCoursePage() {
                     {/* Bottom Progress Bar embedded in image */}
                     <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-200/20 backdrop-blur-sm">
                       <div 
-                        className={`h-full transition-all duration-1000 ${course.status === 'completed' ? 'bg-emerald-500' : 'bg-blue-600'}`} 
+                        className={`h-full transition-all duration-1000 ${course.status === 'completed' ? 'bg-emerald-500' : course.isBatchExpired ? 'bg-rose-500' : 'bg-blue-600'}`} 
                         style={{ width: `${course.progress}%` }}
                       />
                     </div>
@@ -258,6 +275,27 @@ export default function MyCoursePage() {
 
                     <div className="mt-auto space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                       
+                      {/* Batch schedule info */}
+                      {course.batchEndDate && (
+                        <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
+                          course.isBatchExpired 
+                            ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400' 
+                            : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+                        }`}>
+                          {course.isBatchExpired ? (
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          ) : (
+                            <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          <span>
+                            {course.isBatchExpired 
+                              ? `Batch ended ${new Date(course.batchEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` 
+                              : `Batch until ${new Date(course.batchEndDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                            }
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex items-end justify-between">
                         <div>
                           <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
@@ -269,10 +307,16 @@ export default function MyCoursePage() {
                           </p>
                         </div>
                         <Button 
-                          variant={course.status === "completed" ? "outline" : "default"} 
-                          className={`rounded-full px-5 ${course.status === 'completed' ? '' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'}`}
+                          variant={course.status === "completed" ? "outline" : course.isBatchExpired ? "outline" : "default"} 
+                          className={`rounded-full px-5 ${
+                            course.isBatchExpired 
+                              ? 'border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400' 
+                              : course.status === 'completed' 
+                                ? '' 
+                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+                          }`}
                         >
-                          {course.status === "completed" ? "Review" : "Continue"}
+                          {course.isBatchExpired ? "Batch Ended" : course.status === "completed" ? "Review" : "Continue"}
                         </Button>
                       </div>
 
