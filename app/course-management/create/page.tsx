@@ -471,7 +471,8 @@ export default function CreateClassPage() {
     if (!id) return
     try {
       const res = await batchesApi.list(id)
-      setBatches(res.data.data)
+      const batchData = res.data.data
+      setBatches(Array.isArray(batchData) ? batchData : ((batchData as any)?.data || []))
     } catch (err) {
       console.error("Failed to load batches", err)
     }
@@ -823,11 +824,14 @@ export default function CreateClassPage() {
       }
 
       if (parsed.learning_objectives && Array.isArray(parsed.learning_objectives)) {
+        const stringifiedObjectives = parsed.learning_objectives.map((obj: any) =>
+          typeof obj === 'string' ? obj : JSON.stringify(obj)
+        )
         setFormState((prev) => ({
           ...prev,
           what_you_will_learn: [
             ...prev.what_you_will_learn.filter((x) => x.trim() !== ""),
-            ...parsed.learning_objectives,
+            ...stringifiedObjectives,
           ],
         }))
         toast.success("Learning Objectives berhasil dibuat!", { id: toastId })
@@ -1252,18 +1256,38 @@ export default function CreateClassPage() {
                       Generate Learning Objective
                     </Button>
                   </div>
-                  {formState.what_you_will_learn.map((item, index) => (
-                    <div key={`learn-${index}`} className="flex items-center gap-2">
-                      <Input
-                        placeholder={`Learning objective ${index + 1}`}
-                        value={item}
-                        onChange={(e) => handleArrayChange("what_you_will_learn", index, e.target.value)}
-                      />
-                      <Button variant="ghost" size="icon" onClick={() => removeArrayItem("what_you_will_learn", index)} className="shrink-0 text-gray-500 hover:text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                  {formState.what_you_will_learn.map((item, index) => {
+                    let displayValue = item;
+                    try {
+                      const parsed = JSON.parse(item);
+                      if (parsed && typeof parsed === 'object' && parsed.objective !== undefined) {
+                        displayValue = parsed.objective;
+                      }
+                    } catch (e) {}
+
+                    return (
+                      <div key={`learn-${index}`} className="flex items-center gap-2">
+                        <Input
+                          placeholder={`Learning objective ${index + 1}`}
+                          value={displayValue}
+                          onChange={(e) => {
+                            let newValue = e.target.value;
+                            try {
+                              const parsed = JSON.parse(item);
+                              if (parsed && typeof parsed === 'object') {
+                                parsed.objective = newValue;
+                                newValue = JSON.stringify(parsed);
+                              }
+                            } catch (e) {}
+                            handleArrayChange("what_you_will_learn", index, newValue);
+                          }}
+                        />
+                        <Button variant="ghost" size="icon" onClick={() => removeArrayItem("what_you_will_learn", index)} className="shrink-0 text-gray-500 hover:text-red-600">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                   <Button variant="outline" size="sm" onClick={() => addArrayItem("what_you_will_learn")} className="mt-2 text-sm gap-2">
                     <Plus className="h-4 w-4" /> Add Objective
                   </Button>

@@ -565,7 +565,7 @@ function createMcpServer(): McpServer {
                                     ? parsedSummary.key_concepts.join(", ")
                                     : (parsedSummary.key_concepts ?? "-");
 
-                                combinedContext += `\n- Video: ${video.title}\n  Topic: ${topic}\n  Learning Objectives: ${lo}\n  Key Concepts: ${keyConcepts}\n`;
+                                combinedContext += `\n- Video ID: ${video.id}\n  Title: ${video.title}\n  Topic: ${topic}\n  Learning Objectives: ${lo}\n  Key Concepts: ${keyConcepts}\n`;
                                 videoCount++;
                             }
                         } catch (e) {
@@ -587,6 +587,7 @@ Requirements:
 2. The number of learning objectives MUST NOT exceed 6.
 3. Align each objective with Bloom's Taxonomy, using clear and measurable action verbs.
 4. The generated learning objectives MUST be written entirely in Indonesian (e.g., "Siswa mampu menganalisis...", "Mampu menerapkan...").
+5. For each learning objective, identify which videos (by their Video ID) contribute to teaching it.
 
 ### Videos in this Course:
 ${combinedContext}
@@ -596,11 +597,20 @@ ${combinedContext}
                     properties: {
                         learning_objectives: {
                             type: "array",
-                            items: { type: "string" },
-                            description: "Daftar learning objectives (maksimal 6)",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    objective: { type: "string" },
+                                    related_video_ids: { type: "array", items: { type: "string" } }
+                                },
+                                required: ["objective", "related_video_ids"],
+                                additionalProperties: false
+                            },
+                            description: "Daftar learning objectives (maksimal 6) dan array Video ID terkait",
                         }
                     },
-                    required: ["learning_objectives"]
+                    required: ["learning_objectives"],
+                    additionalProperties: false
                 };
 
                 const llmResponse = await callOpenRouterApi(prompt, loSchema);

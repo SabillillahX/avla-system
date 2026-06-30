@@ -12,7 +12,7 @@ import {
   PlayCircle, CheckCircle2, LayoutList, Trophy, ArrowLeft,
   Loader2, BookOpen, Lock, HelpCircle, FileText, GraduationCap,
 } from "lucide-react"
-import { getImageUrl } from "@/lib/class-utils"
+import { getImageUrl, computeCourseProgress } from "@/lib/class-utils"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
@@ -21,24 +21,7 @@ import { buildCertificateId, countLectures } from "@/components/certificate/cert
 
 import { VideoWithCompletion } from "@/lib/types/my-course"
 
-function computeCourseProgress(sections: any[]): {
-  totalVideos: number
-  completedVideos: number
-  percent: number
-} {
-  let totalVideos = 0
-  let completedVideos = 0
 
-  for (const section of sections) {
-    for (const video of section.videos || []) {
-      totalVideos++
-      if (video.is_completed) completedVideos++
-    }
-  }
-
-  const percent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0
-  return { totalVideos, completedVideos, percent }
-}
 
 function VideoCompletionBadges({ video }: { video: VideoWithCompletion }) {
   const hasQuiz = video.quiz_count > 0
@@ -173,12 +156,49 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
                   Yang Akan Anda Pelajari
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {(course.what_you_will_learn ?? []).filter(Boolean).map((item, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{item}</span>
-                    </div>
-                  ))}
+                  {(course.what_you_will_learn ?? []).filter(Boolean).map((item, i) => {
+                    let text = item;
+                    let isAchieved = false;
+
+                    try {
+                      const parsed = JSON.parse(item);
+                      if (parsed && typeof parsed === 'object' && parsed.objective) {
+                        text = parsed.objective;
+                        if (parsed.related_video_ids && Array.isArray(parsed.related_video_ids) && parsed.related_video_ids.length > 0) {
+                          let allDone = true;
+                          for (const vidId of parsed.related_video_ids) {
+                            let videoFound = false;
+                            for (const sec of sections) {
+                              const vid = (sec.videos || []).find((v: any) => String(v.id) === String(vidId));
+                              if (vid) {
+                                videoFound = true;
+                                if (!vid.is_completed) {
+                                  allDone = false;
+                                }
+                                break;
+                              }
+                            }
+                            if (!videoFound || !allDone) {
+                              allDone = false;
+                              break;
+                            }
+                          }
+                          if (allDone) {
+                            isAchieved = true;
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      // fallback to treating as regular string
+                    }
+
+                    return (
+                      <div key={i} className="flex items-start gap-3">
+                        <CheckCircle2 className={cn("w-5 h-5 shrink-0 mt-0.5", isAchieved ? "text-emerald-500" : "text-gray-400")} />
+                        <span className={cn("text-sm leading-relaxed", isAchieved ? "text-gray-900 dark:text-white font-medium" : "text-gray-700 dark:text-gray-300")}>{text}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -230,11 +250,6 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
                                     ? "bg-slate-50/50 dark:bg-slate-900/20"
                                     : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
                                 )}>
-
-                                  {/* Left Border Status for Desktop */}
-                                  {video.is_completed && (
-                                    <div className="hidden sm:block absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
-                                  )}
 
                                   {/* Thumbnail */}
                                   <div className="relative w-full sm:w-48 aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden shrink-0 border border-gray-200/50 dark:border-gray-700/50">
@@ -351,7 +366,7 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
                   {/* Requirements Note */}
                   <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-400 mb-6 border border-gray-100 dark:border-gray-800">
                     <p className="font-medium text-gray-900 dark:text-gray-200 flex items-center gap-2 mb-2">
-                      <Lock className="w-4 h-4 text-gray-400" /> Syarat Kelulusan
+                      Syarat Kelulusan
                     </p>
                     <ul className="list-disc pl-5 space-y-1 text-xs">
                       <li>Menonton semua video</li>
@@ -382,7 +397,6 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
                           variant="outline"
                           className="w-full justify-start text-gray-400 border-gray-200 dark:border-gray-800"
                         >
-                          <Lock className="w-4 h-4 mr-2" />
                           Sertifikat Terkunci
                         </Button>
                       )}

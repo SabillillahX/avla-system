@@ -94,3 +94,22 @@ export const getImageUrl = (path: string | null | undefined): string | null => {
   
   return `${baseUrl}/${path}`;
 };
+
+export const computeCourseProgress = (sections: any[]): {
+  totalVideos: number
+  completedVideos: number
+  percent: number
+} => {
+  let totalVideos = 0
+  let completedVideos = 0
+
+  for (const section of sections) {
+    for (const video of section.videos || []) {
+      totalVideos++
+      if (video.is_completed) completedVideos++
+    }
+  }
+
+  const percent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0
+  return { totalVideos, completedVideos, percent }
+};

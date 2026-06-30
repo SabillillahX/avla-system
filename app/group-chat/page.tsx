@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { type ClassChatMessage } from "@/lib/api/chat"
 import { type CourseClass } from "@/lib/api/classes"
 import { Paperclip, Image as ImageIcon, Info, MessageCircle, MoreVertical, Phone, Search, Send, Video, ArrowLeft } from "lucide-react"
+import { getImageUrl } from "@/lib/class-utils"
 
 type Conversation = {
   id: string
@@ -65,7 +66,7 @@ const getInitials = (name: string) =>
     .join("")
     .toUpperCase()
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000/api"
+const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export default function GroupChatPage() {
   const { user, isLoading } = useAuth()
@@ -152,7 +153,7 @@ export default function GroupChatPage() {
       unread: 0,
       online: true,
       members: null,
-      avatar: course.thumbnail_url || null,
+      avatar: getImageUrl(course.thumbnail_url) || null,
     }))
   }, [classes])
 
@@ -295,9 +296,8 @@ export default function GroupChatPage() {
                           setSelectedChatId(conversation.id)
                           setShowMobileChat(true)
                         }}
-                        className={`flex w-full items-center gap-3 px-4 py-4 text-left transition ${
-                          isActive ? "border-r-4 border-r-blue-500 bg-blue-50/70" : "hover:bg-slate-50"
-                        }`}
+                        className={`flex w-full items-center gap-3 px-4 py-4 text-left transition ${isActive ? "border-r-4 border-r-blue-500 bg-blue-50/70" : "hover:bg-slate-50"
+                          }`}
                       >
                         <div className="relative">
                           <Avatar className="h-14 w-14 border border-white shadow-sm">
@@ -404,9 +404,8 @@ export default function GroupChatPage() {
 
                         <div className={`max-w-[78%] ${isRight ? "items-end" : "items-start"} flex flex-col gap-1`}>
                           <div
-                            className={`rounded-[22px] px-4 py-3 text-[15px] leading-6 shadow-sm ${
-                              isRight ? "bg-blue-500 text-white" : "border border-slate-200 bg-white text-slate-900"
-                            }`}
+                            className={`rounded-[22px] px-4 py-3 text-[15px] leading-6 shadow-sm ${isRight ? "bg-blue-500 text-white" : "border border-slate-200 bg-white text-slate-900"
+                              }`}
                           >
                             {message.message}
                           </div>

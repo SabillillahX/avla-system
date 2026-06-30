@@ -12,19 +12,14 @@ import {
 } from "motion/react"
 import {
   AlertCircle,
-  BarChart3,
   Bell,
   CheckCircle,
   CheckCircle2,
   FileText,
-  HelpCircle,
   Loader2,
   LogOut,
-  MessageSquare,
-
   User,
   Users,
-  Zap,
   ClipboardList,
   ShoppingCart,
   Settings,
@@ -74,7 +69,6 @@ const navItems = [
   { name: "My Course", icon: Users, path: "/my-course", visibleFor: ["student", "admin"] },
   { name: "Order History", icon: ShoppingCart, path: "/orders", visibleFor: ["student", "admin"] },
   { name: "Group Chat", icon: Users, path: "/group-chat" },
-  { name: "Documents", icon: FileText, path: "/documents" },
 
   { name: "Course Management", icon: ClipboardList, path: "/course-management", visibleFor: ["teacher", "admin"] },
   { name: "Teacher Apps", icon: Users, path: "/admin/teacher-applications", visibleFor: ["admin"] },
@@ -240,7 +234,6 @@ function DashboardSidebar({
             <Image src="/logo-black.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-12 w-auto object-contain group-data-[collapsible=icon]:hidden dark:hidden" />
             <Image src="/logo-white.png" alt="Avla Logo" width={200} height={64} className="h-8 md:h-12 w-auto object-contain group-data-[collapsible=icon]:hidden hidden dark:block" />
 
-            {/* Logo when collapsed */}
             <div className="hidden group-data-[collapsible=icon]:flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-transparent">
               <Image
                 src="/icon-logo.png"

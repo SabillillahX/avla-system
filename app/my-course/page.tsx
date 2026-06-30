@@ -10,7 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { useAuth } from "@/contexts/AuthContext"
 import { type CourseClass, type CourseBatchInfo } from "@/lib/api/classes"
 import { Search, PlayCircle, BookOpen, Clock, Trophy, CalendarDays, AlertCircle } from "lucide-react"
-import { getImageUrl } from "@/lib/class-utils"
+import { getImageUrl, computeCourseProgress } from "@/lib/class-utils"
 
 type FilterMode = "all" | "in-progress" | "completed"
 const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000/api"
@@ -72,31 +72,24 @@ export default function MyCoursePage() {
 
   const enrolledCourses = useMemo(() => {
     return (enrolledClasses ?? []).map((course) => {
-      let totalVideos = 0
-      let completedVideos = 0
       let lastLessonStr = "Not started yet"
+      const sections = course.sections || []
+      const { totalVideos, completedVideos, percent } = computeCourseProgress(sections)
 
-      if (course.sections && Array.isArray(course.sections)) {
-        course.sections.forEach((section: any) => {
-          if (section.videos && Array.isArray(section.videos)) {
-            totalVideos += section.videos.length
-            section.videos.forEach((video: any) => {
-              // A video is done only when ALL its quizzes AND assessments are answered
-              const isDone = video.is_completed === true
-              if (isDone) {
-                completedVideos++
-                lastLessonStr = video.title
-              }
-            })
+      // Find last completed lesson name
+      if (completedVideos > 0) {
+        for (const section of sections) {
+          for (const video of section.videos || []) {
+            if (video.is_completed) {
+              lastLessonStr = video.title
+            }
           }
-        })
-
-        if (completedVideos === 0 && course.sections[0]?.videos?.[0]) {
-          lastLessonStr = "Up next: " + course.sections[0].videos[0].title
         }
+      } else if (sections[0]?.videos?.[0]) {
+        lastLessonStr = "Up next: " + sections[0].videos[0].title
       }
 
-      const progressPercent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0
+      const progressPercent = percent
 
       // Determine batch status for this enrolled course
       const allBatches: CourseBatchInfo[] = course.batches || []
