@@ -429,12 +429,22 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 <section className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm space-y-4">
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">What you'll learn</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
-                    {learnings.map((item, i) => (
-                      <div key={i} className="flex items-start gap-2.5">
-                        <CheckCircle className="w-4 h-4 shrink-0 text-blue-500 mt-0.5" />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{item}</span>
-                      </div>
-                    ))}
+                    {learnings.map((item, i) => {
+                      let displayValue = item;
+                      try {
+                        const parsed = JSON.parse(item);
+                        if (parsed && typeof parsed === 'object' && parsed.objective) {
+                          displayValue = parsed.objective;
+                        }
+                      } catch (e) {}
+
+                      return (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <CheckCircle className="w-4 h-4 shrink-0 text-blue-500 mt-0.5" />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{displayValue}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               )}

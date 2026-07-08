@@ -326,6 +326,8 @@ export default function MyVideoPage() {
       status: "pending",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      require_grading: false,
+      passing_score: null,
     }
     setUploadingVideoData(dummyVideo)
     handleOpenChange(false)

@@ -15,6 +15,8 @@ export interface Video {
   compressed_video_path: string | null;
   mp3_audio_path: string | null;
   status: VideoStatus;
+  require_grading: boolean;
+  passing_score: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -77,6 +79,8 @@ export interface UploadVideoPayload {
   video_file?: File;
   video_url?: string;
   generate_ai_quiz?: boolean;
+  require_grading?: boolean;
+  passing_score?: number;
 }
 
 export interface UpdateVideoPayload {
@@ -86,4 +90,6 @@ export interface UpdateVideoPayload {
   course_id?: string;
   section_id?: string;
   thumbnail_file?: File;
+  require_grading?: boolean;
+  passing_score?: number;
 }

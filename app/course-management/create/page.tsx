@@ -30,8 +30,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2, CalendarDays, Users, LockKeyhole, Eye } from "lucide-react"
+import { MoreVertical, Edit, Loader2, CheckCircle2, Circle, AlertCircle, Video, PlayCircle, Clock, ImagePlus, X, Upload, FileQuestion, ShieldAlert, Search, Link2, CalendarDays, Users, LockKeyhole, Eye, Info } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { FormState } from "@/lib/types/course-management"
 import { useAuth } from "@/contexts/AuthContext"
 import { CertificateDialog } from "@/components/certificate/CertificateDialog"
@@ -40,22 +41,22 @@ import { buildCertificateId, countLectures } from "@/components/certificate/cert
 const batchStatusConfig: Record<BatchStatus, { label: string; badgeClass: string; dotClass: string }> = {
   upcoming: {
     label: "Upcoming",
-    badgeClass: "bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-500/10 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20",
+    badgeClass: "text-indigo-600 dark:text-indigo-400",
     dotClass: "bg-indigo-500 dark:bg-indigo-400"
   },
   active: {
     label: "Active",
-    badgeClass: "bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-500/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20",
+    badgeClass: "text-emerald-600 dark:text-emerald-400",
     dotClass: "bg-emerald-500 dark:bg-emerald-400"
   },
   expired: {
     label: "Expired",
-    badgeClass: "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-500/10 dark:bg-white/5 dark:text-gray-400 dark:ring-white/10",
+    badgeClass: "text-gray-500 dark:text-gray-400",
     dotClass: "bg-gray-400 dark:bg-gray-500"
   },
   closed: {
     label: "Closed",
-    badgeClass: "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-500/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20",
+    badgeClass: "text-rose-600 dark:text-rose-400",
     dotClass: "bg-rose-500 dark:bg-rose-400"
   },
 }
@@ -115,18 +116,11 @@ export default function CreateClassPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [requireGrading, setRequireGrading] = useState(false)
+  const [passingScore, setPassingScore] = useState("")
   const videoInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
 
-  const [videoToEdit, setVideoToEdit] = useState<VideoType | null>(null)
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false)
-  const [editTitleInput, setEditTitleInput] = useState("")
-  const [editDescriptionInput, setEditDescriptionInput] = useState("")
-  const [editCategoryInput, setEditCategoryInput] = useState("")
-  const [editThumbnailFileInput, setEditThumbnailFileInput] = useState<File | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
-  const [editError, setEditError] = useState<string | null>(null)
-  const editThumbnailInputRef = useRef<HTMLInputElement>(null)
 
   const [videoToDelete, setVideoToDelete] = useState<VideoType | null>(null)
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false)
@@ -166,6 +160,13 @@ export default function CreateClassPage() {
   const [batchEditEndOpen, setBatchEditEndOpen] = useState(false)
   const [batchEditLoading, setBatchEditLoading] = useState(false)
   const [batchEditError, setBatchEditError] = useState<string | null>(null)
+
+  // Batch invite state
+  const [inviteBatch, setInviteBatch] = useState<CourseBatch | null>(null)
+  const [isInviteOpen, setIsInviteOpen] = useState(false)
+  const [inviteIdentifier, setInviteIdentifier] = useState("")
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
 
   // Block save/navigation while AI is running or has failed for any video in this class
   const isAiActive = aiProcessState === "connecting" || aiProcessState === "generating"
@@ -248,19 +249,6 @@ export default function CreateClassPage() {
     }
   }
 
-  const handleEditThumbnailSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setEditError("Maksimal ukuran foto adalah 5MB.")
-        if (editThumbnailInputRef.current) editThumbnailInputRef.current.value = ""
-        return
-      }
-      setEditError(null)
-      setEditThumbnailFileInput(file)
-    }
-  }
-
   const isVideoReady = (status: VideoStatus) => status === "completed"
 
   const isAiProcessingVideo = (videoId: string) => {
@@ -311,6 +299,8 @@ export default function CreateClassPage() {
         source_type: sourceType,
         video_file: sourceType === "file" ? videoFileInput ?? undefined : undefined,
         video_url: sourceType === "url" ? videoUrl : undefined,
+        require_grading: requireGrading,
+        passing_score: requireGrading && passingScore ? parseInt(passingScore) : undefined,
       }, (e) => {
         if (e.total) {
           setUploadProgress(Math.round((e.loaded * 100) / e.total))
@@ -337,34 +327,11 @@ export default function CreateClassPage() {
     setSourceType("file")
     setVideoUrlInput("")
     setVideoFileInput(null)
+    setRequireGrading(false)
+    setPassingScore("")
     setUploadError(null)
     if (videoInputRef.current) videoInputRef.current.value = ""
     if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
-  }
-
-  const handleEditSubmit = async () => {
-    if (!videoToEdit) return
-    const title = editTitleInput.trim()
-    if (!title) return setEditError("Title is required.")
-
-    setIsEditing(true)
-    setEditError(null)
-
-    try {
-      await videosApi.updateVideo(videoToEdit.id, {
-        title,
-        description: editDescriptionInput.trim() || undefined,
-        thumbnail_file: editThumbnailFileInput ?? undefined,
-      })
-      setIsEditModalVisible(false)
-      refreshSections()
-      toast.success("Video updated")
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Edit failed")
-      setEditError(msg)
-    } finally {
-      setIsEditing(false)
-    }
   }
 
   const handleDeleteVideoSubmit = async () => {
@@ -382,17 +349,6 @@ export default function CreateClassPage() {
     } finally {
       setIsDeleting(false)
     }
-  }
-
-  const openEditModal = (video: VideoType) => {
-    setVideoToEdit(video)
-    setEditTitleInput(video.title)
-    setEditDescriptionInput(video.description || "")
-    setEditCategoryInput(typeof video.category === "string" ? video.category : (video.category?.id || ""))
-    setEditThumbnailFileInput(null)
-    setEditError(null)
-    if (editThumbnailInputRef.current) editThumbnailInputRef.current.value = ""
-    setIsEditModalVisible(true)
   }
 
   const openDeleteModal = (video: VideoType) => {
@@ -633,6 +589,35 @@ export default function CreateClassPage() {
     }
   }
 
+  const handleInviteSubmit = async () => {
+    if (!editId || !inviteBatch) return
+    if (!inviteIdentifier.trim()) {
+      setInviteError("Please enter an email or name.")
+      return
+    }
+
+    setInviteLoading(true)
+    setInviteError(null)
+    try {
+      await batchesApi.invite(editId, inviteBatch.id, { user_identifier: inviteIdentifier.trim() })
+      toast.success("Student invited successfully!")
+      setIsInviteOpen(false)
+      setInviteIdentifier("")
+      loadBatches()
+    } catch (err: any) {
+      setInviteError(err?.response?.data?.message || "Failed to invite student")
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const openInviteModal = (batch: CourseBatch) => {
+    setInviteBatch(batch)
+    setInviteIdentifier("")
+    setInviteError(null)
+    setIsInviteOpen(true)
+  }
+
   const handleChange = (field: keyof FormState, value: any) => {
     if (field === "price" || field === "discount_price") {
       const digits = String(value).replace(/[^0-9]/g, "")
@@ -762,11 +747,11 @@ export default function CreateClassPage() {
     try {
       if (isEditMode && editId) {
         await classesApi.update(editId, formData)
-        toast.success("Success", { description: "Class updated successfully!" })
+        toast.success("Success", { description: "Course updated successfully!" })
       } else {
         formData.append("status", "draft")
         await classesApi.create(formData)
-        toast.success("Success", { description: "Class created successfully!" })
+        toast.success("Success", { description: "Course created successfully!" })
       }
       resetForm()
       router.push("/course-management")
@@ -868,7 +853,7 @@ export default function CreateClassPage() {
               </Button>
             </Link>
           )}
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
               {isEditMode ? "Edit Class Details" : "Create New Class"}
             </h1>
@@ -878,6 +863,20 @@ export default function CreateClassPage() {
                 : "Design a comprehensive learning experience."}
             </p>
           </div>
+          {isEditMode && (
+            <Button
+              variant="outline"
+              className="gap-2 shrink-0"
+              onClick={() => {
+                const url = window.location.origin + '/courses/' + editId;
+                navigator.clipboard.writeText(url);
+                toast.success("Course link copied to clipboard!");
+              }}
+            >
+              <Link2 className="w-4 h-4" />
+              Share Course
+            </Button>
+          )}
         </div>
 
         {/* Blocking banners */}
@@ -1004,6 +1003,15 @@ export default function CreateClassPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {batches.length > 0 && !batches.some(b => b.status === "active" || b.status === "upcoming") && (
+                  <div className="mb-4 flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+                    <p>
+                      <span className="font-medium text-gray-900 dark:text-white mr-1">No Active Batches.</span>
+                      All current batches are closed or expired. Students cannot enroll until you configure a new active batch.
+                    </p>
+                  </div>
+                )}
                 {batches.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400 dark:text-gray-500 gap-3">
                     <div>
@@ -1023,15 +1031,12 @@ export default function CreateClassPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className="relative flex h-2.5 w-2.5 shrink-0">
-                                {batch.status === 'active' && (
-                                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 ${cfg.dotClass}`}></span>
-                                )}
-                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 shadow-sm ${cfg.dotClass}`}></span>
+                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${cfg.dotClass}`}></span>
                               </div>
                               <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">{batch.name}</span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${cfg.badgeClass}`}>
+                              <span className={`text-xs font-medium ${cfg.badgeClass}`}>
                                 {cfg.label}
                               </span>
                               <DropdownMenu>
@@ -1043,6 +1048,9 @@ export default function CreateClassPage() {
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => openBatchEdit(batch)}>
                                     <Edit className="w-4 h-4 mr-2" /> Edit Batch
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openInviteModal(batch)}>
+                                    <Users className="w-4 h-4 mr-2" /> Invite Student
                                   </DropdownMenuItem>
                                   {(batch.status === "active" || batch.status === "upcoming") && (
                                     <DropdownMenuItem
@@ -1182,14 +1190,9 @@ export default function CreateClassPage() {
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => openEditModal(video)}>
-                                          <Edit className="w-4 h-4 mr-2" /> Edit Video
+                                        <DropdownMenuItem onClick={() => router.push(`/videos/${video.id}/manage`)}>
+                                          <Edit className="w-4 h-4 mr-2" /> Manage Video & Assessments
                                         </DropdownMenuItem>
-                                        {video.status === "completed" && (
-                                          <DropdownMenuItem onClick={() => router.push(`/videos/${video.id}/ai-results`)}>
-                                            <FileQuestion className="w-4 h-4 mr-2" /> View AI Results & Assessments
-                                          </DropdownMenuItem>
-                                        )}
                                         <DropdownMenuItem onClick={() => openDeleteModal(video)} className="text-red-600">
                                           <Trash2 className="w-4 h-4 mr-2" /> Delete Video
                                         </DropdownMenuItem>
@@ -1263,7 +1266,7 @@ export default function CreateClassPage() {
                       if (parsed && typeof parsed === 'object' && parsed.objective !== undefined) {
                         displayValue = parsed.objective;
                       }
-                    } catch (e) {}
+                    } catch (e) { }
 
                     return (
                       <div key={`learn-${index}`} className="flex items-center gap-2">
@@ -1278,7 +1281,7 @@ export default function CreateClassPage() {
                                 parsed.objective = newValue;
                                 newValue = JSON.stringify(parsed);
                               }
-                            } catch (e) {}
+                            } catch (e) { }
                             handleArrayChange("what_you_will_learn", index, newValue);
                           }}
                         />
@@ -1748,6 +1751,67 @@ export default function CreateClassPage() {
                 </div>
               )}
 
+              {/* Completion & Grading Settings */}
+              <Card className="shadow-sm border-gray-200 dark:border-gray-800">
+                <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    Assessment Completion Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Require Teacher Grading to Complete
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger type="button">
+                              <Info className="w-4 h-4 text-gray-400" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs text-xs">If on, students must wait for your grade. If off, simply answering AI questions completes it.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </Label>
+                    </div>
+                    <Switch
+                      checked={requireGrading}
+                      onCheckedChange={setRequireGrading}
+                    />
+                  </div>
+
+                  {requireGrading && (
+                    <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-gray-800 animate-in fade-in slide-in-from-top-2">
+                      <div className="space-y-1.5">
+                        <Label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Minimum Passing Score (0-100)
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger type="button">
+                                <Info className="w-4 h-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs text-xs">Minimum score required for the student to pass this assessment.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={passingScore}
+                          onChange={(e) => setPassingScore(e.target.value)}
+                          placeholder="e.g. 75"
+                          className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 h-11"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Error */}
               {uploadError && (
                 <p className="text-sm text-red-500 flex items-center gap-1.5">
@@ -1772,104 +1836,6 @@ export default function CreateClassPage() {
                   ) : (
                     "Upload"
                   )}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isEditModalVisible} onOpenChange={setIsEditModalVisible}>
-          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[600px] max-h-[90vh] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
-            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
-              <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Edit Video</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-5 px-6 py-4 max-h-[calc(90vh-140px)] overflow-y-auto">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Video Title</Label>
-                <Input
-                  value={editTitleInput}
-                  onChange={(e) => setEditTitleInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-                  placeholder="Enter video title"
-                  className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus-visible:ring-blue-500 focus-visible:border-blue-500 transition-all h-11"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</Label>
-                <textarea
-                  value={editDescriptionInput}
-                  onChange={(e) => setEditDescriptionInput(e.target.value)}
-                  placeholder="Optional description"
-                  maxLength={2000}
-                  rows={4}
-                  className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none shadow-sm"
-                ></textarea>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</Label>
-                <select
-                  value={editCategoryInput}
-                  onChange={(e) => setEditCategoryInput(e.target.value)}
-                  className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm h-11"
-                >
-                  <option value="" disabled>
-                    Select a category
-                  </option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Update Thumbnail (Optional)</Label>
-                <div
-                  onClick={() => editThumbnailInputRef.current?.click()}
-                  className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
-                >
-                  <input
-                    type="file"
-                    ref={editThumbnailInputRef}
-                    onChange={handleEditThumbnailSelection}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  {editThumbnailFileInput ? (
-                    <div className="flex flex-col items-center">
-                      <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-500" />
-                      <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 break-all">
-                        {editThumbnailFileInput.name}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-5 h-5 mx-auto mb-1 text-gray-400" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Select a new thumbnail image
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {editError && (
-                <p className="text-sm text-red-500 flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  {editError}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setIsEditModalVisible(false)} disabled={isEditing}>
-                  Cancel
-                </Button>
-                <Button type="button" onClick={handleEditSubmit} disabled={isEditing} className="bg-blue-600 hover:bg-blue-700 min-w-[90px]">
-                  {isEditing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
                 </Button>
               </div>
             </div>
@@ -2272,6 +2238,40 @@ export default function CreateClassPage() {
           }}
         />
       </div>
+
+      {/* Invite Student Dialog */}
+      <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Invite Student to Batch</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="user_identifier">Email or Name</Label>
+              <Input
+                id="user_identifier"
+                value={inviteIdentifier}
+                onChange={(e) => setInviteIdentifier(e.target.value)}
+                placeholder="Enter student email or name"
+              />
+            </div>
+            {inviteError && (
+              <p className="text-sm text-red-500 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" /> {inviteError}
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsInviteOpen(false)} disabled={inviteLoading}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleInviteSubmit} disabled={inviteLoading}>
+              {inviteLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Invite
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ProtectedRoute>
   )
 } 

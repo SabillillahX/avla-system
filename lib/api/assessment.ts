@@ -22,4 +22,14 @@ export const assessmentApi = {
     );
     return response.data;
   },
+
+  getStudentAnswersByClass: async (classId: string) => {
+    const response = await api.get(`/courses/${classId}/student-answers`);
+    return response.data;
+  },
+
+  gradeAnswer: async (answerId: string, payload: { score: number | null; feedback: string | null; is_correct: boolean | null }) => {
+    const response = await api.put(`/question-answers/${answerId}/grade`, payload);
+    return response.data;
+  }
 };

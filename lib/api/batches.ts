@@ -24,4 +24,7 @@ export const batchesApi = {
 
   close: (courseId: string, batchId: string) =>
     axiosInstance.post<ApiResponse<CourseBatch>>(`/courses/${courseId}/batches/${batchId}/close`),
+
+  invite: (courseId: string, batchId: string, payload: { user_identifier: string }) =>
+    axiosInstance.post<ApiResponse<null>>(`/courses/${courseId}/batches/${batchId}/invite`, payload),
 }

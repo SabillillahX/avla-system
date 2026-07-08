@@ -70,6 +70,12 @@ export const videosApi = {
       if (payload.generate_ai_quiz !== undefined) {
         formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
       }
+      if (payload.require_grading !== undefined) {
+        formData.append("require_grading", payload.require_grading ? "1" : "0");
+      }
+      if (payload.passing_score !== undefined) {
+        formData.append("passing_score", payload.passing_score.toString());
+      }
       if (payload.source_type === "url" && payload.video_url) {
         formData.append("video_url", payload.video_url);
       }
@@ -110,6 +116,12 @@ export const videosApi = {
         if (payload.generate_ai_quiz !== undefined) {
           formData.append("generate_ai", payload.generate_ai_quiz ? "1" : "0");
         }
+        if (payload.require_grading !== undefined) {
+          formData.append("require_grading", payload.require_grading ? "1" : "0");
+        }
+        if (payload.passing_score !== undefined) {
+          formData.append("passing_score", payload.passing_score.toString());
+        }
         formData.append("file_name", file.name);
       }
 
@@ -148,6 +160,12 @@ export const videosApi = {
     if (payload.course_id !== undefined) formData.append("course_id", payload.course_id);
     if (payload.section_id !== undefined) formData.append("chapter_id", payload.section_id);
     if (payload.thumbnail_file) formData.append("thumbnail", payload.thumbnail_file);
+    if (payload.require_grading !== undefined) {
+      formData.append("require_grading", payload.require_grading ? "1" : "0");
+    }
+    if (payload.passing_score !== undefined) {
+      formData.append("passing_score", payload.passing_score.toString());
+    }
 
     const response = await api.post<ApiResponse<Video>>(
       `/videos/${videoId}`,

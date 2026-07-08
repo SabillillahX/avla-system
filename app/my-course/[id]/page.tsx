@@ -32,25 +32,23 @@ function VideoCompletionBadges({ video }: { video: VideoWithCompletion }) {
   return (
     <div className="flex flex-wrap gap-2 mt-3">
       {hasQuiz && (
-        <span className={cn(
-          "inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded border",
-          video.is_quiz_done
-            ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-400"
-            : "bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400"
-        )}>
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">
           <HelpCircle className="w-3.5 h-3.5" />
-          Quiz {video.quiz_done_count}/{video.quiz_count}
+          Quiz {video.is_quiz_done ? <span className="font-bold text-emerald-600 dark:text-emerald-500">{`${video.quiz_correct_count ?? 0}/${video.quiz_count} Correct`}</span> : `${video.quiz_done_count}/${video.quiz_count}`}
         </span>
       )}
       {hasAssessment && (
-        <span className={cn(
-          "inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded border",
-          video.is_assessment_done
-            ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-400"
-            : "bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400"
-        )}>
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">
           <FileText className="w-3.5 h-3.5" />
           Assessment {video.assessment_done_count}/{video.assessment_count}
+          {video.is_assessment_done && (
+            <span className={cn(
+              "ml-0.5 font-bold",
+              video.is_assessment_pending ? "text-amber-600 dark:text-amber-500" : (video.is_assessment_passed ? "text-emerald-600 dark:text-emerald-500" : "text-red-600 dark:text-red-500")
+            )}>
+              ({video.is_assessment_pending ? "Pending" : (video.is_assessment_passed ? `Passed with Score: ${video.assessment_total_score ?? 0}` : `Failed with Score: ${video.assessment_total_score ?? 0}`)})
+            </span>
+          )}
         </span>
       )}
     </div>
@@ -113,17 +111,17 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
 
   return (
     <ProtectedRoute>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 overflow-x-hidden">
 
         {/* Header Section */}
-        <div className="flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 pb-8">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 pb-6 sm:pb-8">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Link href="/my-course">
               <Button variant="outline" size="sm" className="h-8 gap-2">
                 <ArrowLeft className="w-3.5 h-3.5" /> Kembali
               </Button>
             </Link>
-            <div className="h-4 w-px bg-gray-300 dark:bg-gray-700" />
+            <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block" />
             <Badge variant="secondary" className="font-normal text-white">
               {course.category?.name || "General"}
             </Badge>
@@ -134,7 +132,7 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
             )}
           </div>
           <div className="space-y-2 max-w-4xl">
-            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-gray-900 dark:text-white tracking-tight break-words">
               {course.name}
             </h1>
             <p className="text-base text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -143,10 +141,10 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
 
           {/* Main Content Area */}
-          <div className="lg:col-span-2 xl:col-span-3 space-y-8">
+          <div className="lg:col-span-2 xl:col-span-3 space-y-6 sm:space-y-8 min-w-0">
 
             {/* What You'll Learn */}
             {(course.what_you_will_learn ?? []).filter(Boolean).length > 0 && (
@@ -225,16 +223,16 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
                     return (
                       <div key={section.id} className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-900">
                         {/* Section Header */}
-                        <div className="bg-gray-50 dark:bg-gray-900/50 p-4 sm:px-6 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <span className="text-lg font-medium text-gray-400 dark:text-gray-500">
+                        <div className="bg-gray-50 dark:bg-gray-900/50 p-3 sm:p-4 sm:px-6 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                            <span className="text-lg font-medium text-gray-400 dark:text-gray-500 shrink-0">
                               {String(idx + 1).padStart(2, '0')}
                             </span>
-                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                            <h4 className="font-semibold text-gray-900 dark:text-white truncate">
                               {section.title}
                             </h4>
                           </div>
-                          <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-200/50 dark:bg-gray-800 px-2.5 py-1 rounded-md">
+                          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 bg-gray-200/50 dark:bg-gray-800 px-2 sm:px-2.5 py-1 rounded-md shrink-0 whitespace-nowrap">
                             {sectionDone}/{sectionTotal} Selesai
                           </span>
                         </div>

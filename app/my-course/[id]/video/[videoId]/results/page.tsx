@@ -27,7 +27,9 @@ interface QuestionData {
 interface AssessmentResult {
   id: number;
   user_answer: string;
-  is_correct: boolean;
+  is_correct: boolean | null;
+  score: string | number | null;
+  feedback: string | null;
   created_at: string;
   question: QuestionData;
 }
@@ -43,17 +45,56 @@ function getStatusLabel(isCorrect: boolean) {
 
 // ─── Stats summary ────────────────────────────────────────────────────────────
 
-function StatsSummary({ assessmentResults, quizResults, activeTab }: {
+function StatsSummary({ assessmentResults, quizResults, activeTab, videoDetails }: {
   assessmentResults: AssessmentResult[];
   quizResults: QuizResult[];
   activeTab: "assessment" | "quiz";
+  videoDetails?: any;
 }) {
-  const data = activeTab === "assessment" ? assessmentResults : quizResults
+  const isAssessment = activeTab === "assessment"
+  const data = isAssessment ? assessmentResults : quizResults
   const total = data.length
-  const correct = data.filter(d => d.is_correct).length
+
+  if (isAssessment) {
+    const totalScore = assessmentResults.reduce((sum, d) => sum + (d.score !== null && d.score !== undefined ? Number(d.score) : 0), 0)
+    const isPending = assessmentResults.some(d => d.score === null || d.score === undefined)
+    const passingScore = videoDetails?.passing_score || 0
+    const isPassed = !isPending && totalScore >= passingScore
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-center">
+          <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider mb-1">Total Questions</p>
+          <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">{total}</p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-center">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider">Total Score</p>
+            {!isPending && (
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${isPassed ? 'text-emerald-600' : 'text-red-600'}`}>
+                {isPassed ? 'Passed' : 'Needs Improvement'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+              {totalScore} <span className="text-sm font-medium text-gray-400">/ 100</span>
+            </p>
+            {isPending && <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider ml-2">Pending Grading</span>}
+          </div>
+          {!isPending && (
+            <p className="text-[10px] sm:text-xs mt-1 font-medium text-gray-500">
+              Minimum required: {passingScore}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const correct = quizResults.filter(d => d.is_correct).length
   const wrong = total - correct
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
-
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -87,16 +128,20 @@ export default function ResultsPage({ params }: { params: { id: string, videoId:
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const [videoDetails, setVideoDetails] = useState<any>(null)
+
   useEffect(() => {
     const fetchResults = async () => {
       try {
         setIsLoading(true)
-        const [quizRes, assessmentRes] = await Promise.all([
+        const [quizRes, assessmentRes, videoRes] = await Promise.all([
           api.get(`/quiz-results?per_page=50&video_id=${params.videoId}`),
-          api.get(`/question-answers?per_page=50&video_id=${params.videoId}`)
+          api.get(`/question-answers?per_page=50&video_id=${params.videoId}`),
+          api.get(`/courses/${params.id}/videos/${params.videoId}`)
         ])
         setQuizResults(quizRes.data.data || [])
         setAssessmentResults(assessmentRes.data.data || [])
+        setVideoDetails(videoRes.data.data)
       } catch (err: any) {
         console.error("Failed to fetch results", err)
         setError("Couldn't load your results. Try refreshing the page.")
@@ -145,6 +190,7 @@ export default function ResultsPage({ params }: { params: { id: string, videoId:
         assessmentResults={assessmentResults}
         quizResults={quizResults}
         activeTab={activeTab}
+        videoDetails={videoDetails}
       />
 
       {/* Tabs */}
@@ -168,8 +214,8 @@ export default function ResultsPage({ params }: { params: { id: string, videoId:
         {activeTab === "assessment" && (
           assessmentResults.length === 0
             ? <EmptyState message="No assessments yet — jump in and give one a try!" />
-            : assessmentResults.map((result) => (
-              <AssessmentResultCard key={`assessment-${result.id}`} result={result} />
+            : assessmentResults.map((result, index) => (
+              <AssessmentResultCard key={`assessment-${result.id}`} result={result} index={index} totalQuestions={assessmentResults.length} />
             ))
         )}
 
@@ -198,50 +244,58 @@ function EmptyState({ message }: { message: string }) {
 
 // ─── Assessment card ──────────────────────────────────────────────────────────
 
-function AssessmentResultCard({ result }: { result: AssessmentResult }) {
-  const { is_correct, question, user_answer } = result
-  const statusLabel = getStatusLabel(is_correct)
+function AssessmentResultCard({ result, index, totalQuestions }: { result: AssessmentResult, index: number, totalQuestions: number }) {
+  const { question, user_answer, score, feedback } = result
+
+  const maxScore = totalQuestions > 0 ? Math.floor(100 / totalQuestions) : 0
+  const isPending = score === null || score === undefined
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
-
-      {/* Top row */}
-      <div className="flex items-start gap-3 mb-4">
-        <div className="mt-0.5 flex-shrink-0">
-          {is_correct
-            ? <CheckCircle2 className="w-5 h-5 text-blue-500" />
-            : <XCircle className="w-5 h-5 text-gray-400" />
-          }
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 sm:p-6 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md space-y-5">
+      {/* Question Header */}
+      <div className="flex gap-4 items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white leading-snug">
+            {index + 1}. {question.question}
+          </h3>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
-              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-              }`}>
-              {statusLabel}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-2 py-0.5 rounded-full capitalize">
-              {question.type.replace("_", " ")}
-            </span>
+
+        {/* Score Badge */}
+        {!isPending ? (
+          <div className="shrink-0 flex items-center justify-center px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-700 font-bold text-sm">
+            {Number(score)} <span className="text-gray-400 font-medium ml-1">/ {maxScore}</span>
           </div>
-          <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{question.question}</p>
+        ) : (
+          <div className="shrink-0 flex items-center justify-center px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-lg border border-gray-200 dark:border-gray-700 font-medium text-xs uppercase tracking-wider">
+            Pending
+          </div>
+        )}
+      </div>
+
+      {/* Answers Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Student Answer */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800">
+          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Your Answer</span>
+          <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{user_answer || "—"}</p>
+        </div>
+
+        {/* Reference Answer */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+          <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2 block">Reference Answer</span>
+          <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-line">{question.correct_answer || "—"}</p>
         </div>
       </div>
 
-      {/* Answers */}
-      <div className="ml-0 sm:ml-8 mt-4 sm:mt-0 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/50">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">You said</span>
-            <p className="text-sm text-gray-800 dark:text-gray-200">{user_answer || "—"}</p>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-700/50">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">Correct answer</span>
-            <p className="text-sm text-gray-800 dark:text-gray-200">{question.correct_answer || "—"}</p>
+      {/* Feedback Section */}
+      {feedback && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm flex gap-3 items-start mt-2">
+          <div>
+            <span className="text-[10px] font-bold text-gray-700 dark:text-black-500 uppercase tracking-wider mb-1 block">Teacher's Feedback</span>
+            <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{feedback}</p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
