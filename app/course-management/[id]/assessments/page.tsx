@@ -39,14 +39,15 @@ export default function AssessmentGradingPage() {
     if (classId) {
       fetchData()
     }
-  }, [classId])
+  }, [classId, selectedBatchId])
 
   const fetchData = async () => {
     try {
       setIsLoading(true)
+      const batchParam = selectedBatchId === "all" ? undefined : selectedBatchId;
       const [courseRes, answersRes] = await Promise.all([
         classesApi.get(classId as string),
-        assessmentApi.getStudentAnswersByClass(classId as string)
+        assessmentApi.getStudentAnswersByClass(classId as string, batchParam)
       ])
 
       setCourse(courseRes.data)

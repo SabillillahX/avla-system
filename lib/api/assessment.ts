@@ -22,8 +22,9 @@ export const assessmentApi = {
     return response.data;
   },
 
-  getStudentAnswersByClass: async (classId: string) => {
-    const response = await api.get(`/courses/${classId}/student-answers`);
+  getStudentAnswersByClass: async (classId: string, batchId?: string) => {
+    const params = batchId ? { batch_id: batchId } : undefined;
+    const response = await api.get(`/courses/${classId}/student-answers`, { params });
     return response.data;
   },
 
