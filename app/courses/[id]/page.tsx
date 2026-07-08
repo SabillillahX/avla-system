@@ -140,9 +140,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   useEffect(() => {
     const loadEnrolled = async () => {
-      if (!user?.roles?.includes("student")) {
-        setJoined(false)
-        setIsCheckingEnrollment(false)
+      if (!user?.roles?.includes("student") || !course) {
+        if (!user?.roles?.includes("student")) {
+          setJoined(false)
+          setIsCheckingEnrollment(false)
+        }
         return
       }
       setIsCheckingEnrollment(true)
@@ -155,8 +157,19 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           },
         })
         const payload = await response.json()
-        const enrolledIds = extractCourseArray(payload.data).map((item) => String(item.id))
-        setJoined(enrolledIds.includes(String(params.id)))
+        const enrolledCourses = extractCourseArray(payload.data)
+
+        const allCourseBatches = course.batches || []
+        const activeBatch = allCourseBatches.find((batch: any) => batch.status === "active") || course.active_batch || null
+
+        if (activeBatch) {
+          const hasActiveEnrollment = enrolledCourses.some((item: any) =>
+            String(item.id) === String(course.id) && item.enrolled_batch_id === activeBatch.id
+          )
+          setJoined(hasActiveEnrollment)
+        } else {
+          setJoined(false)
+        }
       } catch {
         setJoined(false)
       } finally {
@@ -164,7 +177,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       }
     }
     loadEnrolled()
-  }, [params.id, user?.roles])
+  }, [course, user?.roles])
 
   const handleJoin = async () => {
     if (!course || joined || !canEnroll) return
@@ -186,7 +199,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Failed to generate invoice");
-        
+
         if (data.invoice_details) {
           setInvoice(data.invoice_details);
           setShowInvoice(true);
@@ -202,7 +215,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   const handlePayNow = () => {
     if (!invoice || !invoice.snap_token) return;
-    
+
     // @ts-ignore
     window.snap.pay(invoice.snap_token, {
       onSuccess: function () {
@@ -225,25 +238,25 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     if (!invoice) return;
     setIsCanceling(true)
     try {
-        const token = localStorage.getItem("auth_token")
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/transactions/${invoice.transaction_id}/cancel`, {
-            method: "POST",
-            headers: {
-                "Accept": "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            }
-        });
-        if (response.ok) {
-            setShowInvoice(false);
-            setInvoice(null);
-        } else {
-            const data = await response.json();
-            alert(data.message || "Failed to cancel order");
+      const token = localStorage.getItem("auth_token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/transactions/${invoice.transaction_id}/cancel`, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         }
+      });
+      if (response.ok) {
+        setShowInvoice(false);
+        setInvoice(null);
+      } else {
+        const data = await response.json();
+        alert(data.message || "Failed to cancel order");
+      }
     } catch (err: any) {
-        alert(err.message || "Failed to cancel order");
+      alert(err.message || "Failed to cancel order");
     } finally {
-        setIsCanceling(false)
+      setIsCanceling(false)
     }
   }
 
@@ -436,7 +449,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                         if (parsed && typeof parsed === 'object' && parsed.objective) {
                           displayValue = parsed.objective;
                         }
-                      } catch (e) {}
+                      } catch (e) { }
 
                       return (
                         <div key={i} className="flex items-start gap-2.5">
@@ -587,7 +600,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         </div>
         {/* Invoice Modal */}
         {showInvoice && invoice && (
-          <CheckoutModal 
+          <CheckoutModal
             invoice={invoice}
             onClose={() => setShowInvoice(false)}
             onPay={handlePayNow}
@@ -624,8 +637,7 @@ function BatchScheduleBanner({
 
   if (activeBatch && !isBatchFull) {
     return (
-      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-        <CalendarDays className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 p-3.5">
         <div>
           <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             {activeBatch.name} — Enrolling Now
@@ -645,7 +657,7 @@ function BatchScheduleBanner({
 
   if (isBatchFull && activeBatch) {
     return (
-      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800">
         <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
@@ -662,13 +674,13 @@ function BatchScheduleBanner({
 
   if (upcomingBatch) {
     return (
-      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-        <CalendarDays className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-blue-200 dark:border-blue-800">
+        <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+          <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
             Next Batch: {upcomingBatch.name}
           </p>
-          <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
             Starts {formatBatchDate(upcomingBatch.start_date)} – Enrollment opens soon
           </p>
         </div>

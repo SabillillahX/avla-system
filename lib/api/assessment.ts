@@ -6,10 +6,9 @@ import {
 } from "../types/assessment";
 
 export const assessmentApi = {
-  getQuestions: async (videoId: string): Promise<AssessmentQuestionsResponse> => {
-    const response = await api.get<AssessmentQuestionsResponse>(
-      `/questions?video_id=${videoId}`
-    );
+  getQuestions: async (videoId: string, batchId?: string): Promise<AssessmentQuestionsResponse> => {
+    const url = batchId ? `/questions?video_id=${videoId}&batch_id=${batchId}` : `/questions?video_id=${videoId}`;
+    const response = await api.get<AssessmentQuestionsResponse>(url);
     return response.data;
   },
 
@@ -30,6 +29,11 @@ export const assessmentApi = {
 
   gradeAnswer: async (answerId: string, payload: { score: number | null; feedback: string | null; is_correct: boolean | null }) => {
     const response = await api.put(`/question-answers/${answerId}/grade`, payload);
+    return response.data;
+  },
+
+  updateScore: async (questionId: string, payload: { batch_id?: string | null; score?: number | null; feedback?: string | null; is_correct?: boolean | null; ai_score_suggestion?: number | null; ai_feedback_suggestion?: string | null }) => {
+    const response = await api.put(`/question-answers/${questionId}/score`, payload);
     return response.data;
   }
 };

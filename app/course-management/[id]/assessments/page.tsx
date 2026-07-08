@@ -125,6 +125,9 @@ export default function AssessmentGradingPage() {
 
   const trimmedSearch = searchQuery.trim().toLowerCase()
   const filteredStudents = students.filter(s => {
+    const matchesBatch = selectedBatchId === "all" || s.user.batch_id === selectedBatchId;
+    if (!matchesBatch) return false;
+
     if (!trimmedSearch) return true;
     const matchesSearch = s.user.name.toLowerCase().includes(trimmedSearch) ||
       s.user.email.toLowerCase().includes(trimmedSearch);
@@ -557,6 +560,36 @@ export default function AssessmentGradingPage() {
                                       {ans.question.correct_answer}
                                     </p>
                                   </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* AI Suggestion Section */}
+                            {(ans.ai_score_suggestion !== null && ans.ai_score_suggestion !== undefined) && (
+                              <div className="p-5 md:p-6 bg-purple-50/50 border-b border-purple-100/50 flex flex-col sm:flex-row justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs font-bold text-purple-800 uppercase tracking-wider block">AI Suggestion</span>
+                                    <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-bold">
+                                      Score: {ans.ai_score_suggestion}
+                                    </span>
+                                  </div>
+                                  <p className="text-purple-900/90 leading-relaxed text-sm whitespace-pre-line break-words">
+                                    {ans.ai_feedback_suggestion || <span className="italic">No feedback provided.</span>}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 flex items-start mt-2 sm:mt-0">
+                                  <button
+                                    onClick={() => {
+                                      updateState(ans.id, 'score', ans.ai_score_suggestion);
+                                      if (ans.ai_feedback_suggestion) {
+                                        updateState(ans.id, 'feedback', ans.ai_feedback_suggestion);
+                                      }
+                                    }}
+                                    className="px-4 py-2 text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors shadow-sm"
+                                  >
+                                    Apply Suggestion
+                                  </button>
                                 </div>
                               </div>
                             )}

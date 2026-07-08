@@ -9,14 +9,14 @@ export const parsePrice = (value: string): number | null => {
   return Number(digits);
 };
 
-export const formatPrice = (value: string | number | null | undefined): string => {
-  if (value === null || value === undefined || value === '') {
-    return 'Rp0';
+export const formatPrice = (value?: string | number | null): string => {
+  if (value === undefined || value === null || value === '') {
+    return 'Gratis';
   }
 
   const numericValue = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.]/g, ''));
-  if (Number.isNaN(numericValue)) {
-    return 'Rp0';
+  if (Number.isNaN(numericValue) || numericValue === 0) {
+    return 'Gratis';
   }
 
   return `Rp${numericValue.toLocaleString('id-ID')}`;
@@ -24,7 +24,7 @@ export const formatPrice = (value: string | number | null | undefined): string =
 
 export const getCourseDisplayPrice = (course: Pick<CourseClass, "price" | "discount_price" | "is_free">): string => {
   if (course.is_free) {
-    return "Rp0";
+    return "Gratis";
   }
 
   const hasDiscount = course.discount_price !== null && course.discount_price !== undefined && String(course.discount_price) !== "";

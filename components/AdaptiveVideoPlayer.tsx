@@ -15,6 +15,7 @@ type AdaptiveVideoPlayerProps = {
   videoSrc: string
   apiBaseUrl?: string
   accessToken?: string
+  batchId?: string
   className?: string
 }
 
@@ -35,6 +36,7 @@ export default function AdaptiveVideoPlayer({
   videoSrc,
   apiBaseUrl = "",
   accessToken,
+  batchId,
   className,
 }: AdaptiveVideoPlayerProps) {
   const videoContainerRef = useRef<HTMLDivElement>(null)
@@ -79,6 +81,7 @@ export default function AdaptiveVideoPlayer({
     const controller = new AbortController()
 
     const fetchQuizzes = async () => {
+      const batchQuery = batchId ? `&batch_id=${batchId}` : "";
       try {
         setQuizzesLoading(true)
         setQuizzesError(null)
@@ -96,7 +99,7 @@ export default function AdaptiveVideoPlayer({
             }
           ),
           fetch(
-            `${apiBaseUrl}/quiz-results?per_page=50&video_id=${videoId}`,
+            `${apiBaseUrl}/quiz-results?per_page=50&video_id=${videoId}${batchQuery}`,
             {
               method: "GET",
               headers: defaultHeaders(accessToken),
@@ -301,6 +304,7 @@ export default function AdaptiveVideoPlayer({
         body: JSON.stringify({
           quiz_id: quizId,
           user_answer: answer,
+          batch_id: batchId,
         }),
       })
 

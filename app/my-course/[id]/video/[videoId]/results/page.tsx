@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle, MessageCircle, Lightbulb } from "lucide-react"
 import { useRouter } from "next/navigation"
 import api from "@/lib/api/axios"
+import { classesApi } from "@/lib/api/classes"
 
 interface QuizData {
   question: string;
@@ -120,7 +121,7 @@ function StatsSummary({ assessmentResults, quizResults, activeTab, videoDetails 
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ResultsPage({ params }: { params: { id: string, videoId: string } }) {
+export default function ResultsPage({ params, searchParams }: { params: { id: string, videoId: string }, searchParams: { batch_id?: string } }) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<"assessment" | "quiz">("assessment")
   const [quizResults, setQuizResults] = useState<QuizResult[]>([])
@@ -134,9 +135,12 @@ export default function ResultsPage({ params }: { params: { id: string, videoId:
     const fetchResults = async () => {
       try {
         setIsLoading(true)
+        const courseData = await classesApi.get(params.id, searchParams.batch_id)
+        const batchId = (courseData as any).data?.enrolled_batch_id || searchParams.batch_id || null
+        const batchQuery = batchId ? `&batch_id=${batchId}` : '';
         const [quizRes, assessmentRes, videoRes] = await Promise.all([
-          api.get(`/quiz-results?per_page=50&video_id=${params.videoId}`),
-          api.get(`/question-answers?per_page=50&video_id=${params.videoId}`),
+          api.get(`/quiz-results?per_page=50&video_id=${params.videoId}${batchQuery}`),
+          api.get(`/question-answers?per_page=50&video_id=${params.videoId}${batchQuery}`),
           api.get(`/courses/${params.id}/videos/${params.videoId}`)
         ])
         setQuizResults(quizRes.data.data || [])

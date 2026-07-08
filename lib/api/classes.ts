@@ -92,8 +92,9 @@ export const classesApi = {
     return response.data;
   },
 
-  get: async (id: string) => {
-    const response = await api.get<ApiResponse<CourseClass>>(`/courses/${id}`);
+  get: async (id: string, batchId?: string) => {
+    const params = batchId ? { batch_id: batchId } : undefined;
+    const response = await api.get<ApiResponse<CourseClass>>(`/courses/${id}`, { params });
     return response.data;
   },
 

@@ -1389,6 +1389,57 @@ ${combinedContext}
 
 
 
+    server.tool(
+        "evaluateStudentAnswer",
+        "Evaluate a student's answer against a reference answer (if provided) and generate a score and feedback.",
+        {
+            questionId: z.string(),
+            question: z.string(),
+            studentAnswer: z.string(),
+            referenceAnswer: z.string().optional().nullable(),
+        },
+        async ({ questionId, question, studentAnswer, referenceAnswer }) => {
+            if (!referenceAnswer || referenceAnswer.trim() === "") {
+                return {
+                    content: [{ type: "text", text: JSON.stringify({ score: null, feedback: null }) }],
+                };
+            }
+
+            const prompt = `You are an expert educator. Evaluate the following student answer against the reference answer.
+            
+Question: ${question}
+Reference Answer: ${referenceAnswer}
+Student Answer: ${studentAnswer}
+
+Provide a score from 0 to 100 and helpful feedback for the student in Indonesian (Bahasa Indonesia).
+Your output must be strict JSON:
+{
+  "score": 85,
+  "feedback": "Penjelasan yang baik, namun..."
+}`;
+            const schema = {
+                type: "object",
+                properties: {
+                    score: { type: "number" },
+                    feedback: { type: "string" }
+                },
+                required: ["score", "feedback"],
+                additionalProperties: false
+            };
+
+            try {
+                const llmOutput = await callOpenRouterApi(prompt, schema);
+                return {
+                    content: [{ type: "text", text: llmOutput }],
+                };
+            } catch (err: any) {
+                return {
+                    content: [{ type: "text", text: JSON.stringify({ error: err.message }) }],
+                };
+            }
+        }
+    );
+
     return server;
 }
 

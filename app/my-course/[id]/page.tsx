@@ -55,7 +55,7 @@ function VideoCompletionBadges({ video }: { video: VideoWithCompletion }) {
   )
 }
 
-export default function CourseMaterialPage({ params }: { params: { id: string } }) {
+export default function CourseMaterialPage({ params, searchParams }: { params: { id: string }, searchParams: { batch_id?: string } }) {
   const { user } = useAuth()
   const [course, setCourse] = useState<CourseClass | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -64,7 +64,7 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
   useEffect(() => {
     const loadCourse = async () => {
       try {
-        const response = await classesApi.get(params.id)
+        const response = await classesApi.get(params.id, searchParams.batch_id)
         setCourse(response.data)
       } finally {
         setIsLoading(false)
@@ -241,7 +241,7 @@ export default function CourseMaterialPage({ params }: { params: { id: string } 
                         <div className="divide-y divide-gray-100 dark:divide-gray-800/60">
                           {sectionVideos.length > 0 ? (
                             sectionVideos.map((video, vIdx) => (
-                              <Link href={`/my-course/${params.id}/video/${video.id}`} key={video.id} className="block group">
+                              <Link href={`/my-course/${params.id}/video/${video.id}${searchParams.batch_id ? `?batch_id=${searchParams.batch_id}` : ''}`} key={video.id} className="block group">
                                 <div className={cn(
                                   "flex flex-col sm:flex-row gap-4 p-4 sm:p-6 transition-colors duration-200 relative",
                                   video.is_completed

@@ -108,11 +108,22 @@ export default function MyCoursePage() {
 
       // Determine batch status for this enrolled course
       const allBatches: CourseBatchInfo[] = course.batches || []
-      const activeBatch = allBatches.find((b) => b.status === "active") || course.active_batch || null
-      const hasExpiredBatches = allBatches.some((b) => b.status === "expired" || b.status === "closed")
-      const hasActiveBatch = !!activeBatch
-      const isBatchExpired = !hasActiveBatch && hasExpiredBatches
-      const relevantBatch = activeBatch || allBatches.find((b) => b.status === "expired" || b.status === "closed") || null
+      const activeBatch = allBatches.find((b) => b.status === "active") || course.active_batch || null;
+      
+      let relevantBatch = null;
+      let isBatchExpired = false;
+      
+      if ((course as any).enrolled_batch_id) {
+        relevantBatch = allBatches.find((b) => b.id === (course as any).enrolled_batch_id) || null;
+        if (relevantBatch) {
+          isBatchExpired = relevantBatch.status === "expired" || relevantBatch.status === "closed";
+        }
+      } else {
+        const hasExpiredBatches = allBatches.some((b) => b.status === "expired" || b.status === "closed");
+        const hasActiveBatch = !!activeBatch;
+        isBatchExpired = !hasActiveBatch && hasExpiredBatches;
+        relevantBatch = activeBatch || allBatches.find((b) => b.status === "expired" || b.status === "closed") || null;
+      }
 
       return {
         ...course,
@@ -217,8 +228,8 @@ export default function MyCoursePage() {
         {!isFetching && filteredCourses.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredCourses.map((course) => (
-              <Card key={course.id} className={`group overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-900/50 transition-all duration-300 rounded-xl flex flex-col h-full cursor-pointer ${course.isBatchExpired ? 'opacity-75' : ''}`}>
-                <Link href={`/my-course/${course.id}`} className="flex flex-col h-full">
+              <Card key={`${course.id}-${(course as any).enrolled_batch_id || 'default'}`} className={`group overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-900/50 transition-all duration-300 rounded-xl flex flex-col h-full cursor-pointer ${course.isBatchExpired ? 'opacity-75' : ''}`}>
+                <Link href={`/my-course/${course.id}?batch_id=${course.relevantBatch?.id}`} className="flex flex-col h-full">
                   
                   {/* Thumbnail Container */}
                   <div className="relative aspect-[16/10] overflow-hidden bg-gray-100 dark:bg-gray-900">

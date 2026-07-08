@@ -7,6 +7,7 @@ export interface AssessmentQuestion {
   question: string
   options: string[] | null
   explanation: string
+  correct_answer?: string | null
   has_answered: boolean
   accepted_answers?: string[]
   created_at: string
@@ -19,6 +20,7 @@ export interface AssessmentQuestionsResponse {
 
 export interface SubmitAnswerPayload {
   question_id: string
+  batch_id: string
   user_answer: string
 }
 

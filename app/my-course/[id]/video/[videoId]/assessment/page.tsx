@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { assessmentApi } from "@/lib/api/assessment"
+import { classesApi } from "@/lib/api/classes"
 import { AssessmentQuestion } from "@/lib/types/assessment"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -10,13 +11,14 @@ import { Loader2, ArrowLeft, CheckCircle2, XCircle, CheckCircle } from "lucide-r
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 
-export default function AssessmentPage({ params }: { params: { id: string, videoId: string } }) {
+export default function AssessmentPage({ params, searchParams }: { params: { id: string, videoId: string }, searchParams: { batch_id?: string } }) {
   const router = useRouter()
   const { token, user } = useAuth()
 
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [enrolledBatchId, setEnrolledBatchId] = useState<string | null>(null)
 
   // State for tracking user answers per question
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({})
@@ -28,7 +30,11 @@ export default function AssessmentPage({ params }: { params: { id: string, video
     setIsClient(true)
     const fetchQuestions = async () => {
       try {
-        const response = await assessmentApi.getQuestions(params.videoId)
+        const courseRes = await classesApi.get(params.id, searchParams.batch_id)
+        const batchId = (courseRes as any).data?.enrolled_batch_id || searchParams.batch_id || null
+        setEnrolledBatchId(batchId)
+        
+        const response = await assessmentApi.getQuestions(params.videoId, batchId || params.id)
         setQuestions(response.data)
       } catch (err: any) {
         setError(err.message || "Failed to load assessment questions")
@@ -40,7 +46,7 @@ export default function AssessmentPage({ params }: { params: { id: string, video
     if (token) {
       fetchQuestions()
     }
-  }, [params.videoId, token])
+  }, [params.videoId, params.id, token])
 
   const handleOptionChange = (questionId: string, answer: string) => {
     setUserAnswers((prev) => ({ ...prev, [questionId]: answer }))
@@ -53,6 +59,16 @@ export default function AssessmentPage({ params }: { params: { id: string, video
     setIsSubmittingAll(true)
 
     try {
+      let mcpClient: Client | null = null;
+      try {
+        const mcpUrl = process.env.NEXT_PUBLIC_MCP_SERVER_URL
+        const transport = new SSEClientTransport(new URL(`${mcpUrl}/sse`))
+        mcpClient = new Client({ name: "frontend", version: "1.0.0" }, { capabilities: {} })
+        await mcpClient.connect(transport)
+      } catch (err) {
+        console.error("Failed to connect to MCP", err)
+      }
+
       const submitPromises = questions.map(async (question) => {
         if (question.has_answered) return null
 
@@ -61,16 +77,42 @@ export default function AssessmentPage({ params }: { params: { id: string, video
 
         const response = await assessmentApi.submitAnswer({
           question_id: question.uuid,
+          batch_id: enrolledBatchId || searchParams.batch_id || params.id,
           user_answer: answer,
         })
+
+        if (mcpClient && (question.type === "short_answer" || question.type === "essay")) {
+          try {
+            const result = await mcpClient.callTool({
+              name: "evaluateStudentAnswer",
+              arguments: {
+                questionId: question.uuid,
+                question: question.question,
+                studentAnswer: answer,
+                referenceAnswer: question.correct_answer || null
+              }
+            })
+
+            const content = result?.content as any[];
+            if (content && Array.isArray(content) && content.length > 0 && content[0].type === 'text') {
+              const parsed = JSON.parse(content[0].text as string);
+              if (parsed.score !== null && parsed.score !== undefined) {
+                await assessmentApi.updateScore(question.uuid, {
+                  batch_id: enrolledBatchId,
+                  ai_score_suggestion: parsed.score,
+                  ai_feedback_suggestion: parsed.feedback
+                });
+              }
+            }
+          } catch (aiErr) {
+            console.error("AI evaluation failed:", aiErr)
+          }
+        }
+
         return { questionId: question.uuid, response }
       })
 
-      await Promise.all(submitPromises)
-
-
-
-      // Mark visually
+      await Promise.all(submitPromises)      // Mark visually
       const updatedQuestions = questions.map(q => ({
         ...q,
         has_answered: true
@@ -212,17 +254,16 @@ export default function AssessmentPage({ params }: { params: { id: string, video
               onClick={handleSubmitAll}
               disabled={!isAllAnswered || isSubmittingAll || isEverythingCompleted}
               size="lg"
-              className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${
-                isEverythingCompleted 
-                  ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800" 
-                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
-              }`}
+              className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${isEverythingCompleted
+                ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800"
+                : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
+                }`}
             >
               {isSubmittingAll && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-              {isEverythingCompleted 
-                ? "Already Submitted" 
-                : isAllAnswered 
-                  ? "Submit Answer" 
+              {isEverythingCompleted
+                ? "Already Submitted"
+                : isAllAnswered
+                  ? "Submit Answer"
                   : "Fill all the question to submit"}
             </Button>
           </div>
@@ -242,7 +283,7 @@ export default function AssessmentPage({ params }: { params: { id: string, video
             <Button
               onClick={() => {
                 setShowSuccessModal(false)
-                router.push(`/my-course/${params.id}/video/${params.videoId}/results`)
+                router.push(`/my-course/${params.id}/video/${params.videoId}/results${enrolledBatchId ? `?batch_id=${enrolledBatchId}` : ''}`)
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg rounded-xl"
             >

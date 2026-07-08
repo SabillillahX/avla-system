@@ -12,7 +12,7 @@ import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalP
 import { ChevronRight, Search, Star } from "lucide-react"
 
 const formatCount = (value: number) => value.toLocaleString("en-US")
-const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000/api"
+const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL
 
 const extractCourseArray = (value: unknown): CourseClass[] => {
   if (Array.isArray(value)) {
@@ -211,72 +211,72 @@ export default function CoursesPage() {
               {trendingCourses.map((course) => {
                 const card = mapCourseCard(course)
                 return (
-                <div key={course.id} className="w-[200px] sm:w-[250px] shrink-0 snap-start">
-                  <Link href={`/courses/${course.id}`} className="block">
-                    <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                      <img
-                        src={card.imageUrl}
-                        alt={card.title}
-                        className="h-[140px] w-full object-cover"
-                      />
-                    </div>
-                  </Link>
-                  <div className="mt-3 space-y-2">
+                  <div key={course.id} className="w-[200px] sm:w-[250px] shrink-0 snap-start">
                     <Link href={`/courses/${course.id}`} className="block">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
-                        {card.title}
-                      </h3>
+                      <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                        <img
+                          src={card.imageUrl}
+                          alt={card.title}
+                          className="h-[140px] w-full object-cover"
+                        />
+                      </div>
                     </Link>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
-                      {card.subtitle}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                      <span className="font-semibold text-amber-700 dark:text-amber-400">
-                        {card.rating.toFixed(1)}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, index) => (
-                          <Star
-                            key={`${course.id}-star-${index}`}
-                            className={`h-3 w-3 ${index < Math.round(card.rating)
-                              ? "text-amber-500 fill-amber-500"
-                              : "text-gray-300 dark:text-gray-600"
+                    <div className="mt-3 space-y-2">
+                      <Link href={`/courses/${course.id}`} className="block">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
+                          {card.title}
+                        </h3>
+                      </Link>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
+                        {card.subtitle}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold text-amber-700 dark:text-amber-400">
+                          {card.rating.toFixed(1)}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <Star
+                              key={`${course.id}-star-${index}`}
+                              className={`h-3 w-3 ${index < Math.round(card.rating)
+                                ? "text-amber-500 fill-amber-500"
+                                : "text-gray-300 dark:text-gray-600"
+                                }`}
+                            />
+                          ))}
+                        </div>
+                        <span>({formatCount(card.ratingCount)})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {card.price}
+                        </span>
+                        {card.originalPrice && (
+                          <span className="text-xs text-gray-400 line-through">{card.originalPrice}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {joinedIds.includes(course.id) && (
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            Joined
+                          </span>
+                        )}
+                        {card.badges.map((badge) => (
+                          <span
+                            key={`${course.id}-${badge}`}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${badge === "Premium"
+                                ? "bg-indigo-600 text-white"
+                                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                               }`}
-                          />
+                          >
+                            {badge}
+                          </span>
                         ))}
                       </div>
-                      <span>({formatCount(card.ratingCount)})</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {card.price}
-                      </span>
-                      {card.originalPrice && (
-                        <span className="text-xs text-gray-400 line-through">{card.originalPrice}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {joinedIds.includes(course.id) && (
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          Joined
-                        </span>
-                      )}
-                      {card.badges.map((badge) => (
-                        <span
-                          key={`${course.id}-${badge}`}
-                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-                            badge === "Premium"
-                              ? "bg-indigo-600 text-white"
-                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
-                          }`}
-                        >
-                          {badge}
-                        </span>
-                      ))}
                     </div>
                   </div>
-                </div>
-              )})}
+                )
+              })}
             </div>
             <Button
               variant="outline"
@@ -298,72 +298,72 @@ export default function CoursesPage() {
               {topDevelopmentCourses.map((course) => {
                 const card = mapCourseCard(course)
                 return (
-                <div key={course.id} className="w-[200px] sm:w-[250px] shrink-0 snap-start">
-                  <Link href={`/courses/${course.id}`} className="block">
-                    <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                      <img
-                        src={card.imageUrl}
-                        alt={card.title}
-                        className="h-[140px] w-full object-cover"
-                      />
-                    </div>
-                  </Link>
-                  <div className="mt-3 space-y-2">
+                  <div key={course.id} className="w-[200px] sm:w-[250px] shrink-0 snap-start">
                     <Link href={`/courses/${course.id}`} className="block">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
-                        {card.title}
-                      </h3>
+                      <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                        <img
+                          src={card.imageUrl}
+                          alt={card.title}
+                          className="h-[140px] w-full object-cover"
+                        />
+                      </div>
                     </Link>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
-                      {card.subtitle}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                      <span className="font-semibold text-amber-700 dark:text-amber-400">
-                        {card.rating.toFixed(1)}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, index) => (
-                          <Star
-                            key={`${course.id}-star-${index}`}
-                            className={`h-3 w-3 ${index < Math.round(card.rating)
-                              ? "text-amber-500 fill-amber-500"
-                              : "text-gray-300 dark:text-gray-600"
+                    <div className="mt-3 space-y-2">
+                      <Link href={`/courses/${course.id}`} className="block">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
+                          {card.title}
+                        </h3>
+                      </Link>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
+                        {card.subtitle}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold text-amber-700 dark:text-amber-400">
+                          {card.rating.toFixed(1)}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <Star
+                              key={`${course.id}-star-${index}`}
+                              className={`h-3 w-3 ${index < Math.round(card.rating)
+                                ? "text-amber-500 fill-amber-500"
+                                : "text-gray-300 dark:text-gray-600"
+                                }`}
+                            />
+                          ))}
+                        </div>
+                        <span>({formatCount(card.ratingCount)})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {card.price}
+                        </span>
+                        {card.originalPrice && (
+                          <span className="text-xs text-gray-400 line-through">{card.originalPrice}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {joinedIds.includes(course.id) && (
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            Joined
+                          </span>
+                        )}
+                        {card.badges.map((badge) => (
+                          <span
+                            key={`${course.id}-${badge}`}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${badge === "Premium"
+                                ? "bg-indigo-600 text-white"
+                                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                               }`}
-                          />
+                          >
+                            {badge}
+                          </span>
                         ))}
                       </div>
-                      <span>({formatCount(card.ratingCount)})</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {card.price}
-                      </span>
-                      {card.originalPrice && (
-                        <span className="text-xs text-gray-400 line-through">{card.originalPrice}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {joinedIds.includes(course.id) && (
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          Joined
-                        </span>
-                      )}
-                      {card.badges.map((badge) => (
-                        <span
-                          key={`${course.id}-${badge}`}
-                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-                            badge === "Premium"
-                              ? "bg-indigo-600 text-white"
-                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
-                          }`}
-                        >
-                          {badge}
-                        </span>
-                      ))}
                     </div>
                   </div>
-                </div>
-              )})}
+                )
+              })}
             </div>
             <Button
               variant="outline"

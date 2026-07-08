@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { videosApi } from "@/lib/api/handle-videos"
 import { assessmentApi } from "@/lib/api/assessment"
+import { classesApi } from "@/lib/api/classes"
 import api from "@/lib/api/axios"
 import { Video as VideoType } from "@/lib/types/handle-videos"
 import { getStorageUrl } from "@/lib/utils/storage-url"
@@ -21,7 +22,7 @@ import {
   BookOpen
 } from "lucide-react"
 
-export default function VideoPreviewPage({ params }: { params: { id: string, videoId: string } }) {
+export default function VideoPreviewPage({ params, searchParams }: { params: { id: string, videoId: string }, searchParams: { batch_id?: string } }) {
   const router = useRouter()
   const { token } = useAuth()
   const { aiProcessState, aiProcessingVideoId, aiProgress, aiStatusMessage } = useNotification()
@@ -29,13 +30,17 @@ export default function VideoPreviewPage({ params }: { params: { id: string, vid
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAssessmentSubmitted, setIsAssessmentSubmitted] = useState(false)
+  const [batchId, setBatchId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchVideo = async () => {
       try {
+        const courseData = await classesApi.get(params.id, searchParams.batch_id)
+        const fetchedBatchId = (courseData as any).data?.enrolled_batch_id || searchParams.batch_id || null
+        setBatchId(fetchedBatchId)
         const [videoData, questionsResponse] = await Promise.all([
           api.get(`/courses/${params.id}/videos/${params.videoId}`).then(res => res.data.data),
-          assessmentApi.getQuestions(params.videoId).catch(() => ({ data: [] }))
+          assessmentApi.getQuestions(params.videoId, fetchedBatchId || params.id).catch(() => ({ data: [] }))
         ])
         setVideo(videoData)
 
@@ -117,6 +122,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string, vid
               videoSrc={videoSrc}
               apiBaseUrl={process.env.NEXT_PUBLIC_BACKEND_URL}
               accessToken={token ?? undefined}
+              batchId={batchId || undefined}
             />
           ) : (
             <div className="flex items-center justify-center w-full aspect-video bg-black rounded-2xl shadow-2xl">
@@ -168,7 +174,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string, vid
         <Button
           size="lg"
           variant="outline"
-          onClick={() => router.push(`/my-course/${params.id}/video/${params.videoId}/results`)}
+          onClick={() => router.push(`/my-course/${params.id}/video/${params.videoId}/results${batchId ? `?batch_id=${batchId}` : ''}`)}
           className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <BookOpen className="w-5 h-5" />
@@ -176,7 +182,7 @@ export default function VideoPreviewPage({ params }: { params: { id: string, vid
         </Button>
         <Button
           size="lg"
-          onClick={() => router.push(`/my-course/${params.id}/video/${params.videoId}/assessment`)}
+          onClick={() => router.push(`/my-course/${params.id}/video/${params.videoId}/assessment${batchId ? `?batch_id=${batchId}` : ''}`)}
           disabled={isAssessmentSubmitted}
           className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${isAssessmentSubmitted
             ? "bg-gray-100 text-gray-900 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800"
