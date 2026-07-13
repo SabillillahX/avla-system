@@ -226,8 +226,8 @@ export default function CreateClassPage() {
   const handleThumbnailSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setUploadError("Maksimal ukuran foto adalah 5MB.")
+      if (file.size > 3 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran foto adalah 3MB.")
         if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
         return
       }
@@ -246,6 +246,53 @@ export default function CreateClassPage() {
       }
       setUploadError(null)
       setVideoFileInput(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleCourseThumbnailDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("image/")) {
+      setThumbnailFile(file)
+      setPreviewUrl(URL.createObjectURL(file))
+    }
+  }
+
+  const handleThumbnailDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("image/")) {
+      if (file.size > 3 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran foto adalah 3MB.")
+        return
+      }
+      setUploadError(null)
+      setThumbnailFileInput(file)
+    } else if (file) {
+      setUploadError("Hanya file gambar yang diperbolehkan.")
+    }
+  }
+
+  const handleVideoDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("video/")) {
+      if (file.size > 200 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran video adalah 200MB.")
+        return
+      }
+      setUploadError(null)
+      setVideoFileInput(file)
+    } else if (file) {
+      setUploadError("Hanya file video yang diperbolehkan.")
     }
   }
 
@@ -1474,6 +1521,8 @@ export default function CreateClassPage() {
                   <div
                     className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors relative overflow-hidden group"
                     onClick={() => document.getElementById("thumbnail-upload")?.click()}
+                    onDragOver={handleDragOver}
+                    onDrop={handleCourseThumbnailDrop}
                   >
                     {previewUrl ? (
                       <>
@@ -1628,6 +1677,8 @@ export default function CreateClassPage() {
                 <Label className="text-gray-700 dark:text-gray-300">Thumbnail <span className="text-red-500">*</span></Label>
                 <div
                   onClick={() => thumbnailInputRef.current?.click()}
+                  onDragOver={handleDragOver}
+                  onDrop={handleThumbnailDrop}
                   className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
                 >
                   <input
@@ -1664,7 +1715,7 @@ export default function CreateClassPage() {
                         Click to select a thumbnail image
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        JPG, PNG, WEBP up to 2 MB
+                        JPG, PNG, WEBP up to 3 MB
                       </p>
                     </>
                   )}
@@ -1696,6 +1747,8 @@ export default function CreateClassPage() {
                   <Label className="text-gray-700 dark:text-gray-300">Video File</Label>
                   <div
                     onClick={() => videoInputRef.current?.click()}
+                    onDragOver={handleDragOver}
+                    onDrop={handleVideoDrop}
                     className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
                   >
                     <input
@@ -1732,7 +1785,7 @@ export default function CreateClassPage() {
                           Drag &amp; drop your video file here, or click to browse
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                          MP4, MKV, AVI, MOV, WEBM up to 500 MB
+                          MP4, MKV, AVI, MOV, WEBM up to 200 MB
                         </p>
                       </>
                     )}

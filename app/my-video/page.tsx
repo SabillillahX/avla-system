@@ -237,6 +237,43 @@ export default function MyVideoPage() {
     }
   }
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleThumbnailDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("image/")) {
+      if (file.size > 3 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran foto adalah 3MB.")
+        return
+      }
+      setUploadError(null)
+      setThumbnailFileInput(file)
+    } else if (file) {
+      setUploadError("Hanya file gambar yang diperbolehkan.")
+    }
+  }
+
+  const handleVideoDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("video/")) {
+      if (file.size > 200 * 1024 * 1024) {
+        setUploadError("Maksimal ukuran video adalah 200MB.")
+        return
+      }
+      setUploadError(null)
+      setVideoFileInput(file)
+    } else if (file) {
+      setUploadError("Hanya file video yang diperbolehkan.")
+    }
+  }
+
 
 
   const resetUploadForm = () => {
@@ -749,6 +786,8 @@ export default function MyVideoPage() {
                   <Label className="text-gray-700 dark:text-gray-300">Thumbnail <span className="text-red-500">*</span></Label>
                   <div
                     onClick={() => thumbnailInputRef.current?.click()}
+                    onDragOver={handleDragOver}
+                    onDrop={handleThumbnailDrop}
                     className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
                   >
                     <input
@@ -817,6 +856,8 @@ export default function MyVideoPage() {
                     <Label className="text-gray-700 dark:text-gray-300">Video File</Label>
                     <div
                       onClick={() => videoInputRef.current?.click()}
+                      onDragOver={handleDragOver}
+                      onDrop={handleVideoDrop}
                       className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
                     >
                       <input
@@ -853,7 +894,7 @@ export default function MyVideoPage() {
                             Drag &amp; drop your video file here, or click to browse
                           </p>
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                            MP4, MKV, AVI, MOV, WEBM up to 500 MB
+                            MP4, MKV, AVI, MOV, WEBM up to 200 MB
                           </p>
                         </>
                       )}

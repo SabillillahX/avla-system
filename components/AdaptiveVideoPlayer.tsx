@@ -10,6 +10,12 @@ import Player from "video.js/dist/types/player"
 import "video.js/dist/video-js.css"
 import "videojs-youtube"
 
+type TranscriptSegment = {
+  start: number
+  end: number
+  text: string
+}
+
 type AdaptiveVideoPlayerProps = {
   videoId: string
   videoSrc: string
@@ -56,6 +62,39 @@ export default function AdaptiveVideoPlayer({
   const [isMobile, setIsMobile] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([])
+  const [activeSubtitle, setActiveSubtitle] = useState<string>('')
+  const transcriptSegmentsRef = useRef<TranscriptSegment[]>([])
+
+  useEffect(() => {
+    if (!apiBaseUrl || !videoId) return
+
+    let isSubscribed = true
+    fetch(`${apiBaseUrl}/videos/${videoId}/transcript`, {
+      headers: defaultHeaders(accessToken),
+      credentials: accessToken ? 'omit' : 'include',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Transcript fetch failed')
+        return res.json()
+      })
+      .then((json) => {
+        if (isSubscribed && Array.isArray(json.data)) {
+          setTranscriptSegments(json.data)
+          transcriptSegmentsRef.current = json.data
+        }
+      })
+      .catch(() => {
+        if (isSubscribed) {
+          setTranscriptSegments([])
+          transcriptSegmentsRef.current = []
+        }
+      })
+
+    return () => {
+      isSubscribed = false
+    }
+  }, [apiBaseUrl, videoId, accessToken])
 
   useEffect(() => {
     setMounted(true)
@@ -207,7 +246,7 @@ export default function AdaptiveVideoPlayer({
         controls: true,
         fluid: true,
         techOrder: isYoutube ? ["youtube", "html5"] : ["html5"],
-        sources: [{ src: videoSrc, type }]
+        sources: [{ src: videoSrc, type }],
       }, () => {
         setPlayerEl(player.el() as HTMLElement)
 
@@ -266,6 +305,25 @@ export default function AdaptiveVideoPlayer({
       playerRef.current.src({ src: videoSrc, type })
     }
   }, [videoSrc, resetQuizState])
+
+  useEffect(() => {
+    if (!playerRef.current) return
+    const player = playerRef.current
+    const handleTimeUpdate = () => {
+      const currentTime = player.currentTime() || 0
+      const segments = transcriptSegmentsRef.current
+      const activeSegment = segments.find(
+        (seg) => currentTime >= seg.start && currentTime <= seg.end
+      )
+      setActiveSubtitle(activeSegment ? activeSegment.text.trim() : '')
+    }
+    player.on('timeupdate', handleTimeUpdate)
+    return () => {
+      if (!player.isDisposed()) {
+        player.off('timeupdate', handleTimeUpdate)
+      }
+    }
+  }, [playerRef.current])
 
   useEffect(() => {
     return () => {
@@ -397,6 +455,35 @@ export default function AdaptiveVideoPlayer({
     <div className={className}>
       <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-black">
         <div ref={videoContainerRef} className="w-full" />
+        {activeSubtitle && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '60px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              maxWidth: '80%',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              zIndex: 10,
+            }}
+          >
+            <span
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                color: '#ffffff',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontSize: '16px',
+                lineHeight: '1.5',
+                display: 'inline-block',
+                textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+              }}
+            >
+              {activeSubtitle}
+            </span>
+          </div>
+        )}
         {portalTarget && createPortal(quizOverlay, portalTarget)}
       </div>
     </div>

@@ -150,25 +150,69 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             : new Error("Failed to connect to MCP after several attempts.")
     }, [armStaleProtection])
 
+    const reconnectDelayRef = useRef(1_000)
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const heartbeatWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const destroySseConnection = useCallback(() => {
+        clearTimer(reconnectTimerRef)
+        clearTimer(heartbeatWatchdogRef)
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+        }
+    }, [])
+
+    const resetHeartbeatWatchdog = useCallback((reconnectFn: () => void) => {
+        clearTimer(heartbeatWatchdogRef)
+        heartbeatWatchdogRef.current = setTimeout(() => {
+            console.warn("[Notifications] No heartbeat received — forcing reconnect.")
+            destroySseConnection()
+            reconnectFn()
+        }, SSE_HEARTBEAT_TIMEOUT_MS)
+    }, [destroySseConnection])
+
     const connectSse = useCallback(() => {
         if (!MCP_SERVER_URL) return
         if (isUnmountedRef.current || !user?.id) return
 
-        if (eventSourceRef.current) return
+        destroySseConnection()
 
-        console.log("[Notifications] Initializing global connection...")
+        console.log("[Notifications] Initializing SSE connection...")
         const eventSource = new EventSource(`${MCP_SERVER_URL}/notifications?userId=${user.id}`)
         eventSourceRef.current = eventSource
 
+        const scheduleReconnect = () => {
+            if (isUnmountedRef.current) return
+            const baseDelay = reconnectDelayRef.current
+            const jitter = Math.random() * baseDelay * 0.3
+            const delay = Math.floor(baseDelay + jitter)
+            console.log(`[Notifications] Reconnecting in ${(delay / 1000).toFixed(1)}s...`)
+            reconnectTimerRef.current = setTimeout(() => {
+                reconnectDelayRef.current = Math.min(baseDelay * 2, 30_000)
+                connectSse()
+            }, delay)
+        }
+
         eventSource.onopen = () => {
             console.log("[Notifications] SSE connected.")
+            reconnectDelayRef.current = 1_000
+            resetHeartbeatWatchdog(scheduleReconnect)
         }
 
-        eventSource.onerror = (error) => {
-            console.error("[Notifications] SSE error/disconnected. EventSource will try to reconnect automatically.", error)
+        eventSource.onerror = () => {
+            console.error("[Notifications] SSE error/disconnected.")
+            destroySseConnection()
+            scheduleReconnect()
         }
+
+        eventSource.addEventListener("ping", () => {
+            resetHeartbeatWatchdog(scheduleReconnect)
+        })
 
         eventSource.onmessage = async (event: MessageEvent) => {
+            resetHeartbeatWatchdog(scheduleReconnect)
+
             if (!event.data || event.data.trim() === "{}" || event.data.trim() === "") return;
 
             let data: Record<string, unknown>
@@ -297,7 +341,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     break
             }
         }
-    }, [user?.id, armStaleProtection, runMcpWithRetry, scheduleAutoHide])
+    }, [user?.id, armStaleProtection, runMcpWithRetry, scheduleAutoHide, destroySseConnection, resetHeartbeatWatchdog])
 
     useEffect(() => {
         if (!MCP_SERVER_URL) return
@@ -310,13 +354,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             isUnmountedRef.current = true
             clearTimer(hideTimerRef)
             clearTimer(staleTimerRef)
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close()
-                eventSourceRef.current = null
-                console.log("[Notifications] SSE connection closed (unmount).")
-            }
+            destroySseConnection()
+            console.log("[Notifications] SSE connection closed (unmount).")
         }
-    }, [user?.id, connectSse])
+    }, [user?.id, connectSse, destroySseConnection])
 
     return (
         <NotificationContext.Provider value={{ aiProcessState, aiProgress, aiStatusMessage, aiProcessingVideoId }}>

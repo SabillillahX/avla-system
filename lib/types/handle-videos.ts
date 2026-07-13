@@ -17,6 +17,7 @@ export interface Video {
   status: VideoStatus;
   require_grading: boolean;
   passing_score: number | null;
+  transcript_vtt_path?: string | null;
   created_at: string;
   updated_at: string;
 }
