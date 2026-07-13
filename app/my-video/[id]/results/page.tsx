@@ -32,50 +32,6 @@ interface AssessmentResult {
   question: QuestionData;
 }
 
-// ─── Friendly label helpers ───────────────────────────────────────────────────
-
-function getStatusLabel(isCorrect: boolean) {
-  if (isCorrect) {
-    return "Got it! ✓"
-  }
-  return "Not quite yet"
-}
-
-// ─── Stats summary ────────────────────────────────────────────────────────────
-
-function StatsSummary({ assessmentResults, quizResults, activeTab }: {
-  assessmentResults: AssessmentResult[];
-  quizResults: QuizResult[];
-  activeTab: "assessment" | "quiz";
-}) {
-  const data = activeTab === "assessment" ? assessmentResults : quizResults
-  const total = data.length
-  const correct = data.filter(d => d.is_correct).length
-  const wrong = total - correct
-  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
-
-
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
-        <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider mb-1">Total</p>
-        <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">{total}</p>
-      </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
-        <p className="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Correct</p>
-        <p className="text-xl sm:text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{correct}</p>
-      </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
-        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Not yet</p>
-        <p className="text-xl sm:text-2xl font-semibold text-gray-700 dark:text-gray-300">{wrong}</p>
-      </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
-        <p className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Accuracy</p>
-        <p className="text-xl sm:text-2xl font-semibold text-blue-700 dark:text-blue-300">{accuracy}%</p>
-      </div>
-    </div>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -140,12 +96,6 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* Stats */}
-      <StatsSummary
-        assessmentResults={assessmentResults}
-        quizResults={quizResults}
-        activeTab={activeTab}
-      />
 
       {/* Tabs */}
       <div className="flex border-b border-gray-100 dark:border-gray-800 mb-6">
@@ -168,16 +118,16 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
         {activeTab === "assessment" && (
           assessmentResults.length === 0
             ? <EmptyState message="No assessments yet — jump in and give one a try!" />
-            : assessmentResults.map((result) => (
-              <AssessmentResultCard key={`assessment-${result.id}`} result={result} />
+            : assessmentResults.map((result, index) => (
+              <AssessmentResultCard key={`assessment-${result.id}`} result={result} index={index + 1} />
             ))
         )}
 
         {activeTab === "quiz" && (
           quizResults.length === 0
             ? <EmptyState message="No pop-up quizzes answered yet. Keep watching!" />
-            : quizResults.map((result) => (
-              <QuizResultCard key={`quiz-${result.id}`} result={result} />
+            : quizResults.map((result, index) => (
+              <QuizResultCard key={`quiz-${result.id}`} result={result} index={index + 1} />
             ))
         )}
       </div>
@@ -198,34 +148,24 @@ function EmptyState({ message }: { message: string }) {
 
 // ─── Assessment card ──────────────────────────────────────────────────────────
 
-function AssessmentResultCard({ result }: { result: AssessmentResult }) {
+function AssessmentResultCard({ result, index }: { result: AssessmentResult, index: number }) {
   const { is_correct, question, user_answer } = result
-  const statusLabel = getStatusLabel(is_correct)
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
 
       {/* Top row */}
       <div className="flex items-start gap-3 mb-4">
-        <div className="mt-0.5 flex-shrink-0">
-          {is_correct
-            ? <CheckCircle2 className="w-5 h-5 text-blue-500" />
-            : <XCircle className="w-5 h-5 text-gray-400" />
-          }
-        </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
-              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-              }`}>
-              {statusLabel}
-            </span>
             <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-2 py-0.5 rounded-full capitalize">
               {question.type.replace("_", " ")}
             </span>
           </div>
-          <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{question.question}</p>
+          <div className="flex items-start gap-2">
+            <span className="text-sm font-medium text-black dark:text-gray-400">{index}.</span>
+            <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{question.question}</p>
+          </div>
         </div>
       </div>
 
@@ -248,9 +188,8 @@ function AssessmentResultCard({ result }: { result: AssessmentResult }) {
 
 // ─── Quiz card ────────────────────────────────────────────────────────────────
 
-function QuizResultCard({ result }: { result: QuizResult }) {
+function QuizResultCard({ result, index }: { result: QuizResult, index: number }) {
   const { is_correct, user_answer, quiz } = result
-  const statusLabel = getStatusLabel(is_correct)
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm transition-shadow hover:shadow-md">
@@ -264,17 +203,14 @@ function QuizResultCard({ result }: { result: QuizResult }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${is_correct
-              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-              }`}>
-              {statusLabel}
-            </span>
             <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-2 py-0.5 rounded-full">
               Multiple choice
             </span>
           </div>
-          <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{quiz.question}</p>
+          <div className="flex items-start gap-2">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{index}.</span>
+            <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{quiz.question}</p>
+          </div>
         </div>
       </div>
 

@@ -20,7 +20,7 @@ export interface AssessmentQuestionsResponse {
 
 export interface SubmitAnswerPayload {
   question_id: string
-  batch_id: string
+  batch_id?: string
   user_answer: string
 }
 

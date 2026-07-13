@@ -133,15 +133,7 @@ export default function MyVideoPage() {
   const videoInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
 
-  const [videoToEdit, setVideoToEdit] = useState<VideoType | null>(null)
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false)
-  const [editTitleInput, setEditTitleInput] = useState("")
-  const [editDescriptionInput, setEditDescriptionInput] = useState("")
-  const [editCategoryInput, setEditCategoryInput] = useState("")
-  const [editThumbnailFileInput, setEditThumbnailFileInput] = useState<File | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
-  const [editError, setEditError] = useState<string | null>(null)
-  const editThumbnailInputRef = useRef<HTMLInputElement>(null)
+
 
   const [videoToDelete, setVideoToDelete] = useState<VideoType | null>(null)
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false)
@@ -245,18 +237,7 @@ export default function MyVideoPage() {
     }
   }
 
-  const handleEditThumbnailSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setEditError("Maksimal ukuran foto adalah 5MB.")
-        if (editThumbnailInputRef.current) editThumbnailInputRef.current.value = ""
-        return
-      }
-      setEditError(null)
-      setEditThumbnailFileInput(file)
-    }
-  }
+
 
   const resetUploadForm = () => {
     setTitleInput("")
@@ -361,44 +342,7 @@ export default function MyVideoPage() {
     }
   }
 
-  const openEditModal = (video: VideoType) => {
-    setVideoToEdit(video)
-    setEditTitleInput(video.title)
-    setEditDescriptionInput(video.description || "")
-    setEditCategoryInput(getCategoryId(video.category))
-    setEditThumbnailFileInput(null)
-    setEditError(null)
-    if (editThumbnailInputRef.current) editThumbnailInputRef.current.value = ""
-    setIsEditModalVisible(true)
-  }
 
-  const handleEditSubmit = async () => {
-    if (!videoToEdit) return
-    const title = editTitleInput.trim()
-    if (!title) {
-      setEditError("Title is required.")
-      return
-    }
-
-    setIsEditing(true)
-    setEditError(null)
-
-    try {
-      await videosApi.updateVideo(videoToEdit.id, {
-        title,
-        description: editDescriptionInput.trim() || undefined,
-        category_id: editCategoryInput.trim() || undefined,
-        thumbnail_file: editThumbnailFileInput ?? undefined,
-      })
-      setIsEditModalVisible(false)
-      fetchVideos()
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : "Edit failed. Please try again.")
-      setEditError(msg)
-    } finally {
-      setIsEditing(false)
-    }
-  }
 
   const openDeleteModal = (video: VideoType) => {
     setVideoToDelete(video)
@@ -576,8 +520,8 @@ export default function MyVideoPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditModal(video); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
-                        <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Edit Video</span>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/videos/${video.id}/manage`); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
+                        <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Manage Video & Assessments</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDeleteModal(video); }} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
                         <Trash2 className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Delete Video</span>
@@ -668,8 +612,8 @@ export default function MyVideoPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditModal(video); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
-                    <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Edit Video</span>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/videos/${video.id}/manage`); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
+                    <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Manage Video & Assessments</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDeleteModal(video); }} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
                     <Trash2 className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Delete Video</span>
@@ -959,104 +903,7 @@ export default function MyVideoPage() {
           </Dialog>
         </div>
 
-        {/* Edit Dialog */}
-        <Dialog open={isEditModalVisible} onOpenChange={setIsEditModalVisible}>
-          <DialogContent className="bg-white dark:bg-gray-900 sm:max-w-[600px] max-h-[90vh] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden p-0">
-            <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
-              <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Edit Video</DialogTitle>
-            </DialogHeader>
 
-            <div className="space-y-5 px-6 py-4 max-h-[calc(90vh-140px)] overflow-y-auto">
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Video Title</Label>
-                  <Input
-                    value={editTitleInput}
-                    onChange={(e) => setEditTitleInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-                    placeholder="Enter video title"
-                    className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus-visible:ring-blue-500 focus-visible:border-blue-500 transition-all h-11"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</Label>
-                  <textarea
-                    value={editDescriptionInput}
-                    onChange={(e) => setEditDescriptionInput(e.target.value)}
-                    placeholder="Optional description"
-                    maxLength={2000}
-                    rows={4}
-                    className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none shadow-sm"
-                  ></textarea>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</Label>
-                  <select
-                    value={editCategoryInput}
-                    onChange={(e) => setEditCategoryInput(e.target.value)}
-                    className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm h-11"
-                  >
-                  <option value="" disabled>
-                    Select a category
-                  </option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <Label className="text-gray-700 dark:text-gray-300">Update Thumbnail (Optional)</Label>
-                <div
-                  onClick={() => editThumbnailInputRef.current?.click()}
-                  className="relative mt-1 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
-                >
-                  <input
-                    type="file"
-                    ref={editThumbnailInputRef}
-                    onChange={handleEditThumbnailSelection}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  {editThumbnailFileInput ? (
-                    <div className="flex flex-col items-center">
-                      <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-500" />
-                      <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 break-all">
-                        {editThumbnailFileInput.name}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-5 h-5 mx-auto mb-1 text-gray-400" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Select a new thumbnail image
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {editError && (
-                <p className="text-sm text-red-500 flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  {editError}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setIsEditModalVisible(false)} disabled={isEditing}>
-                  Cancel
-                </Button>
-                <Button type="button" onClick={handleEditSubmit} disabled={isEditing} className="bg-blue-600 hover:bg-blue-700 min-w-[90px]">
-                  {isEditing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Delete Dialog */}
         <Dialog open={isDeleteModalVisible} onOpenChange={setIsDeleteModalVisible}>

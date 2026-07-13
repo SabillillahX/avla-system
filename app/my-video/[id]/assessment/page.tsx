@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Loader2, ArrowLeft, CheckCircle2, XCircle, CheckCircle } from "lucide-react"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
+import { toast } from "sonner"
 
 export default function AssessmentPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -80,7 +81,7 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
       setShowSuccessModal(true)
     } catch (err: any) {
       console.error("Failed to submit answers:", err)
-      // Could show a toast here
+      toast.error(err?.response?.data?.message || err.message || "Failed to submit answers")
     } finally {
       setIsSubmittingAll(false)
     }

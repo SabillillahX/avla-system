@@ -8,13 +8,12 @@ import { ENV, ALLOWED_ORIGINS, fetchWithAuth } from "./utils/helper.js";
 import {
     NotificationPayload,
     ParsedQuiz,
-    AssessmentQuestion,
     TranscriptSegment,
     TranscriptChunk,
     UnknownRecord,
     SemanticAssessmentQuestion
 } from "./utils/interface.js";
-import { parseQuizFromLlmOutput, parseAssessmentFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
+import { parseQuizFromLlmOutput, parseSemanticAssessmentFromLlmOutput } from "./utils/helper.js";
 import { TranscriptContext, getOrLoadTranscriptContext } from "./utils/cacheManager.js";
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
