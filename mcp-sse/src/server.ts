@@ -664,7 +664,7 @@ ${combinedContext}
                     const checkData = await checkRes.json();
                     if (checkData.total && checkData.total > 0) {
                         console.log(`[Quiz] Skipping generation: ${checkData.total} quizzes already exist for videoId=${videoIdStr}`);
-                        
+
                         // We emit completion so the frontend stops waiting
                         emitNotificationToUser(userIdStr, {
                             event: "quiz_generation_completed",
@@ -672,7 +672,7 @@ ${combinedContext}
                             message: "Quizzes already exist. Finished.",
                             progress: 100,
                         });
-                        
+
                         return {
                             content: [{ type: "text", text: `Quizzes already exist for video ${videoIdStr}. Skipped.` }],
                         };
@@ -968,7 +968,6 @@ ${combinedContext}
                 };
             }
 
-            // Check database to see if assessment questions already exist for this video
             try {
                 const checkRes = await fetchWithAuth(
                     `${ENV.backendUrl}/questions?video_id=${videoIdStr}`,
@@ -978,8 +977,6 @@ ${combinedContext}
                     const checkData = await checkRes.json();
                     if (checkData.data && checkData.data.length > 0) {
                         console.log(`[Assessment] Skipping generation: ${checkData.data.length} questions already exist for videoId=${videoIdStr}`);
-                        
-                        // We emit completion so the frontend stops waiting
                         emitNotificationToUser(userIdStr, {
                             event: "assessment_generation_completed",
                             video_id: videoId,
@@ -987,7 +984,7 @@ ${combinedContext}
                             assessment_progress: 100,
                             assessment_status: "completed",
                         });
-                        
+
                         return {
                             content: [{ type: "text", text: `Assessment already exists for video ${videoIdStr}. Skipped.` }],
                         };
@@ -1071,7 +1068,7 @@ ${combinedContext}
                     assessment_status: "analyzing",
                 });
 
-                let targetBloomLevels = "C1, C2, and C3"; // Default assessment
+                let targetBloomLevels = "C1, C2, and C3";
                 try {
                     const qaResponse = await fetchWithAuth(`${ENV.backendUrl}/question-answers?per_page=100`, {
                         method: "GET",
