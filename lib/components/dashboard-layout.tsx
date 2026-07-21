@@ -27,7 +27,6 @@ import {
 
 import { useAuth } from "@/lib/contexts/AuthContext"
 import { useNotification } from "@/lib/components/notification"
-import { ThemeToggle } from "@/lib/components/theme-toggle"
 import { Avatar, AvatarFallback, AvatarImage } from "@/lib/components/ui/avatar"
 import { Badge } from "@/lib/components/ui/badge"
 import { Button } from "@/lib/components/ui/button"
@@ -250,7 +249,6 @@ function DashboardSidebar({
             <SidebarTrigger className="w-10 h-10 shrink-0 text-gray-500 hover:bg-blue-100 hover:text-blue-700 transition-colors" />
             <div className="group-data-[collapsible=icon]:hidden flex gap-1">
               <NotificationsPopover />
-              <ThemeToggle />
             </div>
           </div>
         </div>

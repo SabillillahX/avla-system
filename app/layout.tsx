@@ -1,7 +1,6 @@
 import type React from "react"
 import "./globals.css"
 import ClientLayout from "./client-layout"
-import { ThemeProvider } from "@/lib/components/theme-provider"
 import { AuthProvider } from "@/lib/contexts/AuthContext"
 import { NotificationProvider } from "@/lib/components/notification"
 import { Toaster } from "@/lib/components/ui/sonner"
@@ -15,13 +14,11 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body className="font-sans antialiased">
-                <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-                    <AuthProvider>
-                        <NotificationProvider>
-                            <ClientLayout>{children}</ClientLayout>
-                        </NotificationProvider>
-                    </AuthProvider>
-                </ThemeProvider>
+                <AuthProvider>
+                    <NotificationProvider>
+                        <ClientLayout>{children}</ClientLayout>
+                    </NotificationProvider>
+                </AuthProvider>
                 <Toaster />
             </body>
         </html>
