@@ -8,11 +8,11 @@ import { classesApi } from "@/lib/api/classes"
 import api from "@/lib/api/axios"
 import { Video as VideoType } from "@/lib/types/handle-videos"
 import { getStorageUrl } from "@/lib/utils/storage-url"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import AdaptiveVideoPlayer from "@/components/AdaptiveVideoPlayer"
-import { useAuth } from "@/contexts/AuthContext"
-import { useNotification } from "@/components/notification"
+import { Button } from "@/lib/components/ui/button"
+import { Badge } from "@/lib/components/ui/badge"
+import AdaptiveVideoPlayer from "@/lib/components/AdaptiveVideoPlayer"
+import { useAuth } from "@/lib/contexts/AuthContext"
+import { useNotification } from "@/lib/components/notification"
 import {
   ArrowLeft,
   Loader2,

@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import DashboardLayout from "@/components/dashboard-layout"
+import { ProtectedRoute } from "@/lib/components/auth/ProtectedRoute"
+import DashboardLayout from "@/lib/components/dashboard-layout"
 import { format, parseISO } from "date-fns"
 import {
   Receipt,
@@ -13,10 +13,10 @@ import {
   XCircle,
   FileText
 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { CheckoutModal } from "@/components/CheckoutModal"
+import { Badge } from "@/lib/components/ui/badge"
+import { Button } from "@/lib/components/ui/button"
+import { Input } from "@/lib/components/ui/input"
+import { CheckoutModal } from "@/lib/components/CheckoutModal"
 import { InvoiceDetails } from "@/lib/types/checkout-modal"
 import { Transaction } from "@/lib/types/orders"
 import Script from "next/script"

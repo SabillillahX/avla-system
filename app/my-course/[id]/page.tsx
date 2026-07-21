@@ -2,11 +2,11 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import { Button } from "@/lib/components/ui/button"
+import { Badge } from "@/lib/components/ui/badge"
+import { Card, CardContent } from "@/lib/components/ui/card"
+import { Progress } from "@/lib/components/ui/progress"
+import { ProtectedRoute } from "@/lib/components/auth/ProtectedRoute"
 import { classesApi, type CourseClass } from "@/lib/api/classes"
 import {
   PlayCircle, CheckCircle2, LayoutList, Trophy, ArrowLeft,
@@ -15,9 +15,9 @@ import {
 import { getImageUrl, computeCourseProgress } from "@/lib/class-utils"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { useAuth } from "@/contexts/AuthContext"
-import { CertificateDialog } from "@/components/certificate/CertificateDialog"
-import { buildCertificateId, countLectures } from "@/components/certificate/certificate-utils"
+import { useAuth } from "@/lib/contexts/AuthContext"
+import { CertificateDialog } from "@/lib/components/certificate/CertificateDialog"
+import { buildCertificateId, countLectures } from "@/lib/components/certificate/certificate-utils"
 
 import { VideoWithCompletion } from "@/lib/types/my-course"
 

@@ -10,14 +10,14 @@ import {
   Sparkles,
   Video,
 } from "lucide-react"
-import { useAuth } from "@/contexts/AuthContext"
-import TestimonialsSection from "../components/testimonials-section"
-import FAQSection from "../components/faq-section"
-import CTASection from "@/components/cta-section"
-import FooterSection from "@/components/footer-section"
-import { HeroSection } from "@/components/ui/hero-section-1"
-import { BentoCard, BentoGrid } from "@/components/ui/bento-grid"
-import { Marquee } from "@/components/ui/marquee"
+import { useAuth } from "@/lib/contexts/AuthContext"
+import TestimonialsSection from "../lib/components/testimonials-section"
+import FAQSection from "../lib/components/faq-section"
+import CTASection from "@/lib/components/cta-section"
+import FooterSection from "@/lib/components/footer-section"
+import { HeroSection } from "@/lib/components/ui/hero-section-1"
+import { BentoCard, BentoGrid } from "@/lib/components/ui/bento-grid"
+import { Marquee } from "@/lib/components/ui/marquee"
 import { cn } from "@/lib/utils"
 
 const metricCards = [

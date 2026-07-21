@@ -653,6 +653,35 @@ ${combinedContext}
                     content: [{ type: "text", text: `Quiz generation already in progress for video ${videoIdStr}.` }],
                 };
             }
+
+            // Check database to see if quizzes already exist for this video
+            try {
+                const checkRes = await fetchWithAuth(
+                    `${ENV.backendUrl}/videos/${videoIdStr}/quizzes`,
+                    { method: "GET", headers: buildAuthHeaders(token) }
+                );
+                if (checkRes.ok) {
+                    const checkData = await checkRes.json();
+                    if (checkData.total && checkData.total > 0) {
+                        console.log(`[Quiz] Skipping generation: ${checkData.total} quizzes already exist for videoId=${videoIdStr}`);
+                        
+                        // We emit completion so the frontend stops waiting
+                        emitNotificationToUser(userIdStr, {
+                            event: "quiz_generation_completed",
+                            video_id: videoId,
+                            message: "Quizzes already exist. Finished.",
+                            progress: 100,
+                        });
+                        
+                        return {
+                            content: [{ type: "text", text: `Quizzes already exist for video ${videoIdStr}. Skipped.` }],
+                        };
+                    }
+                }
+            } catch (err) {
+                console.error("[Quiz] Error checking existing quizzes:", err);
+            }
+
             inflightQuizJobs.set(videoIdStr, Date.now());
 
             try {
@@ -938,6 +967,36 @@ ${combinedContext}
                     content: [{ type: "text", text: `Assessment generation already in progress for video ${videoIdStr}.` }],
                 };
             }
+
+            // Check database to see if assessment questions already exist for this video
+            try {
+                const checkRes = await fetchWithAuth(
+                    `${ENV.backendUrl}/questions?video_id=${videoIdStr}`,
+                    { method: "GET", headers: buildAuthHeaders(token) }
+                );
+                if (checkRes.ok) {
+                    const checkData = await checkRes.json();
+                    if (checkData.data && checkData.data.length > 0) {
+                        console.log(`[Assessment] Skipping generation: ${checkData.data.length} questions already exist for videoId=${videoIdStr}`);
+                        
+                        // We emit completion so the frontend stops waiting
+                        emitNotificationToUser(userIdStr, {
+                            event: "assessment_generation_completed",
+                            video_id: videoId,
+                            message: "Assessment already exists. Finished.",
+                            assessment_progress: 100,
+                            assessment_status: "completed",
+                        });
+                        
+                        return {
+                            content: [{ type: "text", text: `Assessment already exists for video ${videoIdStr}. Skipped.` }],
+                        };
+                    }
+                }
+            } catch (err) {
+                console.error("[Assessment] Error checking existing questions:", err);
+            }
+
             inflightAssessmentJobs.set(videoIdStr, Date.now());
 
             try {
@@ -1436,6 +1495,156 @@ Your output must be strict JSON:
                     content: [{ type: "text", text: JSON.stringify({ error: err.message }) }],
                 };
             }
+        }
+    );
+
+    server.tool(
+        "evaluateAssessmentAnswers",
+        "Evaluate a user's submitted assessment answers against the video transcript.",
+        {
+            token: z.string().describe("Bearer token of the currently logged-in user"),
+            userId: z.union([z.number(), z.string()]).describe("User ID for realtime progress notifications"),
+            videoId: z.union([z.number(), z.string()]).describe("ID of the target video"),
+        },
+        async ({ token, userId, videoId }) => {
+            const userIdStr = String(userId);
+            (async () => {
+                try {
+                    emitNotificationToUser(userIdStr, {
+                        event: "evaluation_started",
+                        video_id: videoId,
+                        message: "Mengevaluasi jawaban assessment Anda...",
+                    });
+
+                    const transcriptResponse = await fetchWithAuth(
+                        `${ENV.backendUrl}/videos/${videoId}/transcript`,
+                        { method: "GET", headers: buildAuthHeaders(token) }
+                    );
+
+                    if (!transcriptResponse.ok) {
+                        throw new Error(`Failed to fetch transcript: ${transcriptResponse.status}`);
+                    }
+
+                    const transcriptBody = await transcriptResponse.json();
+                    const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
+                    const transcriptText = transcriptSegments.map(s => s.text).join(" ").trim();
+
+                    // Fetch question answers
+                    const qaResponse = await fetchWithAuth(
+                        `${ENV.backendUrl}/question-answers?per_page=100&video_id=${videoId}`,
+                        { method: "GET", headers: buildAuthHeaders(token) }
+                    );
+
+                    if (!qaResponse.ok) {
+                        throw new Error(`Failed to fetch answers: ${qaResponse.status}`);
+                    }
+
+                    const qaBody = await qaResponse.json();
+                    const answers: any[] = qaBody.data?.data ?? qaBody.data ?? [];
+
+                    // Filter for answers that need evaluation
+                    const answersToEvaluate = answers.filter(a =>
+                        a.question &&
+                        (a.question.type === "essay" || a.question.type === "short_answer")
+                    );
+
+                    if (answersToEvaluate.length === 0) {
+                        emitNotificationToUser(userIdStr, {
+                            event: "evaluation_completed",
+                            video_id: videoId,
+                            message: "Tidak ada jawaban yang perlu dievaluasi.",
+                        });
+                        return;
+                    }
+
+                    const answerPrompts = answersToEvaluate.map((a, index) =>
+                        `Soal ${index + 1}: ${a.question.question}\nJawaban: ${a.user_answer}`
+                    ).join("\n\n");
+
+                    const totalAnswers = answersToEvaluate.length;
+
+                    const prompt = `You are an expert educator. Evaluate the following student answers based ONLY on the video transcript provided. Do not use outside knowledge.
+
+## Video Transcript:
+"""
+${transcriptText}
+"""
+
+## Student Answers:
+${answerPrompts}
+
+Provide constructive feedback for each answer in Indonesian (Bahasa Indonesia).
+You MUST return exactly ${totalAnswers} feedback items, one for each answer above, in the same order.
+Your output must be a strict JSON object with a "feedbacks" array of strings.
+Example for 2 answers:
+{ "feedbacks": ["Feedback untuk soal 1...", "Feedback untuk soal 2..."] }`;
+
+                    const schema = {
+                        type: "object",
+                        properties: {
+                            feedbacks: {
+                                type: "array",
+                                items: { type: "string" }
+                            }
+                        },
+                        required: ["feedbacks"],
+                        additionalProperties: false
+                    };
+
+                    const llmOutput = await callOpenRouterApi(prompt, schema);
+                    let parsedResult: { feedbacks: string[] } = { feedbacks: [] };
+                    try {
+                        parsedResult = JSON.parse(llmOutput);
+                    } catch (e) {
+                        console.error("[evaluateAssessmentAnswers] Failed to parse LLM output:", llmOutput);
+                    }
+
+                    const feedbacks = parsedResult.feedbacks ?? [];
+                    console.log(`[evaluateAssessmentAnswers] Received ${feedbacks.length} feedbacks for ${totalAnswers} answers`);
+
+                    for (let i = 0; i < Math.min(feedbacks.length, totalAnswers); i++) {
+                        const answer = answersToEvaluate[i];
+                        const feedback = feedbacks[i];
+                        const questionId = answer.question_uuid ?? answer.question_id ?? answer.question?.id;
+
+                        if (!questionId) {
+                            console.warn(`[evaluateAssessmentAnswers] Skipping answer index ${i}: no question_id found`);
+                            continue;
+                        }
+
+                        const updateResponse = await fetchWithAuth(
+                            `${ENV.backendUrl}/question-answers/${questionId}/score`,
+                            {
+                                method: "PUT",
+                                headers: buildAuthHeaders(token),
+                                body: JSON.stringify({ ai_feedback_suggestion: feedback }),
+                            }
+                        );
+
+                        if (!updateResponse.ok) {
+                            console.warn(`[evaluateAssessmentAnswers] Failed to update answer for question ${questionId}: ${updateResponse.status}`);
+                        }
+                    }
+
+                    emitNotificationToUser(userIdStr, {
+                        event: "evaluation_completed",
+                        video_id: videoId,
+                        message: "Evaluasi jawaban selesai.",
+                    });
+
+                } catch (err: any) {
+                    console.error("[evaluateAssessmentAnswers] Error:", err);
+                    emitNotificationToUser(userIdStr, {
+                        event: "evaluation_failed",
+                        video_id: videoId,
+                        message: `Gagal mengevaluasi jawaban: ${err.message}`,
+                    });
+                }
+            })();
+
+            return {
+                content: [{ type: "text", text: "Background evaluation started." }],
+            };
         }
     );
 

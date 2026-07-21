@@ -3,25 +3,25 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/lib/components/ui/button"
+import { Input } from "@/lib/components/ui/input"
+import { Badge } from "@/lib/components/ui/badge"
+import { Card, CardContent } from "@/lib/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/lib/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Progress } from "@/components/ui/progress"
+} from "@/lib/components/ui/dialog"
+import { Label } from "@/lib/components/ui/label"
+import { Progress } from "@/lib/components/ui/progress"
 import {
   Search,
   Play,
@@ -52,7 +52,7 @@ import { Video as VideoType, VideoStatus, ViewMode } from "@/lib/types/handle-vi
 import { videosApi } from "@/lib/api/handle-videos"
 import api from "@/lib/api/axios"
 import { getStorageUrl } from "@/lib/utils/storage-url"
-import { useNotification } from "@/components/notification"
+import { useNotification } from "@/lib/components/notification"
 
 const statusConfig: Record<
   VideoStatus,
@@ -727,7 +727,7 @@ export default function MyVideoPage() {
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-xs sm:text-sm">
                 <Upload className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Upload Video</span>
+                <span className="hidden sm:inline">Upload Materi</span>
                 <span className="sm:hidden">Upload</span>
               </Button>
             </DialogTrigger>

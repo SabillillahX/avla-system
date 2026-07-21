@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useAuth } from '@/contexts/AuthContext';
-import { GuestRoute } from '@/components/auth/GuestRoute';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useAuth } from '@/lib/contexts/AuthContext';
+import { GuestRoute } from '@/lib/components/auth/GuestRoute';
+import { Button } from '@/lib/components/ui/button';
+import { Input } from '@/lib/components/ui/input';
+import { Label } from '@/lib/components/ui/label';
+import { Alert, AlertDescription } from '@/lib/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 

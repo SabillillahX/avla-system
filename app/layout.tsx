@@ -1,10 +1,10 @@
 import type React from "react"
 import "./globals.css"
 import ClientLayout from "./client-layout"
-import { ThemeProvider } from "@/components/theme-provider"
-import { AuthProvider } from "@/contexts/AuthContext"
-import { NotificationProvider } from "@/components/notification"
-import { Toaster } from "@/components/ui/sonner"
+import { ThemeProvider } from "@/lib/components/theme-provider"
+import { AuthProvider } from "@/lib/contexts/AuthContext"
+import { NotificationProvider } from "@/lib/components/notification"
+import { Toaster } from "@/lib/components/ui/sonner"
 import { icons } from "lucide-react"
 
 export default function RootLayout({

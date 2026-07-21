@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import { assessmentApi } from "@/lib/api/assessment"
 import { classesApi } from "@/lib/api/classes"
 import { AssessmentQuestion } from "@/lib/types/assessment"
-import { useAuth } from "@/contexts/AuthContext"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "@/lib/contexts/AuthContext"
+import { Button } from "@/lib/components/ui/button"
 import { Loader2, ArrowLeft, CheckCircle2, XCircle, CheckCircle } from "lucide-react"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
@@ -33,7 +33,7 @@ export default function AssessmentPage({ params, searchParams }: { params: { id:
         const courseRes = await classesApi.get(params.id, searchParams.batch_id)
         const batchId = (courseRes as any).data?.enrolled_batch_id || searchParams.batch_id || null
         setEnrolledBatchId(batchId)
-        
+
         const response = await assessmentApi.getQuestions(params.videoId, batchId || params.id)
         setQuestions(response.data)
       } catch (err: any) {

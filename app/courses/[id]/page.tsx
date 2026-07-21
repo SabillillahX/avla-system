@@ -3,11 +3,11 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { useAuth } from "@/contexts/AuthContext"
+import { Button } from "@/lib/components/ui/button"
+import { Badge } from "@/lib/components/ui/badge"
+import { Separator } from "@/lib/components/ui/separator"
+import { ProtectedRoute } from "@/lib/components/auth/ProtectedRoute"
+import { useAuth } from "@/lib/contexts/AuthContext"
 import { classesApi, type CourseClass, type CourseSection, type CourseBatchInfo } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
 import {
@@ -15,7 +15,7 @@ import {
   ChevronUp, PlayCircle, CheckCircle, Loader2, Lock, Clock, X, Receipt, ShieldCheck,
   CalendarDays, AlertCircle
 } from "lucide-react"
-import { CheckoutModal } from "@/components/CheckoutModal"
+import { CheckoutModal } from "@/lib/components/CheckoutModal"
 import { cn } from "@/lib/utils"
 import Script from "next/script"
 

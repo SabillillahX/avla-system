@@ -2,11 +2,11 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import { Button } from "@/lib/components/ui/button"
+import { Input } from "@/lib/components/ui/input"
+import { Badge } from "@/lib/components/ui/badge"
+import { Card, CardContent } from "@/lib/components/ui/card"
+import { ProtectedRoute } from "@/lib/components/auth/ProtectedRoute"
 import { classesApi, type CourseClass } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, extractCourseArray, getImageUrl } from "@/lib/class-utils"
 import { Plus, Search, Edit2, Eye, EyeOff, Trash2, Clock, Users, BookOpen, CheckSquare } from "lucide-react"
@@ -21,7 +21,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/lib/components/ui/alert-dialog"
 
 const mapClassRow = (course: CourseClass): ClassRow => {
   let displayStatus = (course.status as ClassRow["status"]) || "draft"

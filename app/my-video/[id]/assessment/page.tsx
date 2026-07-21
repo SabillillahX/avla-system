@@ -4,12 +4,11 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { assessmentApi } from "@/lib/api/assessment"
 import { AssessmentQuestion } from "@/lib/types/assessment"
-import { useAuth } from "@/contexts/AuthContext"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "@/lib/contexts/AuthContext"
+import { Button } from "@/lib/components/ui/button"
 import { Loader2, ArrowLeft, CheckCircle2, XCircle, CheckCircle } from "lucide-react"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { toast } from "sonner"
+import { aiService } from "@/lib/constants/ai-service"
 
 export default function AssessmentPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -19,7 +18,6 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // State for tracking user answers per question
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({})
   const [isSubmittingAll, setIsSubmittingAll] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -69,9 +67,14 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
 
       await Promise.all(submitPromises)
 
+      if (token && user) {
+        aiService.callToolBackground("evaluateAssessmentAnswers", {
+          token,
+          userId: user.id,
+          videoId: params.id
+        })
+      }
 
-
-      // Mark visually
       const updatedQuestions = questions.map(q => ({
         ...q,
         has_answered: true
@@ -213,17 +216,16 @@ export default function AssessmentPage({ params }: { params: { id: string } }) {
               onClick={handleSubmitAll}
               disabled={!isAllAnswered || isSubmittingAll || isEverythingCompleted}
               size="lg"
-              className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${
-                isEverythingCompleted 
-                  ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800" 
-                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
-              }`}
+              className={`font-medium px-6 sm:px-8 py-5 sm:py-6 rounded-xl transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${isEverythingCompleted
+                ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 shadow-none hover:bg-gray-100 dark:hover:bg-gray-800"
+                : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
+                }`}
             >
               {isSubmittingAll && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-              {isEverythingCompleted 
-                ? "Already Submitted" 
-                : isAllAnswered 
-                  ? "Submit Answer" 
+              {isEverythingCompleted
+                ? "Already Submitted"
+                : isAllAnswered
+                  ? "Submit Answer"
                   : "Fill all the question to submit"}
             </Button>
           </div>

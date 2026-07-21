@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Switch } from "@/components/ui/switch"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ProtectedRoute } from "@/lib/components/auth/ProtectedRoute"
+import { Button } from "@/lib/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/lib/components/ui/card"
+import { Input } from "@/lib/components/ui/input"
+import { Label } from "@/lib/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/lib/components/ui/dialog"
+import { Switch } from "@/lib/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/lib/components/ui/tooltip"
 import {
   ArrowLeft, Loader2, Plus, HelpCircle, FileText, Pencil, Trash2,
   Save, X, CheckCircle2, Clock, Upload, AlertCircle, Info

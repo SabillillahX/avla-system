@@ -2,11 +2,11 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { useAuth } from "@/contexts/AuthContext"
+import { Button } from "@/lib/components/ui/button"
+import { Card, CardContent } from "@/lib/components/ui/card"
+import { Input } from "@/lib/components/ui/input"
+import { ProtectedRoute } from "@/lib/components/auth/ProtectedRoute"
+import { useAuth } from "@/lib/contexts/AuthContext"
 import { type CourseClass } from "@/lib/api/classes"
 import { formatDateLabel, formatPrice, getCourseDisplayPrice, getCourseOriginalPrice, getImageUrl } from "@/lib/class-utils"
 import { ChevronRight, Search, Star } from "lucide-react"
@@ -265,8 +265,8 @@ export default function CoursesPage() {
                           <span
                             key={`${course.id}-${badge}`}
                             className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${badge === "Premium"
-                                ? "bg-indigo-600 text-white"
-                                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                              ? "bg-indigo-600 text-white"
+                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                               }`}
                           >
                             {badge}
@@ -352,8 +352,8 @@ export default function CoursesPage() {
                           <span
                             key={`${course.id}-${badge}`}
                             className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${badge === "Premium"
-                                ? "bg-indigo-600 text-white"
-                                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                              ? "bg-indigo-600 text-white"
+                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                               }`}
                           >
                             {badge}

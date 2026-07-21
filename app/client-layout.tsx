@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { usePathname } from "next/navigation"
-import DashboardLayout from "@/components/dashboard-layout"
+import DashboardLayout from "@/lib/components/dashboard-layout"
 
 export default function ClientLayout({
   children,
