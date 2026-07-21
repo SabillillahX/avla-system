@@ -14,6 +14,7 @@ import { Label } from '@/lib/components/ui/label';
 import { Alert, AlertDescription } from '@/lib/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const registerSchema = z.object({
   name: z.string().min(1, 'Nama wajib diisi').max(255, 'Nama maksimal 255 karakter'),
@@ -30,7 +31,7 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 export default function RegisterPage() {
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, loginWithGoogle } = useAuth();
   const router = useRouter();
 
   const {
@@ -39,6 +40,27 @@ export default function RegisterPage() {
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
+  });
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        setError('');
+        setIsLoading(true);
+        await loginWithGoogle(tokenResponse.access_token);
+      } catch (err: any) {
+        if (err.response?.data?.message) {
+          setError(err.response.data.message);
+        } else {
+          setError('Login with Google failed.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    onError: () => {
+      setError('Google Login was unsuccessful.');
+    }
   });
 
   const onSubmit = async (data: RegisterFormData) => {
@@ -86,6 +108,8 @@ export default function RegisterPage() {
                 type="button"
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2 font-medium"
+                onClick={() => googleLogin()}
+                disabled={isLoading}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/mcp-sse/node_modules*
 
 # next.js
 /.next/

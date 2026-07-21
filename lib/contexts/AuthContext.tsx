@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { authApi } from '@/lib/api/auth';
 import { User, LoginCredentials, RegisterData, AuthContextType } from '@/lib/types/auth';
 
@@ -67,6 +68,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginWithGoogle = async (googleToken: string) => {
+    try {
+      const response = await authApi.loginWithGoogle(googleToken);
+
+      localStorage.setItem('auth_token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+
+      setToken(response.token);
+      setUser(response.user);
+
+      router.push('/my-video');
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await authApi.logout();
@@ -103,12 +120,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     isAuthenticated: !!token && !!user,
     login,
+    loginWithGoogle,
     register,
     logout,
     refreshUser,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''}>
+      <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+    </GoogleOAuthProvider>
+  );
 }
 
 export function useAuth() {
