@@ -557,10 +557,10 @@ export default function MyVideoPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/videos/${video.id}/manage`); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
+                      <DropdownMenuItem onSelect={() => router.push(`/videos/${video.id}/manage`)} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
                         <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Manage Video & Assessments</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDeleteModal(video); }} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
+                      <DropdownMenuItem onSelect={() => openDeleteModal(video)} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
                         <Trash2 className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Delete Video</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -649,10 +649,10 @@ export default function MyVideoPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent onClick={(e) => e.stopPropagation()} align="end" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/videos/${video.id}/manage`); }} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
+                  <DropdownMenuItem onSelect={() => router.push(`/videos/${video.id}/manage`)} className="text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 py-2">
                     <Edit className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Manage Video & Assessments</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openDeleteModal(video); }} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
+                  <DropdownMenuItem onSelect={() => openDeleteModal(video)} className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-2">
                     <Trash2 className="w-5 h-5 mr-3" /> <span className="text-sm font-medium">Delete Video</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
