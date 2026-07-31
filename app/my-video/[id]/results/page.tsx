@@ -35,11 +35,20 @@ interface AssessmentResult {
   ai_feedback_suggestion?: string;
 }
 
+interface OverallEvaluation {
+  id: string;
+  summary: string;
+  knowledge_gaps: string[];
+  detailed_feedback: any[];
+  adaptive_recommendations: string[];
+}
+
 export default function ResultsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<"assessment" | "quiz">("assessment")
   const [quizResults, setQuizResults] = useState<QuizResult[]>([])
   const [assessmentResults, setAssessmentResults] = useState<AssessmentResult[]>([])
+  const [overallEvaluation, setOverallEvaluation] = useState<OverallEvaluation | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [isEvaluating, setIsEvaluating] = useState(false)
@@ -76,12 +85,16 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
     const fetchResults = async () => {
       try {
         setIsLoading(true)
-        const [quizRes, assessmentData] = await Promise.all([
+        const [quizRes, assessmentData, evaluationRes] = await Promise.all([
           api.get(`/quiz-results?per_page=50&video_id=${params.id}`),
-          fetchAssessmentResults()
+          fetchAssessmentResults(),
+          api.get(`/videos/${params.id}/assessment-evaluations`).catch(() => null)
         ])
         setQuizResults(quizRes.data.data || [])
         setAssessmentResults(assessmentData)
+        if (evaluationRes?.data?.data) {
+          setOverallEvaluation(evaluationRes.data.data)
+        }
 
         const hasEssayOrShortAnswer = assessmentData.some(
           (r: AssessmentResult) => r.question?.type === "essay" || r.question?.type === "short_answer"
@@ -116,6 +129,12 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
       if (detail.videoId === params.id) {
         const freshData = await fetchAssessmentResults()
         setAssessmentResults(freshData)
+
+        const evalRes = await api.get(`/videos/${params.id}/assessment-evaluations`).catch(() => null)
+        if (evalRes?.data?.data) {
+          setOverallEvaluation(evalRes.data.data)
+        }
+
         setIsEvaluating(false)
         setFeedbackJustArrived(true)
         setTimeout(() => setFeedbackJustArrived(false), 2000)
@@ -192,6 +211,42 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
       </div>
 
       <div className="space-y-4">
+        {activeTab === "assessment" && overallEvaluation && (
+          <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 border border-gray-100 dark:border-gray-700 shadow-sm">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              Executive Summary
+            </h2>
+            <p className="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+              {overallEvaluation.summary}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider text-blue-600 dark:text-blue-400">Knowledge Gaps</h3>
+                <ul className="space-y-2">
+                  {overallEvaluation.knowledge_gaps?.map((gap, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0"></span>
+                      {gap}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider text-green-600 dark:text-green-400">Recommendations</h3>
+                <ul className="space-y-2">
+                  {overallEvaluation.adaptive_recommendations?.map((rec, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 flex-shrink-0"></span>
+                      {rec}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "assessment" && (
           assessmentResults.length === 0
             ? <EmptyState message="No assessments yet — jump in and give one a try!" />

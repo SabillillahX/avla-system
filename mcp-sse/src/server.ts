@@ -1560,48 +1560,90 @@ Your output must be strict JSON:
 
                     const totalAnswers = answersToEvaluate.length;
 
-                    const prompt = `You are an expert educator. Evaluate the following student answers based ONLY on the video transcript provided. Do not use outside knowledge.
+                    const prompt = `Kamu adalah asisten evaluasi pembelajaran adaptif. Berdasarkan transkrip video berikut, evaluasi jawaban user terhadap daftar soal. Temukan pola kesalahan user, jelaskan di mana letak miskonsepsinya berdasarkan transkrip, dan berikan rekomendasi timestamp video yang harus mereka tonton ulang.
 
-## Video Transcript:
+## Transkrip Video:
 """
 ${transcriptText}
 """
 
-## Student Answers:
+## Jawaban User:
 ${answerPrompts}
 
-Provide constructive feedback for each answer in Indonesian (Bahasa Indonesia).
-You MUST return exactly ${totalAnswers} feedback items, one for each answer above, in the same order.
-Your output must be a strict JSON object with a "feedbacks" array of strings.
-Example for 2 answers:
-{ "feedbacks": ["Feedback untuk soal 1...", "Feedback untuk soal 2..."] }`;
+Berikan output dalam format JSON dengan skema:
+- summary: Ringkasan eksekutif gambaran cepat performa user (1-2 kalimat).
+- knowledge_gaps: Array string memetakan sub-topik atau konsep dasar yang gagal dipahami.
+- detailed_feedback: Array object berisi "question_index" (1-based index) dan "feedback" spesifik menjelaskan mengapa jawaban salah/benar berdasarkan video.
+- adaptive_recommendations: Array string langkah actionable (misal tonton ulang timestamp tertentu).
+`;
 
                     const schema = {
                         type: "object",
                         properties: {
-                            feedbacks: {
+                            summary: { type: "string" },
+                            knowledge_gaps: { type: "array", items: { type: "string" } },
+                            detailed_feedback: {
                                 type: "array",
-                                items: { type: "string" }
-                            }
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        question_index: { type: "integer" },
+                                        feedback: { type: "string" }
+                                    },
+                                    required: ["question_index", "feedback"],
+                                    additionalProperties: false
+                                }
+                            },
+                            adaptive_recommendations: { type: "array", items: { type: "string" } }
                         },
-                        required: ["feedbacks"],
+                        required: ["summary", "knowledge_gaps", "detailed_feedback", "adaptive_recommendations"],
                         additionalProperties: false
                     };
 
                     const llmOutput = await callOpenRouterApi(prompt, schema);
-                    let parsedResult: { feedbacks: string[] } = { feedbacks: [] };
+                    let parsedResult: any = { 
+                        summary: "", 
+                        knowledge_gaps: [], 
+                        detailed_feedback: [], 
+                        adaptive_recommendations: [] 
+                    };
                     try {
                         parsedResult = JSON.parse(llmOutput);
                     } catch (e) {
                         console.error("[evaluateAssessmentAnswers] Failed to parse LLM output:", llmOutput);
                     }
 
-                    const feedbacks = parsedResult.feedbacks ?? [];
-                    console.log(`[evaluateAssessmentAnswers] Received ${feedbacks.length} feedbacks for ${totalAnswers} answers`);
+                    // 1. Save overall assessment evaluation
+                    const evalPayload = {
+                        summary: parsedResult.summary || "Evaluasi selesai.",
+                        knowledge_gaps: parsedResult.knowledge_gaps || [],
+                        detailed_feedback: parsedResult.detailed_feedback || [],
+                        adaptive_recommendations: parsedResult.adaptive_recommendations || []
+                    };
 
-                    for (let i = 0; i < Math.min(feedbacks.length, totalAnswers); i++) {
+                    const evaluationResponse = await fetchWithAuth(
+                        `${ENV.backendUrl}/videos/${videoId}/assessment-evaluations`,
+                        {
+                            method: "POST",
+                            headers: buildAuthHeaders(token),
+                            body: JSON.stringify(evalPayload),
+                        }
+                    );
+
+                    if (!evaluationResponse.ok) {
+                        console.warn(`[evaluateAssessmentAnswers] Failed to save evaluation summary: ${evaluationResponse.status}`);
+                    }
+
+                    // 2. Update individual answers with their specific feedback
+                    const detailedFeedbacks = parsedResult.detailed_feedback || [];
+                    console.log(`[evaluateAssessmentAnswers] Received ${detailedFeedbacks.length} feedbacks for ${totalAnswers} answers`);
+
+                    for (const df of detailedFeedbacks) {
+                        const i = df.question_index - 1;
+                        if (i < 0 || i >= answersToEvaluate.length) continue;
+                        
                         const answer = answersToEvaluate[i];
-                        const feedback = feedbacks[i];
+                        const feedback = df.feedback;
                         const questionId = answer.question_uuid ?? answer.question_id ?? answer.question?.id;
 
                         if (!questionId) {
