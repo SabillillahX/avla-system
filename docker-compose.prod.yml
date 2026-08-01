@@ -1,28 +1,6 @@
 name: drafin
 
 services:
-  caddy:
-    build:
-      context: .
-      dockerfile: Dockerfile.caddy
-    container_name: drafin-caddy
-    restart: unless-stopped
-    env_file: .env 
-    environment:
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
-    ports:
-      - "8080:80"
-      - "8443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      nextjs:
-        condition: service_started
-      mcp-sse:
-        condition: service_started
-
   nextjs:
     build:
       context: .
@@ -36,7 +14,9 @@ services:
         NEXT_PUBLIC_MIDTRANS_SNAP: ${NEXT_PUBLIC_MIDTRANS_SNAP}
     container_name: drafin-nextjs
     restart: unless-stopped
-    env_file: .env 
+    env_file: .env
+    ports:
+      - "3000:3000"
     expose:
       - "3000"
     environment:
@@ -66,9 +46,9 @@ services:
       dockerfile: Dockerfile
     container_name: drafin-mcp-sse
     restart: unless-stopped
-    env_file: 
+    env_file:
       - ./mcp-sse/.env
-    ports: 
+    ports:
       - "8081:8081"
     expose:
       - "8081"
@@ -81,7 +61,3 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
-
-volumes:
-  caddy_data:
-  caddy_config:
