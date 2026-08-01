@@ -1,4 +1,28 @@
+name: drafin
+
 services:
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    container_name: drafin-caddy
+    restart: unless-stopped
+    env_file: .env 
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      nextjs:
+        condition: service_started
+      mcp-sse:
+        condition: service_started
+
   nextjs:
     build:
       context: .
@@ -8,24 +32,17 @@ services:
         NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL}
         NEXT_PUBLIC_MCP_SERVER_URL: ${NEXT_PUBLIC_MCP_SERVER_URL}
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
-        NEXT_PUBLIC_MIDTRANS_CLIENT_KEY: ${NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-        NEXT_PUBLIC_MIDTRANS_SNAP: ${NEXT_PUBLIC_MIDTRANS_SNAP}
+    container_name: drafin-nextjs
     restart: unless-stopped
+    env_file: .env 
     expose:
       - "3000"
     environment:
-      NODE_ENV: production
-      PORT: 3000
-      HOSTNAME: 0.0.0.0
-      # server-side only (tanpa NEXT_PUBLIC_)
-      GROQ_API: ${GROQ_API}
-      # dipakai juga di server component / route handler
-      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
-      NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL}
-      NEXT_PUBLIC_MCP_SERVER_URL: ${NEXT_PUBLIC_MCP_SERVER_URL}
-      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
-      NEXT_PUBLIC_MIDTRANS_CLIENT_KEY: ${NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-      NEXT_PUBLIC_MIDTRANS_SNAP: ${NEXT_PUBLIC_MIDTRANS_SNAP}
+      - NODE_ENV=production
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+      - NEXT_PUBLIC_STORAGE_URL=${NEXT_PUBLIC_STORAGE_URL}
+      - NEXT_PUBLIC_MCP_SERVER_URL=${NEXT_PUBLIC_MCP_SERVER_URL}
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
     depends_on:
       mcp-sse:
         condition: service_started
@@ -35,8 +52,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    networks:
-      - dokploy-network
     deploy:
       resources:
         limits:
@@ -47,26 +62,24 @@ services:
     build:
       context: ./mcp-sse
       dockerfile: Dockerfile
+    container_name: drafin-mcp-sse
     restart: unless-stopped
+    env_file: 
+      - ./mcp-sse/.env
+    ports: 
+      - "8081:8081"
     expose:
       - "8081"
     environment:
-      NODE_ENV: production
-      PORT: 8081
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
-      ASSEMBLY_API: ${ASSEMBLY_API}
-      SSE_ASSEMBLY_API: ${SSE_ASSEMBLY_API}
-    networks:
-      - dokploy-network
+      - NODE_ENV=production
+      - PORT=8081
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
     deploy:
       resources:
         limits:
           memory: 256M
           cpus: "0.5"
 
-networks:
-  dokploy-network:
-    external: true
+volumes:
+  caddy_data:
+  caddy_config:

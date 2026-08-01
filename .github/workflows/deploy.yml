@@ -1,36 +1,36 @@
-# name: Production Deployment
+name: Production Deployment
 
-# on:
-#   push:
-#     branches:
-#       - master
+on:
+  push:
+    branches:
+      - master
 
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-#     steps:
-#       - name: Execute Remote SSH Commands
-#         uses: appleboy/ssh-action@v1.0.3
-#         with:
-#           host: ${{ secrets.SERVER_IP }}
-#           username: ${{ secrets.SERVER_USER }}
-#           key: ${{ secrets.SSH_PRIVATE_KEY }}
-#           script_stop: true
-#           script: |
-#             set -e
+    steps:
+      - name: Execute Remote SSH Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -e
 
-#             echo "Starting deployment..."
+            echo "Starting deployment..."
 
-#             cd /var/www/avla-system || { echo "Directory not found! Aborting."; exit 1; }
+            cd /var/www/avla-system || { echo "Directory not found! Aborting."; exit 1; }
 
-#             echo "1. Pulling latest code..."
-#             git pull origin master
+            echo "1. Pulling latest code..."
+            git pull origin master
 
-#             echo "2. Building and running new container..."
-#             docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+            echo "2. Building and running new container..."
+            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
 
-#             echo "3. Cleaning up unused dangling images..."
-#             docker image prune -f
+            echo "3. Cleaning up unused dangling images..."
+            docker image prune -f
 
-#             echo "Deployment is completed! Server successfully updated."
+            echo "Deployment is completed! Server successfully updated."
