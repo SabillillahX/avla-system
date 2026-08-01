@@ -11,18 +11,19 @@ jobs:
 
     steps:
       - name: Execute Remote SSH Commands
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
           script_stop: true
           script: |
             set -e
 
             echo "Starting deployment..."
 
-            cd /var/www/avla-system || { echo "Directory not found! Aborting."; exit 1; }
+            cd /home/ubuntu/var/www/avla-system || { echo "Directory not found! Aborting."; exit 1; }
 
             echo "1. Pulling latest code..."
             git pull origin master
