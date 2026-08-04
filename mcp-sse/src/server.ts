@@ -546,12 +546,11 @@ function createMcpServer(): McpServer {
                         try {
                             let parsedSummary: any = video.summary;
 
-                            // Keep parsing if it's a string (handles double-stringified JSON)
                             while (typeof parsedSummary === 'string') {
                                 try {
                                     parsedSummary = JSON.parse(parsedSummary);
                                 } catch (e) {
-                                    break; // Not a valid JSON string, stop parsing
+                                    break;
                                 }
                             }
 
@@ -645,7 +644,6 @@ ${combinedContext}
             const userIdStr = String(userId);
             const videoIdStr = String(videoId);
 
-            // Deduplication guard: skip if already generating quizzes for this video
             const existingQuizJob = inflightQuizJobs.get(videoIdStr);
             if (existingQuizJob && (Date.now() - existingQuizJob) < INFLIGHT_JOB_TTL_MS) {
                 console.log(`[Quiz] Skipping duplicate request for videoId=${videoIdStr} (already in-flight)`);
@@ -654,7 +652,6 @@ ${combinedContext}
                 };
             }
 
-            // Check database to see if quizzes already exist for this video
             try {
                 const checkRes = await fetchWithAuth(
                     `${ENV.backendUrl}/videos/${videoIdStr}/quizzes`,
@@ -665,7 +662,6 @@ ${combinedContext}
                     if (checkData.total && checkData.total > 0) {
                         console.log(`[Quiz] Skipping generation: ${checkData.total} quizzes already exist for videoId=${videoIdStr}`);
 
-                        // We emit completion so the frontend stops waiting
                         emitNotificationToUser(userIdStr, {
                             event: "quiz_generation_completed",
                             video_id: videoId,
@@ -794,7 +790,6 @@ ${combinedContext}
                             summaryMetadata
                         );
 
-                        // Menggunakan transcriptContext agar OpenRouter/Gemini bisa memanfaatkan Context Caching
                         const rawLlmOutput = await callOpenRouterApi(prompt, quizSchema, transcriptContext);
                         let parsedQuiz = parseQuizFromLlmOutput(rawLlmOutput);
 
@@ -941,7 +936,6 @@ ${combinedContext}
         }
     );
 
-    // Tool: generateFullAssessment
     server.tool(
         "generateFullAssessment",
         "Generate a complete summative assessment with 10 mixed-type questions (5 MC, 3 short answer, 2 essay) from the full video transcript. Can run in parallel with adaptive quiz generation.",
@@ -1269,7 +1263,6 @@ ${combinedContext}
         }
     );
 
-    // Tool: generateSemanticAssessment
     server.tool(
         "generateSemanticAssessment",
         "Generate a set of semantic similarity questions targeting a specific Bloom's Taxonomy level.",
@@ -1526,7 +1519,6 @@ Your output must be strict JSON:
                     const transcriptSegments: TranscriptSegment[] = transcriptBody.data ?? [];
                     const transcriptText = transcriptSegments.map(s => s.text).join(" ").trim();
 
-                    // Fetch question answers
                     const qaResponse = await fetchWithAuth(
                         `${ENV.backendUrl}/question-answers?per_page=100&video_id=${videoId}`,
                         { method: "GET", headers: buildAuthHeaders(token) }
@@ -1539,7 +1531,6 @@ Your output must be strict JSON:
                     const qaBody = await qaResponse.json();
                     const answers: any[] = qaBody.data?.data ?? qaBody.data ?? [];
 
-                    // Filter for answers that need evaluation
                     const answersToEvaluate = answers.filter(a =>
                         a.question &&
                         (a.question.type === "essay" || a.question.type === "short_answer")
@@ -1613,7 +1604,6 @@ Berikan output dalam format JSON dengan skema:
                         console.error("[evaluateAssessmentAnswers] Failed to parse LLM output:", llmOutput);
                     }
 
-                    // 1. Save overall assessment evaluation
                     const evalPayload = {
                         summary: parsedResult.summary || "Evaluasi selesai.",
                         knowledge_gaps: parsedResult.knowledge_gaps || [],
@@ -1634,7 +1624,6 @@ Berikan output dalam format JSON dengan skema:
                         console.warn(`[evaluateAssessmentAnswers] Failed to save evaluation summary: ${evaluationResponse.status}`);
                     }
 
-                    // 2. Update individual answers with their specific feedback
                     const detailedFeedbacks = parsedResult.detailed_feedback || [];
                     console.log(`[evaluateAssessmentAnswers] Received ${detailedFeedbacks.length} feedbacks for ${totalAnswers} answers`);
 

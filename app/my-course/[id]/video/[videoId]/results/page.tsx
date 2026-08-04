@@ -235,8 +235,6 @@ export default function ResultsPage({ params, searchParams }: { params: { id: st
   )
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center py-14 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
